@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; script-src 'self'">
+<title>PriceLens</title>
+<style>
+/* ═══════════════════════════════════════════════
+   PriceLens — 极简主义设计系统
+   Design System v1.0 — Apple HIG inspired
+   ═══════════════════════════════════════════════ */
+
+/* ── Design Tokens ── */
+:root {
+  --bg: #f5f5f7;
+  --card-bg: rgba(255,255,255,0.85);
+  --card-bg-solid: #ffffff;
+  --text-primary: #1d1d1f;
+  --text-secondary: #86868b;
+  --text-tertiary: #aeaeb2;
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
+  --danger: #ff3b30;
+  --success: #34c759;
+  --warning: #ff9500;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.08);
+  --shadow-lg: 0 16px 48px rgba(0,0,0,0.12);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --transition: cubic-bezier(0.25,0.8,0.25,1);
+  --sidebar-w: 200px;
+  --header-h: 48px;
+}
+
+/* ── Dark Mode ── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1e;
+    --card-bg: rgba(44,44,46,0.85);
+    --card-bg-solid: #2c2c2e;
+    --text-primary: #f5f5f7;
+    --text-secondary: #98989d;
+    --text-tertiary: #636366;
+  }
+}
+
+/* 手动暗色模式 (覆盖系统设置) */
+:root.dark {
+  --bg: #1c1c1e;
+  --card-bg: rgba(44,44,46,0.85);
+  --card-bg-solid: #2c2c2e;
+  --text-primary: #f5f5f7;
+  --text-secondary: #98989d;
+  --text-tertiary: #636366;
+}
+:root.dark #sidebar { background: rgba(44,44,46,0.4); }
+:root.dark .video-card { background: #1c1c1e; }
+:root.dark .coupon-card { background: #2a2420; border-color: rgba(255,255,255,0.08); }
+:root.dark .comment-text { color: #ccc; }
+:root.dark .toast { background: rgba(255,255,255,0.15); }
+
+/* ── Reset ── */
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── App Window ── */
+#app {
+  width: 100vw; height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+
+/* ── Header / Title Bar ── */
+#titlebar {
+  height: var(--header-h);
+  display: flex; align-items: center;
+  padding: 0 12px 0 16px;
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+  /* 添加明确的背景色和底部分隔线，解决透明窗口下的视觉重叠问题 */
+  background: var(--card-bg-solid);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.titlebar-controls { display: flex; gap: 8px; margin-right: 12px; -webkit-app-region: no-drag; }
+.control-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  cursor: pointer; transition: opacity 0.15s;
+  opacity: 0.85; display: flex;
+  align-items: center; justify-content: center;
+  font-size: 8px; color: transparent;
+}
+.control-dot:hover { opacity: 1; }
+.control-dot:hover::after { color: rgba(0,0,0,0.5); }
+.dot-red    { background: #ff5f57; }
+.dot-red:hover::after    { content: '×'; }
+.dot-yellow { background: #febc2e; }
+.dot-yellow:hover::after { content: '−'; }
+.dot-green  { background: #28c840; }
+.dot-green:hover::after  { content: '□'; }
+
+.search-area {
+  flex: 1; max-width: 480px; margin: 0 auto;
+  position: relative; -webkit-app-region: no-drag;
+}
+.search-input {
+  width: 100%; padding: 7px 14px 7px 36px;
+  border: none; border-radius: 8px;
+  background: rgba(128,128,128,0.08);
+  font-size: 13px; font-family: var(--font);
+  color: var(--text-primary);
+  outline: none; transition: background 0.2s, box-shadow 0.2s;
+}
+.search-input::placeholder { color: var(--text-tertiary); }
+.search-input:focus {
+  background: var(--card-bg-solid);
+  box-shadow: 0 0 0 2px rgba(0,113,227,0.2);
+}
+.search-icon {
+  position: absolute; left: 10px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary); font-size: 14px;
+  pointer-events: none;
+}
+
+/* ── Search History Dropdown ── */
+.search-history-dropdown {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+  background: var(--card-bg-solid); border-radius: 8px;
+  box-shadow: var(--shadow-md); border: 1px solid rgba(0,0,0,0.06);
+  max-height: 240px; overflow-y: auto; z-index: 100;
+}
+.history-item {
+  padding: 8px 14px; font-size: 12px; cursor: pointer;
+  color: var(--text-secondary); transition: background 0.15s;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.history-item:hover { background: rgba(0,113,227,0.06); color: var(--text-primary); }
+
+/* ── Main Layout ── */
+#main { flex: 1; display: flex; overflow: hidden; }
+
+/* ── Sidebar ── */
+#sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  background: rgba(255,255,255,0.4);
+  border-right: 1px solid rgba(0,0,0,0.04);
+  display: flex; flex-direction: column;
+  padding: 16px 12px;
+}
+
+.sidebar-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  cursor: pointer; transition: background 0.15s, opacity 0.15s;
+  font-size: 13px; color: var(--text-secondary);
+}
+.sidebar-item:hover { background: rgba(0,0,0,0.04); }
+.sidebar-item.active {
+  background: var(--card-bg-solid);
+  color: var(--text-primary);
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+}
+.sidebar-icon {
+  width: 26px; height: 26px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+.icon-overview { background: #333; }
+.icon-bzhan   { background: #fb7299; }
+.icon-manman  { background: #00a0e9; }
+.icon-gwd     { background: #ff9900; }
+.icon-smz     { background: #e02e24; }
+
+.cache-info {
+  margin-top: auto; text-align: center;
+  font-size: 11px; color: var(--text-tertiary);
+  padding: 12px 0;
+}
+.cache-info .size { font-weight: 500; color: var(--text-secondary); margin-top: 2px; }
+.btn-clear-cache {
+  margin-top: 4px; background: none; border: none;
+  color: var(--accent); font-size: 11px; cursor: pointer;
+  font-family: var(--font);
+}
+.btn-clear-cache:hover { text-decoration: underline; }
+
+/* ── Content Area ── */
+#content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 28px 32px;
+  position: relative;
+}
+#content::-webkit-scrollbar { width: 5px; }
+#content::-webkit-scrollbar-track { background: transparent; }
+#content::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
+
+/* ── Empty State ── */
+.empty-state {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: var(--text-tertiary);
+  animation: fadeUpIn 0.4s var(--transition);
+}
+.empty-icon { font-size: 48px; margin-bottom: 14px; opacity: 0.3; }
+.empty-state h3 { font-size: 17px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+.empty-state p  { font-size: 13px; }
+
+/* ── Product Header ── */
+.product-header {
+  display: flex; gap: 22px; margin-bottom: 26px;
+  animation: fadeUpIn 0.35s var(--transition);
+}
+.product-img {
+  width: 110px; height: 110px; border-radius: var(--radius-md);
+  background: var(--card-bg-solid); object-fit: cover;
+  box-shadow: var(--shadow-sm); flex-shrink: 0;
+}
+.product-info { flex: 1; min-width: 0; }
+.product-info h1 {
+  font-size: 19px; font-weight: 600; line-height: 1.35;
+  margin-bottom: 8px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.price-tag {
+  font-size: 28px; font-weight: 700; color: var(--danger);
+  margin-bottom: 4px;
+}
+.price-tag .original {
+  font-size: 14px; color: var(--text-tertiary);
+  text-decoration: line-through; font-weight: 400; margin-left: 8px;
+}
+.price-meta { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); align-items: center; }
+.badge {
+  display: inline-flex; padding: 2px 10px; border-radius: 12px;
+  font-size: 11px; font-weight: 600; line-height: 1.6;
+}
+.badge-low   { background: rgba(52,199,89,0.12); color: var(--success); }
+.badge-high  { background: rgba(255,59,48,0.12); color: var(--danger); }
+.badge-warn  { background: rgba(255,149,0,0.12); color: var(--warning); }
+.badge-alert { background: rgba(255,59,48,0.1); color: var(--danger); }
+
+/* ── Tabs ── */
+.tabs {
+  display: flex; gap: 20px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  margin-bottom: 22px;
+}
+.tab {
+  padding: 8px 0; font-size: 13px; color: var(--text-secondary);
+  cursor: pointer; position: relative; transition: color 0.2s;
+  font-weight: 400;
+}
+.tab:hover { color: var(--text-primary); }
+.tab.active { color: var(--text-primary); font-weight: 600; }
+.tab.active::after {
+  content: ''; position: absolute; bottom: -1px; left: 0;
+  width: 100%; height: 2px; background: var(--accent); border-radius: 2px;
+}
+
+/* ── Content Sections ── */
+.tab-content { display: none; animation: slideUp 0.3s var(--transition); }
+.tab-content.active { display: block; }
+
+/* ── Card ── */
+.card {
+  background: var(--card-bg-solid); border-radius: var(--radius-md);
+  padding: 20px; margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(0,0,0,0.03);
+}
+.card-title {
+  font-size: 13px; font-weight: 600; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text-primary);
+}
+
+/* ── Price Chart ── */
+.chart-wrap { position: relative; height: 220px; }
+.chart-wrap svg { width: 100%; height: 100%; }
+.chart-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 11px; color: var(--text-secondary); justify-content: center; }
+.chart-legend span { display: flex; align-items: center; gap: 4px; }
+.chart-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.dot-current { background: var(--accent); }
+.dot-lowest  { background: var(--success); }
+.dot-highest { background: var(--danger); }
+
+/* ── Video Grid ── */
+.video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 14px; }
+.video-card {
+  border-radius: 8px; overflow: hidden;
+  cursor: pointer; background: #f9f9f9;
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+}
+:root.dark .video-card { background: #1c1c1e; }
+.video-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.video-thumb {
+  height: 105px; position: relative; overflow: hidden;
+}
+.video-thumb-placeholder {
+  width: 100%; height: 100%;
+  background: linear-gradient(135deg, #e2e2e2 0%, #d0d0d0 100%);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-tertiary); font-size: 24px;
+}
+.video-duration {
+  position: absolute; bottom: 6px; right: 6px;
+  background: rgba(0,0,0,0.7); color: #fff;
+  font-size: 10px; padding: 1px 5px; border-radius: 3px;
+}
+.video-badge-warning {
+  position: absolute; top: 6px; left: 6px;
+  background: var(--danger); color: #fff;
+  font-size: 9px; padding: 1px 5px; border-radius: 3px;
+  font-weight: 600;
+}
+.video-info { padding: 10px; }
+.video-title {
+  font-size: 12px; line-height: 1.4; font-weight: 500;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; margin-bottom: 4px;
+}
+.video-meta { font-size: 11px; color: var(--text-tertiary); }
+
+/* ── Coupons ── */
+.coupon-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border: 1px dashed rgba(0,0,0,0.1);
+  border-radius: 10px; margin-bottom: 10px;
+  background: #fffcf5; transition: background 0.15s;
+}
+:root.dark .coupon-card { background: #2a2420; border-color: rgba(255,255,255,0.08); }
+.coupon-left { display: flex; align-items: center; gap: 14px; }
+.coupon-amount { font-size: 20px; font-weight: 700; color: var(--danger); white-space: nowrap; }
+.coupon-details { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.coupon-details .scope { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+.coupon-expire { font-size: 11px; color: var(--text-tertiary); }
+.btn-copy {
+  background: var(--accent); color: #fff; border: none;
+  padding: 6px 14px; border-radius: 6px; font-size: 12px;
+  cursor: pointer; font-family: var(--font);
+  transition: opacity 0.15s; white-space: nowrap;
+}
+.btn-copy:hover { opacity: 0.88; }
+.btn-copy:active { transform: scale(0.97); }
+
+.final-price-bar {
+  padding: 16px 20px; background: rgba(52,199,89,0.08);
+  border-radius: var(--radius-md); margin-bottom: 14px;
+  text-align: center; border: 1px solid rgba(52,199,89,0.15);
+}
+.final-price-bar .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+.final-price-bar .price { font-size: 24px; font-weight: 700; color: var(--success); }
+.final-price-bar .calc { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+.stackable-tag {
+  display: inline-block; background: rgba(255,149,0,0.12);
+  color: var(--warning); font-size: 10px; font-weight: 600;
+  padding: 1px 6px; border-radius: 4px; margin-left: 4px;
+}
+
+/* ── Comments ── */
+.comment-item {
+  padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.04);
+  animation: fadeUpIn 0.25s var(--transition);
+}
+.comment-item:last-child { border-bottom: none; }
+.comment-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.comment-user { font-size: 12px; font-weight: 600; }
+.comment-time { font-size: 11px; color: var(--text-tertiary); }
+.comment-text { font-size: 13px; line-height: 1.55; color: #444; }
+:root.dark .comment-text { color: #ccc; }
+.comment-text .kw-warn {
+  color: var(--danger); font-weight: 600;
+}
+.comment-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+
+/* ── Vote Bar ── */
+.vote-bar {
+  display: flex; height: 6px; border-radius: 3px;
+  overflow: hidden; margin-top: 8px; background: rgba(0,0,0,0.04);
+}
+.vote-bar .worthy   { background: var(--success); transition: width 0.5s ease-out; }
+.vote-bar .unworthy { background: var(--danger); }
+.vote-stats { font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
+
+/* ── Offer Card ── */
+.offer-card {
+  padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.04);
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.offer-card:last-child { border-bottom: none; }
+.offer-info { flex: 1; }
+.offer-title { font-size: 13px; line-height: 1.4; margin-bottom: 4px; cursor: pointer; }
+.offer-title:hover { color: var(--accent); }
+.offer-price { font-size: 15px; font-weight: 700; color: var(--danger); }
+.offer-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+.offer-votes { text-align: right; flex-shrink: 0; margin-left: 12px; }
+.offer-votes .val { font-size: 13px; font-weight: 600; color: var(--success); }
+
+/* ── Alert Banner ── */
+.alert-banner {
+  padding: 10px 16px; border-radius: 8px; margin-bottom: 16px;
+  font-size: 12px; font-weight: 500;
+  display: flex; align-items: center; gap: 8px;
+  animation: fadeUpIn 0.3s var(--transition);
+}
+.alert-warning { background: rgba(255,149,0,0.1); color: var(--warning); border: 1px solid rgba(255,149,0,0.2); }
+.alert-info    { background: rgba(0,113,227,0.08); color: var(--accent); border: 1px solid rgba(0,113,227,0.15); }
+.alert-error   { background: rgba(255,59,48,0.08); color: var(--danger); border: 1px solid rgba(255,59,48,0.15); }
+
+/* ── Loading ── */
+.loader-wrap {
+  display: flex; align-items: center; justify-content: center;
+  padding: 40px;
+}
+.loader-dots { display: flex; gap: 6px; }
+.loader-dots span {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); opacity: 0.3;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.loader-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loader-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.85); color: #fff;
+  padding: 10px 20px; border-radius: 20px;
+  font-size: 13px; font-family: var(--font);
+  z-index: 1000; pointer-events: none;
+  animation: toastIn 0.3s spring, toastOut 0.25s ease-in 2s forwards;
+  backdrop-filter: blur(10px);
+}
+:root.dark .toast { background: rgba(255,255,255,0.15); }
+
+/* ── Keyframes ── */
+@keyframes fadeUpIn  { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideUp   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse     { 0%,100% { opacity: 0.2; } 50% { opacity: 0.8; } }
+@keyframes toastIn   { from { opacity: 0; transform: translateX(-50%) translateY(-16px) scale(0.9); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
+@keyframes toastOut  { to   { opacity: 0; transform: translateX(-50%) translateY(-8px); } }
+@keyframes countUp   { from { opacity: 0.6; } to { opacity: 1; } }
+@keyframes pulseDot  { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: 0.6; } }
+.price-current-dot { animation: pulseDot 2s ease-in-out infinite; }
+
+/* ── Hidden ── */
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- App Shell -->
+<div id="app">
+
+  <!-- ── Title Bar ── -->
+  <div id="titlebar">
+    <div class="titlebar-controls">
+      <div class="control-dot dot-red"    data-action="close"     title="关闭"></div>
+      <div class="control-dot dot-yellow" data-action="minimize"  title="最小化"></div>
+      <div class="control-dot dot-green"  data-action="maximize"  title="最大化"></div>
+    </div>
+    <div class="search-area">
+      <span class="search-icon">🔍</span>
+      <input type="text" class="search-input" id="searchInput"
+             placeholder="搜索商品名称 / 粘贴京东 / 淘宝链接"
+             autocomplete="off">
+      <div class="search-history-dropdown hidden" id="searchHistory"></div>
+    </div>
+  </div>
+
+  <!-- ── Main Content ── -->
+  <div id="main">
+
+    <!-- ── Sidebar ── -->
+    <div id="sidebar">
+      <div class="sidebar-item active" data-tab="overview">
+        <div class="sidebar-icon icon-overview">📊</div>
+        <span>综合概览</span>
+      </div>
+      <div class="sidebar-item" data-tab="bzhan">
+        <div class="sidebar-icon icon-bzhan">B</div>
+        <span>B站评测</span>
+      </div>
+      <div class="sidebar-item" data-tab="history">
+        <div class="sidebar-icon icon-manman">慢</div>
+        <span>历史价格</span>
+      </div>
+      <div class="sidebar-item" data-tab="coupons">
+        <div class="sidebar-icon icon-gwd">券</div>
+        <span>隐藏优惠券</span>
+      </div>
+      <div class="sidebar-item" data-tab="community">
+        <div class="sidebar-icon icon-smz">值</div>
+        <span>值友评论</span>
+      </div>
+
+      <div class="cache-info">
+        <div>💾 本地缓存</div>
+        <div class="size" id="cacheSize">--</div>
+        <button class="btn-clear-cache" id="btnClearCache">清除缓存</button>
+        <button class="btn-clear-cache" id="darkModeToggle" style="margin-top:2px;">🌙 暗色</button>
+      </div>
+    </div>
+
+    <!-- ── Content Panel ── -->
+    <div id="content">
+      <!-- Empty -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">📦</div>
+        <h3>开始探索好价</h3>
+        <p>输入商品名称，自动聚合全网数据</p>
+      </div>
+
+      <!-- Product Area (hidden until search) -->
+      <div id="productArea" class="hidden">
+        <!-- Header -->
+        <div class="product-header">
+          <svg class="product-img" id="prodImg" viewBox="0 0 110 110">
+            <rect width="110" height="110" rx="12" fill="#e8e8ed"/>
+            <text x="55" y="62" text-anchor="middle" fill="#aeaeb2" font-size="36">📦</text>
+          </svg>
+          <div class="product-info">
+            <h1 id="prodTitle">--</h1>
+            <div class="price-tag">
+              <span id="prodPrice">¥--</span>
+              <span class="original" id="prodOrigPrice"></span>
+            </div>
+            <div class="price-meta">
+              <span id="priceBadge"></span>
+              <span id="prodPlatform">--</span>
+              <span id="prodUpdateTime">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alert Banner -->
+        <div id="alertBanner" class="hidden"></div>
+
+        <!-- Tabs -->
+        <div class="tabs" id="tabs">
+          <div class="tab active" data-tab="tab-history">📈 价格趋势</div>
+          <div class="tab" data-tab="tab-bzhan">📺 B站评测</div>
+          <div class="tab" data-tab="tab-coupons">🎫 优惠券</div>
+          <div class="tab" data-tab="tab-community">💬 值友评论</div>
+        </div>
+
+        <!-- Tab: History -->
+        <div id="tab-history" class="tab-content active">
+          <div class="card"><div class="card-title">📉 90天价格曲线</div><div class="chart-wrap" id="priceChart"></div></div>
+        </div>
+
+        <!-- Tab: Bilibili -->
+        <div id="tab-bzhan" class="tab-content">
+          <div class="card"><div class="card-title">📺 B站热门评测 & 翻车实录</div><div class="video-grid" id="videoGrid"></div></div>
+        </div>
+
+        <!-- Tab: Coupons -->
+        <div id="tab-coupons" class="tab-content">
+          <div class="final-price-bar hidden" id="finalPriceBar">
+            <div class="label">叠加后到手价</div>
+            <div class="price" id="finalPrice">¥--</div>
+            <div class="calc" id="priceCalc">--</div>
+          </div>
+          <div class="card"><div class="card-title">🎫 挖掘到的隐藏优惠</div><div id="couponList"></div></div>
+        </div>
+
+        <!-- Tab: Community -->
+        <div id="tab-community" class="tab-content">
+          <div class="card"><div class="card-title">💬 什么值得买 · 最新评论</div><div id="commentList"></div></div>
+        </div>
+      </div>
+
+      <!-- Loader -->
+      <div class="loader-wrap hidden" id="loader">
+        <div class="loader-dots"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toastContainer"></div>
+
+<!-- Scripts -->
+<script src="js/utils.js"></script>
+<script src="js/components/price-chart.js"></script>
+<script src="js/components/video-grid.js"></script>
+<script src="js/components/coupon-list.js"></script>
+<script src="js/components/comment-feed.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

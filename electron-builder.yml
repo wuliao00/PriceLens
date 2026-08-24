@@ -1,0 +1,39 @@
+# PriceLens — electron-builder 配置
+# 参考: https://www.electron.build/configuration/configuration
+
+appId: com.pricelens.app
+productName: PriceLens
+copyright: Copyright © 2024 PriceLens
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - src/**/*
+  - build/**/*
+  - package.json
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  artifactName: PriceLens-Setup-${version}.exe
+
+portable:
+  artifactName: PriceLens-Portable-${version}.exe
+
+extraResources: []

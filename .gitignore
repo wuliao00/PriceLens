@@ -1,0 +1,23 @@
+# Vue, IDE dirs
+node_modules/
+dist/
+release/
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Cache
+userData/
+*.log
+
+# Playwright browsers
+ms-playwright/
+
+# Android (not used in this Electron project, but keeping for reference)
+local.properties
+app/pricelens.keystore
+*.keystore
