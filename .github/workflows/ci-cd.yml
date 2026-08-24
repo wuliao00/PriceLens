@@ -1,0 +1,235 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  release:
+    types: [published]
+
+env:
+  JAVA_VERSION: '17'
+  NODE_VERSION: '20'
+  GRADLE_VERSION: '8.5'
+
+jobs:
+  # ========== Android 构建与测试 ==========
+  android-build:
+    name: Android Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 完整历史用于版本号生成
+      
+      - name: 设置 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
+      
+      - name: 设置 Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+      
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          ndk-version: r26c
+          cmdline-tools-version: latest
+      
+      - name: 验证 Gradle Wrapper
+        run: ./gradlew --version
+      
+      - name: 代码风格检查
+        run: |
+          ./gradlew ktlintCheck detekt --no-daemon
+      
+      - name: 单元测试
+        run: |
+          ./gradlew test --no-daemon --continue
+      
+      - name: 构建 Debug APK
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon
+      
+      - name: 上传 Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+      
+      - name: 构建 Release APK (仅 Release 事件)
+        if: github.event_name == 'release'
+        env:
+          PRICLENS_STORE_FILE: ${{ secrets.PRICLENS_STORE_FILE }}
+          PRICLENS_STORE_PASSWORD: ${{ secrets.PRICLENS_STORE_PASSWORD }}
+          PRICLENS_KEY_ALIAS: ${{ secrets.PRICLENS_KEY_ALIAS }}
+          PRICLENS_KEY_PASSWORD: ${{ secrets.PRICLENS_KEY_PASSWORD }}
+        run: |
+          echo "PRICLENS_STORE_FILE=$PRICLENS_STORE_FILE" >> local.properties
+          echo "PRICLENS_STORE_PASSWORD=$PRICLENS_STORE_PASSWORD" >> local.properties
+          echo "PRICLENS_KEY_ALIAS=$PRICLENS_KEY_ALIAS" >> local.properties
+          echo "PRICLENS_KEY_PASSWORD=$PRICLENS_KEY_PASSWORD" >> local.properties
+          ./gradlew :app:assembleRelease --no-daemon
+      
+      - name: 上传 Release APK (仅 Release 事件)
+        if: github.event_name == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
+
+  # ========== Desktop 构建与测试 ==========
+  desktop-build:
+    name: Desktop Build & Test
+    runs-on: windows-latest
+    timeout-minutes: 30
+    
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: desktop
+    
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+      
+      - name: 安装依赖
+        run: npm ci
+      
+      - name: 代码风格检查
+        run: npm run lint
+      
+      - name: 单元测试
+        run: npm test --if-present
+      
+      - name: 构建分发包
+        run: npm run build
+      
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-dist
+          path: desktop/dist/*.zip
+          retention-days: 7
+
+  # ========== 文档部署 ==========
+  docs-deploy:
+    name: Deploy GitHub Pages
+    runs-on: ubuntu-latest
+    needs: [android-build, desktop-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      pages: write
+      id-token: write
+    
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+      
+      - name: 设置 Pages
+        uses: actions/configure-pages@v4
+      
+      - name: 上传 Pages 产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      
+      - name: 部署到 GitHub Pages
+        uses: actions/deploy-pages@v4
+
+  # ========== Release 发布 ==========
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [android-build, desktop-build]
+    if: github.event_name == 'release'
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 下载 Android Release APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-release-apk
+          path: release-assets/
+      
+      - name: 下载 Desktop 分发包
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-dist
+          path: release-assets/
+      
+      - name: 重命名 Android APK
+        run: |
+          mv release-assets/app-release.apk "release-assets/PriceLens比价助手_v${{ github.event.release.tag_name }}_免费开源_作者莫.apk"
+      
+      - name: 发布 Release 资源
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release-assets/*
+          draft: false
+          prerelease: ${{ github.event.release.prerelease }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ========== 依赖安全扫描 ==========
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+      
+      - name: 设置 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
+      
+      - name: 设置 Gradle
+        uses: gradle/actions/setup-gradle@v3
+      
+      - name: 依赖漏洞扫描
+        run: ./gradlew dependencyCheckAnalyze --no-daemon
+        continue-on-error: true
+      
+      - name: 上传漏洞报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: app/build/reports/dependency-check-report.html
+          retention-days: 30
+      
+      - name: npm 审计
+        run: |
+          cd desktop
+          npm audit --audit-level=high
+        continue-on-error: true
