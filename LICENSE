@@ -20,13 +20,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-## 附加声明（非许可条款，不影响 MIT 许可效力）
-
-1. **永久免费承诺**：PriceLens 承诺永久免费、无内购、无广告、无会员制。任何人以任何形式对他人收费分发本软件（付费下载、付费解锁、会员制、代装服务等）均为欺诈行为，请用户警惕。
-
-2. **隐私承诺**：本软件不收集、不上传任何用户数据；比价数据仅保存在用户设备本地。详见 [PRIVACY.md](PRIVACY.md)。
-
-3. **安全承诺**：本软件未集成任何第三方统计、推送、广告、热修复 SDK。详见 [SECURITY.md](SECURITY.md)。
