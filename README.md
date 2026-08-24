@@ -381,9 +381,9 @@ A:
 | **项目结构** | 代码目录组织与模块职责 | [README.md#项目结构](README.md#-项目结构) |
 | **贡献指南** | PR 流程、代码规范、欢迎方向 | [README.md#贡献指南](README.md#-贡献指南) |
 | **FAQ** | 常见问题分类解答 | [README.md#常见问题-faq](README.md#-常见问题-faq) |
-| **隐私声明** | 数据收集/使用/存储说明 | [PRIVACY.md](PRIVACY.md) *(待创建)* |
-| **API 文档** | 爬虫接口、缓存层、IPC 通信 | [docs/API.md](docs/API.md) *(待创建)* |
-| **开发指南** | 环境搭建、调试技巧、发布流程 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) *(待创建)* |
+| **隐私声明** | 数据收集/使用/存储说明 | [PRIVACY.md](PRIVACY.md) |
+| **API 文档** | 爬虫接口、缓存层、IPC 通信 | [docs/API.md](docs/API.md)  |
+| **开发指南** | 环境搭建、调试技巧、发布流程 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)  |
 | **GitHub Wiki** | 社区维护的扩展文档 | [Wiki](https://github.com/wuliao00/PriceLens/wiki) |
 
 > 📝 标记 `*(待创建)*` 的文档欢迎社区贡献，请参考 [贡献指南](README.md#-贡献指南)
