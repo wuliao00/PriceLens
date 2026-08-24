@@ -147,7 +147,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: 设置 Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v6
       
       - name: 上传 Pages 产物
         uses: actions/upload-pages-artifact@v3
