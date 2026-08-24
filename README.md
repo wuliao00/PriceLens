@@ -60,12 +60,36 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 **源码构建**：
 ```bash
 cd desktop
-npm install          # 首次安装依赖（需 Node 18+）
-npm run build        # 产出 dist/PriceLens-<version>-win.zip
+
+# 1. 安装依赖（需 Node 18+，推荐使用 nvm 管理版本）
+npm install          # 首次安装依赖，自动生成图标
+
+# 2. 开发模式（热重载）
+npm run dev          # Electron + Vite 双进程热重载
+npm run dev:web      # 仅启动 Vite 开发服务器（http://localhost:5173）
+
+# 3. 生成应用图标（已在 postinstall 自动运行，也可手动）
+npm run icon         # 生成 build/icon.ico (256×256 PNG-in-ICO)
+
+# 4. 打包分发版（仅 ZIP 便携版，避免 NSIS 兼容性问题）
+npm run build        # 产出 dist/PriceLens-<version>-win.zip (116 MB)
+
+# 5. 可选：安装 Playwright 用于动态渲染页面爬取
+# npm install playwright
+# npx playwright install chromium
 ```
 
-> 💡 `electron-builder.yml` 已配置仅打包 ZIP 便携版（避免 NSIS 兼容性问题）。  
-> 💡 桌面端爬虫与 Android 端**同源同策略**，解析器复用 `desktop/src/main/crawlers/`。
+**构建产物说明**：
+- `dist/win-unpacked/` — 解压后的应用目录（可直接运行 `PriceLens.exe`）
+- `dist/PriceLens-2.0.0-win.zip` — 便携版分发包，解压即用，无需安装
+
+**配置文件**：
+- `electron-builder.yml` — 仅打包 `zip` 目标，`asar: true`，排除 `node_modules/*/test*` 等体积优化
+- `vite.config.js` — 渲染进程构建配置，`base: './'` 保证相对路径可在 ZIP 内运行
+- `package.json` — `productName: "PriceLens"`、`version: "2.0.0"` 同步至安装包元数据
+
+> 💡 桌面端爬虫与 Android 端**同源同策略**，解析器复用 `desktop/src/main/crawlers/`。  
+> 💡 `optionalDependencies` 中的 `playwright` 仅用于需要 JS 渲染的页面（如 SPA 商品页），未安装时自动降级为静态解析。
 
 ---
 
