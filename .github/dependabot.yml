@@ -1,0 +1,48 @@
+version: 2
+updates:
+  # Gradle 依赖更新 (Android 模块)
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "gradle"
+      - "android"
+    commit-message:
+      prefix: "chore(deps):"
+      include: "scope"
+
+  # npm 依赖更新 (桌面端)
+  - package-ecosystem: "npm"
+    directory: "/desktop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "npm"
+      - "electron"
+    commit-message:
+      prefix: "chore(deps):"
+      include: "scope"
+
+  # GitHub Actions 更新
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci):"
+      include: "scope"
