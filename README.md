@@ -29,10 +29,10 @@
 
 | 平台 | 蓝奏云 | 夸克网盘 | GitHub Release |
 |------|--------|----------|----------------|
-| **Android** | [PriceLens比价助手_v2.3_免费开源_作者莫.apk](https://www.lanzou.com/b01example) | [PriceLens比价助手_v2.3_免费开源_作者莫.apk](https://pan.quark.cn/s/example) | [Release](https://github.com/wuliao00/PriceLens/releases) |
-| **Windows** | [PriceLens-2.0.0-win.zip](https://www.lanzou.com/b01example) | [PriceLens-2.0.0-win.zip](https://pan.quark.cn/s/example) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+| **Android** | [PriceLens比价助手_v2.3_免费开源_作者莫.apk](https://www.ilanzou.com/s/K1DKLuCg) | [PriceLens比价助手_v2.3_免费开源_作者莫.apk](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+| **Windows** | [PriceLens-2.0.0-win.zip](https://www.ilanzou.com/s/K1DKLuCg) | [PriceLens-2.0.0-win.zip](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
 
-> ⚠️ **请将上方 `example` 替换为实际分享链接**。蓝奏云建议设置提取码，夸克网盘可设置有效期。
+> ⚠️ **蓝奏云无需提取码**，夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
 
 ---
 
