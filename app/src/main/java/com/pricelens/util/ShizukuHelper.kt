@@ -175,7 +175,9 @@ object ShizukuHelper {
 
     /**
      * 一键开启无障碍 + 悬浮窗 + 通知权限。完成后回调 true/false。
+     *
      * 命令保持幂等：已在列表中则不重复追加；低版本无通知运行时权限时忽略报错。
+     * 写完 settings 后再主动 ping 一次 UserService（避免 R8 混淆下"看似 OK 实则未连"）。
      */
     fun oneClickSetup(context: Context, onDone: (Boolean) -> Unit) {
         if (!isAlive() || !isGranted()) {
@@ -184,22 +186,43 @@ object ShizukuHelper {
         }
         val svc = "com.pricelens/com.pricelens.accessibility.PriceMonitorService"
         // 一条 shell 完成读-改-写，避免多次往返
+        // 注意：用双引号包住 $VAR 防止 CUR 含空格/冒号时被 shell 拆分
         val cmd = """
-            CUR=`settings get secure enabled_accessibility_services`
-            case "`echo ${'$'}CUR`" in
-              *com.pricelens*) ;;
+            CUR="`settings get secure enabled_accessibility_services`"
+            case "${'$'}CUR" in
+              *"com.pricelens"*) ;;
               *) if [ -z "${'$'}CUR" ] || [ "${'$'}CUR" = "null" ]; then
-                     settings put secure enabled_accessibility_services "$svc";
+                     settings put secure enabled_accessibility_services "${'$'}svc";
                  else
-                     settings put secure enabled_accessibility_services "`echo ${'$'}CUR`:$svc";
+                     settings put secure enabled_accessibility_services "${'$'}CUR:${'$'}svc";
                  fi ;;
             esac
             settings put secure accessibility_enabled 1
-            appops set com.pricelens SYSTEM_ALERT_WINDOW allow
+            # Android 13+ 用 cmd appops 替代直接 appops set，兼容 MIUI/ColorOS
+            appops set --uid com.pricelens SYSTEM_ALERT_WINDOW allow || appops set com.pricelens SYSTEM_ALERT_WINDOW allow
             pm grant com.pricelens android.permission.POST_NOTIFICATIONS || true
-            echo SETUP_DONE
+            # 立即验证：写入是否生效（防止系统静默丢弃）
+            NEW="`settings get secure enabled_accessibility_services`"
+            case "${'$'}NEW" in
+              *"com.pricelens"*) echo SETUP_OK ;;
+              *) echo SETUP_FAIL ;;
+            esac
         """.trimIndent()
 
-        execViaShizuku(context, cmd) { ok, _ -> onDone(ok) }
+        execViaShizuku(context, cmd) { ok, output ->
+            val writeOk = ok && output.contains("SETUP_OK")
+            if (writeOk) {
+                // 写入成功 → 自动跳无障碍设置页（部分 ROM 还需要用户在系统弹窗里点"确定"）
+                // 这样把"系统拒绝"的最后一个确认步骤也自动引导到位
+                try {
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                } catch (_: Exception) {
+                }
+            }
+            onDone(writeOk)
+        }
     }
 }
