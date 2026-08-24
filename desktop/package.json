@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "cheerio": "^1.0.0",
-    "undici": "^6.19.0"
+    "undici": "^8.10.0"
   },
   "optionalDependencies": {
     "playwright": "^1.40.0"
