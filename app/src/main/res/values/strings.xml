@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PriceLens</string>
+    <string name="accessibility_label">PriceLens 比价助手</string>
+    <string name="accessibility_desc">开启后，在京东/淘宝/拼多多商品页自动识别当前价格并弹出比价浮窗。仅监听以上三个电商应用，读取的价格与标题只保存在本机，绝不上传。可随时在系统设置或应用内一键关闭。</string>
+    <string name="overlay_cta">查看历史价 &amp; 优惠券</string>
+    <string name="price_alert_channel">降价提醒</string>
+    <string name="notification_permission_hint">开启通知权限后才能收到降价提醒</string>
+    <string name="disclaimer_title">免费声明 · 作者：莫</string>
+    <string name="disclaimer_body">作者：莫\n\n本软件（PriceLens 比价助手）永久免费开源，不收取任何费用，没有付费版、没有会员、没有内购。\n\n⚠ 任何人以任何形式向您收费（付费下载、付费解锁、 VIP 会员、代装服务等），都是骗子，请勿上当！\n\n您的数据仅保存在手机本地，绝不上传。</string>
+    <string name="disclaimer_ok">我知道了，是免费的</string>
+</resources>

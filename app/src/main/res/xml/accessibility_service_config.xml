@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- §1.3 服务配置：仅监听京东/淘宝/拼多多，最小权限 + 300ms 事件节流 -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:notificationTimeout="300"
+    android:packageNames="com.jingdong.app.mall,com.taobao.taobao,com.xunmeng.pinduoduo"
+    android:description="@string/accessibility_desc"
+    android:isAccessibilityTool="true"
+    android:settingsActivity="com.pricelens.ui.main.MainActivity" />
