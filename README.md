@@ -25,6 +25,17 @@
 
 ## 🚀 快速开始
 
+### 国内加速下载（推荐）
+
+| 平台 | 蓝奏云 | 夸克网盘 | GitHub Release |
+|------|--------|----------|----------------|
+| **Android** | [PriceLens比价助手_v2.3_免费开源_作者莫.apk](https://www.lanzou.com/b01example) | [PriceLens比价助手_v2.3_免费开源_作者莫.apk](https://pan.quark.cn/s/example) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+| **Windows** | [PriceLens-2.0.0-win.zip](https://www.lanzou.com/b01example) | [PriceLens-2.0.0-win.zip](https://pan.quark.cn/s/example) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+
+> ⚠️ **请将上方 `example` 替换为实际分享链接**。蓝奏云建议设置提取码，夸克网盘可设置有效期。
+
+---
+
 ### Android 版（手机端）
 
 **下载**：[Release](https://github.com/wuliao00/PriceLens/releases) → `PriceLens比价助手_v2.3_免费开源_作者莫.apk`
@@ -55,7 +66,7 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 
 ### Windows 版（桌面端）
 
-**下载**：[Release](https://github.com/wuliao00/PriceLens/releases) → `PriceLens-2.0.0-win.zip`（116 MB，解压即用）
+**下载**：见上方 [国内加速下载](#国内加速下载推荐) 表格 → `PriceLens-2.0.0-win.zip`（116 MB，解压即用）
 
 **源码构建**：
 ```bash
