@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+  <rect width="800" height="500" fill="#1a1a2e"/>
+  <text x="400" y="230" font-family="system-ui, sans-serif" font-size="28" fill="#64ffda" text-anchor="middle" dominant-baseline="middle">Desktop 主界面</text>
+  <text x="400" y="275" font-family="system-ui, sans-serif" font-size="18" fill="#8892b0" text-anchor="middle" dominant-baseline="middle">请替换为真实截图</text>
+  <text x="400" y="315" font-family="system-ui, sans-serif" font-size="14" fill="#4a4a6a" text-anchor="middle" dominant-baseline="middle">建议尺寸: 800×500 (16:10)</text>
+</svg>

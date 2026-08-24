@@ -4,6 +4,22 @@
 > Android 无障碍增强版 + Windows Electron 便携版  
 > 作者：**莫** | 版本：Android v2.3.0 / Desktop v2.0.0
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
+[![Windows](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/wuliao00/PriceLens/releases)
+[![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF.svg)](https://kotlinlang.org/)
+[![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4.svg)](https://developer.android.com/jetpack/compose)
+[![Electron](https://img.shields.io/badge/Framework-Electron-47848F.svg)](https://www.electronjs.org/)
+[![Vite](https://img.shields.io/badge/Build-Vite-646CFF.svg)](https://vitejs.dev/)
+[![Release](https://img.shields.io/github/v/release/wuliao00/PriceLens?label=Latest%20Release)](https://github.com/wuliao00/PriceLens/releases)
+[![Stars](https://img.shields.io/github/stars/wuliao00/PriceLens?style=social)](https://github.com/wuliao00/PriceLens/stargazers)
+
+---
+
+## 🎯 一句话介绍
+
+**PriceLens 让比价回归本质：打开商品页即时看到全网历史价格、优惠券、社区真实评价——无广告、无埋点、数据不出本机。**
+
 ---
 
 ## 📱 支持平台对比
@@ -20,6 +36,24 @@
 | 自定义脚本 | ✅ Shizuku ADB | ⏳ 计划中 |
 | 数据存储 | 本机 Room + TLRU | 本机 SQLite + IndexedDB |
 | 分发方式 | APK（需签名） | ZIP 便携版（免安装） |
+
+---
+
+## 📸 界面预览
+
+> 📷 **建议替换为真实截图/GIF**（将图片放入 `assets/` 目录并更新下方路径）
+
+### Android 端
+
+| 主界面 | 价格浮窗 | B站社区验证 | 价格曲线 |
+|--------|----------|-------------|----------|
+| ![Android Main](assets/android-main.svg) | ![Price Overlay](assets/android-overlay.svg) | ![Bili Verify](assets/android-bili.svg) | ![Price Chart](assets/android-chart.svg) |
+
+### Windows 桌面端
+
+| 主界面 | 价格历史 | 优惠券 | 搜索结果 |
+|--------|----------|--------|----------|
+| ![Desktop Main](assets/desktop-main.svg) | ![Desktop Chart](assets/desktop-chart.svg) | ![Desktop Coupon](assets/desktop-coupon.svg) | ![Desktop Search](assets/desktop-search.svg) |
 
 ---
 
@@ -217,13 +251,142 @@ UA 轮换 ×5 池
 
 ## 🤝 贡献指南
 
+我们欢迎所有形式的贡献！
+
+### 提交 PR 流程
+
 1. Fork 本仓库
 2. 创建特性分支：`git checkout -b feat/your-feature`
 3. 提交变更：`git commit -m "feat: your feature"`
 4. 推送分支：`git push origin feat/your-feature`
 5. 发起 Pull Request
 
-> 欢迎 PR：爬虫适配、UI 优化、性能调优、文档完善、国际化...
+### 欢迎的贡献方向
+
+| 类型 | 示例 |
+|------|------|
+| 🐛 **Bug 修复** | 爬虫解析失效、UI 异常、崩溃修复 |
+| ✨ **新功能** | 新增电商平台支持、新增对比维度 |
+| 🎨 **UI/UX 优化** | 动画优化、暗色模式适配、无障碍改进 |
+| ⚡ **性能调优** | 启动速度、内存占用、缓存命中率 |
+| 📚 **文档完善** | README、API 文档、使用教程、FAQ |
+| 🌐 **国际化** | 多语言支持（i18n） |
+| 🔧 **工程化** | CI/CD、自动化测试、依赖更新 |
+
+### 代码规范
+
+- **Kotlin**：遵循 [Android 官方代码风格](https://developer.android.com/kotlin/style-guide)，使用 `ktlint` + `detekt`
+- **JavaScript/TypeScript**：ESLint + Prettier（`npm run lint`）
+- **提交信息**：遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范（`feat:`, `fix:`, `docs:`, `chore:`, `refactor:` 等）
+
+> 💡 提交前请运行本地检查：`./gradlew ktlintCheck detekt` (Android) / `npm run lint` (Desktop)
+
+---
+
+## ❓ 常见问题 (FAQ)
+
+### 安装与运行
+
+<details>
+<summary><strong>Q: Android APK 安装后打不开 / 闪退？</strong></summary>
+
+A: 请检查：
+1. Android 版本 ≥ 8.0 (API 26)
+2. 已授权**无障碍服务**（设置 → 无障碍 → PriceLens → 开启）
+3. 已授权**悬浮窗权限**（设置 → 应用 → PriceLens → 显示在其他应用上层）
+4. 若使用 Shizuku，请确保 Shizuku 服务正在运行
+</details>
+
+<details>
+<summary><strong>Q: Windows 版解压后双击无反应？</strong></summary>
+
+A: 请检查：
+1. Windows 10/11 (x64)，不支持 32 位系统
+2. 杀毒软件可能拦截 Electron 应用，请添加信任/白名单
+3. 尝试以管理员身份运行 `PriceLens.exe`
+4. 查看 `%APPDATA%\PriceLens\logs\` 下的日志排查
+</details>
+
+<details>
+<summary><strong>Q: 如何验证下载文件完整性？</strong></summary>
+
+A: Release 页面提供 SHA256 校验值，可用以下命令验证：
+```bash
+# Windows (PowerShell)
+Get-FileHash -Algorithm SHA256 PriceLens-2.0.0-win.zip
+
+# Linux/macOS
+sha256sum PriceLens-2.0.0-win.zip
+```
+</details>
+
+### 功能与使用
+
+<details>
+<summary><strong>Q: 为什么某些商品页读不到价格？</strong></summary>
+
+A: 电商 App 控件 ID 随版本频繁变更，`PriceNodeMatcher` 采用启发式兜底匹配，但无法保证 100% 覆盖。遇到失效请提 Issue 并提供：
+- 目标 App 版本号
+- 商品链接/关键词
+- Layout Inspector 截图（可选）
+</details>
+
+<details>
+<summary><strong>Q: 盯价功能如何工作？会消耗电量吗？</strong></summary>
+
+A: Android 端使用 `WorkManager` 周期性任务（默认 30 分钟），受系统电量优化策略影响，实际执行间隔可能延长。已加入电量约束：仅在充电/电量充足时执行网络请求。
+</details>
+
+<details>
+<summary><strong>Q: 桌面端能否像手机端一样自动盯价？</strong></summary>
+
+A: 目前桌面端为查询型工具，**后台盯价功能计划中**（见 [Issue #盯价](https://github.com/wuliao00/PriceLens/issues)）。可手动点击刷新获取最新价格。
+</details>
+
+<details>
+<summary><strong>Q: 数据存储在哪里？如何备份/迁移？</strong></summary>
+
+A: 
+- **Android**：`/data/data/com.pricelens/databases/` (Room) + 内存缓存
+- **Windows**：`%APPDATA%\PriceLens\` (SQLite + IndexedDB)
+- 备份：直接复制对应目录即可；跨设备迁移可导出 JSON（功能开发中）
+</details>
+
+### 隐私与安全
+
+<details>
+<summary><strong>Q: 会上传我的商品浏览记录吗？</strong></summary>
+
+A: **绝不**。PriceLens 遵循 **本地优先** 原则：所有比价数据、搜索历史、盯价任务仅存储在本机，**零埋点、零上报、无账号体系**。详见 [隐私声明](PRIVACY.md)。
+</details>
+
+<details>
+<summary><strong>Q: 为什么需要无障碍服务 / Shizuku 授权？</strong></summary>
+
+A: 
+- **无障碍服务**：读取商品页 UI 树提取价格/标题，实现"打开即比价"
+- **Shizuku (ADB 权限)**：一键授权无障碍+悬浮窗+通知，并支持自定义脚本执行
+- 权限最小化：仅在用户主动开启时生效，均可随时关闭
+</details>
+
+---
+
+## 📚 文档体系
+
+| 文档 | 说明 | 链接 |
+|------|------|------|
+| **README** | 项目总览、快速开始、功能介绍 | [README.md](README.md) |
+| **Release Notes** | 版本更新详细记录 | [RELEASE_NOTES_v2.3.0.md](RELEASE_NOTES_v2.3.0.md) |
+| **爬虫规范** | 双端共用的反爬/限流/重试策略 | [README.md#爬虫规范双端共用](README.md#-爬虫规范双端共用) |
+| **项目结构** | 代码目录组织与模块职责 | [README.md#项目结构](README.md#-项目结构) |
+| **贡献指南** | PR 流程、代码规范、欢迎方向 | [README.md#贡献指南](README.md#-贡献指南) |
+| **FAQ** | 常见问题分类解答 | [README.md#常见问题-faq](README.md#-常见问题-faq) |
+| **隐私声明** | 数据收集/使用/存储说明 | [PRIVACY.md](PRIVACY.md) *(待创建)* |
+| **API 文档** | 爬虫接口、缓存层、IPC 通信 | [docs/API.md](docs/API.md) *(待创建)* |
+| **开发指南** | 环境搭建、调试技巧、发布流程 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) *(待创建)* |
+| **GitHub Wiki** | 社区维护的扩展文档 | [Wiki](https://github.com/wuliao00/PriceLens/wiki) |
+
+> 📝 标记 `*(待创建)*` 的文档欢迎社区贡献，请参考 [贡献指南](README.md#-贡献指南)
 
 ---
 
