@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "description": "renderer 子包声明 ESM，保证浏览器与 Vite 均以 ES module 加载"
+}

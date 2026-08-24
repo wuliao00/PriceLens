@@ -1,0 +1,89 @@
+/**
+ * 设计令牌（规范 §1.1）—— 所有 UI 必须引用这些变量，禁止硬编码魔法数值。
+ */
+:root {
+  /* ── 字体 ── */
+  --font-stack: -apple-system, BlinkMacSystemFont,
+                "Segoe UI Variable Text", "Segoe UI",
+                Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+
+  /* ── 字号 / 字重 ── */
+  --fs-display:  28px; --fw-display: 700;
+  --fs-title:    20px; --fw-title:   600;
+  --fs-body:     14px; --fw-body:    400;
+  --fs-caption:  12px; --fw-caption: 400;
+  --fs-label:    11px; --fw-label:   600;
+
+  /* ── 亮色 ── */
+  --bg-app:        #f5f5f7;
+  --bg-card:       rgba(255,255,255,0.72);
+  --bg-card-solid: #ffffff;
+  --bg-sidebar:    rgba(255,255,255,0.30);
+  --bg-input:      rgba(0,0,0,0.05);
+  --bg-hover:      rgba(0,0,0,0.04);
+
+  --text-primary:   #1d1d1f;
+  --text-secondary: #86868b;
+  --text-tertiary:  #aeaeb2;
+
+  --accent:    #0071e3;
+  --danger:    #ff3b30;
+  --success:   #34c759;
+  --warning:   #ff9500;
+
+  /* ── 阴影 ── */
+  --shadow-1: 0  2px  8px rgba(0,0,0,0.04);
+  --shadow-2: 0  8px 24px rgba(0,0,0,0.08);
+  --shadow-3: 0 16px 48px rgba(0,0,0,0.12);
+
+  /* ── 圆角 ── */
+  --radius-window: 12px;
+  --radius-card:   14px;
+  --radius-btn:    10px;
+  --radius-tag:     6px;
+
+  /* ── 间距（8px 基准） ── */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
+  --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
+  --sp-8: 32px; --sp-10: 40px;
+
+  /* ── 动画 ── */
+  --ease-apple:  cubic-bezier(0.25, 0.8, 0.25, 1);
+  --ease-out:    cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-in:     cubic-bezier(0.4, 0.0, 1, 1);
+  --dur-fast:    150ms;
+  --dur-normal:  300ms;
+  --dur-slow:    500ms;
+
+  /* ── 毛玻璃 ── */
+  --glass-blur:  blur(20px) saturate(180%);
+
+  /* ── 布局尺寸 ── */
+  --titlebar-h: 48px;
+  --statusbar-h: 28px;
+  --sidebar-w: 200px;
+}
+
+/* ── 暗色覆盖 ── */
+[data-theme="dark"] {
+  --bg-app:        #000000;
+  --bg-card:       rgba(28,28,30,0.72);
+  --bg-card-solid: #1c1c1e;
+  --bg-sidebar:    rgba(28,28,30,0.50);
+  --bg-input:      rgba(255,255,255,0.08);
+  --bg-hover:      rgba(255,255,255,0.06);
+
+  --text-primary:   #f5f5f7;
+  --text-secondary: #98989d;
+  --text-tertiary:  #636366;
+
+  --accent:  #0a84ff;
+  --danger:  #ff453a;
+  --success: #30d158;
+  --warning: #ff9f0a;
+
+  --shadow-1: 0  2px  8px rgba(0,0,0,0.30);
+  --shadow-2: 0  8px 24px rgba(0,0,0,0.40);
+  --shadow-3: 0 16px 48px rgba(0,0,0,0.50);
+}

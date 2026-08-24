@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:; connect-src 'self'; font-src 'self';" />
+  <title>PriceLens</title>
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+</head>
+<body>
+  <div class="app-window" id="app-window">
+    <!-- ── 自定义标题栏 48px ── -->
+    <header class="titlebar" id="titlebar">
+      <div class="traffic-lights" id="traffic-lights" title="窗口控制">
+        <div class="dot dot--close" id="tl-close" role="button" aria-label="关闭"></div>
+        <div class="dot dot--minimize" id="tl-min" role="button" aria-label="最小化"></div>
+        <div class="dot dot--maximize" id="tl-max" role="button" aria-label="最大化"></div>
+      </div>
+
+      <div class="search-bar" id="search-bar">
+        <input class="search-input" id="search-input" type="text" spellcheck="false"
+               placeholder="输入商品名 / 粘贴京东、淘宝、B站链接" autocomplete="off" />
+        <div class="search-dropdown" id="search-dropdown" hidden></div>
+      </div>
+
+      <div class="titlebar-actions">
+        <button class="icon-btn" id="btn-theme" aria-label="切换主题" title="主题"></button>
+        <button class="icon-btn" id="btn-settings" aria-label="设置" title="设置 (Ctrl+,)"></button>
+        <div class="win-controls">
+          <button class="win-btn" id="btn-min" aria-label="最小化"></button>
+          <button class="win-btn" id="btn-max" aria-label="最大化/还原"></button>
+          <button class="win-btn win-btn--close" id="btn-close" aria-label="关闭"></button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── 主体：侧边栏 + 内容区 ── -->
+    <div class="app-body">
+      <aside class="sidebar" id="sidebar">
+        <nav class="nav-list" id="nav-list">
+          <div class="nav-item" data-view="overview" title="概览">
+            <span class="nav-icon" data-icon="grid"></span><span class="nav-label">概览</span>
+          </div>
+          <div class="nav-item" data-view="bilibili" title="B站评测">
+            <span class="nav-icon" data-icon="tv"></span><span class="nav-label">B站</span>
+          </div>
+          <div class="nav-item" data-view="price" title="历史价格">
+            <span class="nav-icon" data-icon="chart"></span><span class="nav-label">盯价</span>
+            <span class="nav-dot" id="watch-dot" hidden></span>
+          </div>
+          <div class="nav-item" data-view="coupons" title="优惠券">
+            <span class="nav-icon" data-icon="ticket"></span><span class="nav-label">找券</span>
+          </div>
+          <div class="nav-item" data-view="community" title="什么值得买社区">
+            <span class="nav-icon" data-icon="chat"></span><span class="nav-label">社区</span>
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="cache-info">
+            <span class="cache-size" id="cache-size">缓存 0 MB</span>
+            <button class="btn btn--text" id="btn-clear-cache">清除</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-content" id="main-content"></main>
+    </div>
+
+    <!-- ── 状态栏 28px ── -->
+    <footer class="statusbar">
+      <span class="status-text" id="status-text">就绪</span>
+      <span class="status-meta" id="status-meta">PriceLens v2.0</span>
+    </footer>
+  </div>
+
+  <!-- 挂载点：Toast / 右键菜单 / 弹窗 -->
+  <div id="toast-root"></div>
+  <div id="context-menu-root"></div>
+  <div id="modal-root"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
