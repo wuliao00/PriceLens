@@ -92,14 +92,32 @@ function broadcastTheme() {
 }
 
 /**
+ * 解析托盘图标真实路径：
+ * - dev：app.getAppPath()/build/icon.ico
+ * - asar 打包后 getAppPath() 指向 asar 内，asar 内无法被 nativeImage 读取，
+ *   需回退到 process.resourcesPath/app.asar.unpacked/build/icon.ico（需 electron-builder 解包配置）
+ * @returns {string|null} 存在的图标路径，否则 null
+ */
+function resolveTrayIcon() {
+  const candidates = [
+    path.join(app.getAppPath(), 'build', 'icon.ico'),
+    path.join(process.resourcesPath || '', 'app.asar.unpacked', 'build', 'icon.ico'),
+  ];
+  for (const p of candidates) {
+    if (p && fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+/**
  * 创建托盘图标与菜单：显示主窗口 / 立即检查盯价 / 退出。
  * 图标缺失时跳过（不阻断启动）。
  * @param {() => {checkWatch: () => Promise<void>}} getHandles
  */
 function createTray(getHandles) {
-  const iconPath = path.join(app.getAppPath(), 'build', 'icon.ico');
-  if (!fs.existsSync(iconPath)) {
-    logger.warn(`托盘图标缺失（${iconPath}），跳过托盘常驻`);
+  const iconPath = resolveTrayIcon();
+  if (!iconPath) {
+    logger.warn('托盘图标缺失，跳过托盘常驻');
     return;
   }
   tray = new Tray(nativeImage.createFromPath(iconPath));

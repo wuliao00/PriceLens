@@ -9,3 +9,10 @@ ico-report.txt
 build/*.tgz
 build/win-unpacked/
 
+# 本地调试/临时脚本（保留本机，不入库）
+_smoke*
+_probe*
+_extract*
+_check_*
+build-output.log
+
