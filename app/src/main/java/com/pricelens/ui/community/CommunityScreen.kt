@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.pricelens.data.remote.ShihuoApi
 import com.pricelens.data.remote.SmzdmApi
 import com.pricelens.ui.components.PriceCard
 import com.pricelens.ui.components.ShimmerList
@@ -32,14 +33,15 @@ import com.pricelens.ui.theme.Dims
 import com.pricelens.ui.theme.SemanticColors
 
 /**
- * §6.4 临门一脚 — 什么值得买爆料 + 值/不值进度条。
+ * §6.4 临门一脚 — 识货商品 + 什么值得买爆料 + 值/不值进度条。
+ * 识货补充鞋服/数码等当当覆盖不到的品类，含国补标记。
  * 关键词高亮：神价|史低 → 绿加粗；翻车|品控 → 红加粗（AnnotatedString，无重组动画）。
  */
 @Composable
 fun CommunityScreen(state: MainUiState) {
-    if (state.posts.isEmpty()) {
+    if (state.posts.isEmpty() && state.shihuoItems.isEmpty()) {
         if (state.loading) ShimmerList()
-        else com.pricelens.ui.bilibili.EmptyHint("搜索后聚合什么值得买最新爆料与热评")
+        else com.pricelens.ui.bilibili.EmptyHint("搜索后聚合识货商品与什么值得买最新爆料")
         return
     }
     val context = LocalContext.current
@@ -47,6 +49,32 @@ fun CommunityScreen(state: MainUiState) {
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(Dims.SpacingXL)
     ) {
+        if (state.shihuoItems.isNotEmpty()) {
+            item(key = "shihuo_header") {
+                Text(
+                    "识货",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = Dims.SpacingS)
+                )
+            }
+            items(state.shihuoItems, key = { "sh:${it.goodsId}" }) { item ->
+                ShihuoCard(item) {
+                    if (item.url.isNotEmpty()) com.pricelens.util.UrlOpener.open(context, item.url)
+                }
+                Spacer(Modifier.height(Dims.SpacingM))
+            }
+            item(key = "smzdm_header") {
+                if (state.posts.isNotEmpty()) {
+                    Text(
+                        "什么值得买",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = Dims.SpacingS, bottom = Dims.SpacingS)
+                    )
+                }
+            }
+        }
         items(state.posts, key = { it.url.ifEmpty { it.title } }) { post ->
             PostCard(post) {
                 // 唤起值得买/京东/淘宝 App，未安装回退浏览器
@@ -55,6 +83,59 @@ fun CommunityScreen(state: MainUiState) {
                 }
             }
             Spacer(Modifier.height(Dims.SpacingM))
+        }
+    }
+}
+
+/** 识货商品卡：标题 + 价格 + 品牌/销量 + 国补标签 */
+@Composable
+private fun ShihuoCard(item: ShihuoApi.ShihuoItem, onClick: () -> Unit) {
+    PriceCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+        Row {
+            if (item.image.isNotEmpty()) {
+                com.pricelens.ui.components.AppImage(
+                    url = item.image,
+                    contentDescription = item.title,
+                    modifier = Modifier.width(64.dp).height(64.dp).padding(end = Dims.SpacingM),
+                    corner = 8.dp
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(Dims.SpacingS))
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text(
+                        com.pricelens.util.PriceFormatter.format(item.price),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.width(Dims.SpacingM))
+                    Text(
+                        listOf(item.brand, item.salesInfo).filter { it.isNotEmpty() }
+                            .joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (item.hasSubsidy) {
+                        Spacer(Modifier.width(Dims.SpacingS))
+                        Text(
+                            "国补",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SemanticColors.LowPrice,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
     }
 }

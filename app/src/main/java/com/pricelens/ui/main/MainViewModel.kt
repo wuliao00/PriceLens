@@ -11,6 +11,7 @@ import com.pricelens.data.remote.BiliApi
 import com.pricelens.data.remote.GwdangApi
 import com.pricelens.data.remote.JdApi
 import com.pricelens.data.remote.ManmanbuyApi
+import com.pricelens.data.remote.ShihuoApi
 import com.pricelens.data.remote.SmzdmApi
 import com.pricelens.data.repository.PriceRepository
 import com.pricelens.util.PriceJudgment
@@ -38,6 +39,7 @@ data class MainUiState(
     val videos: List<BiliApi.BiliVideo> = emptyList(),
     val coupons: List<GwdangApi.Coupon> = emptyList(),
     val posts: List<SmzdmApi.SmzdmPost> = emptyList(),
+    val shihuoItems: List<ShihuoApi.ShihuoItem> = emptyList(),
     val netPrice: Double? = null,           // 到手价（找券页 countUp 用）
     val error: String? = null,
     /** 无障碍实时价：本机登录账号在商品页看到的价格（含会员价） */
@@ -215,9 +217,13 @@ class MainViewModel @Inject constructor(
                     _state.update { it.copy(posts = posts) }
                 }
                 if (!filled) {
-                    android.util.Log.w("PriceLens", "关键词 [$keyword] 无商品候选（当当/值得买均无结果）")
+                    android.util.Log.w("PriceLens", "关键词 [$keyword] 当当/值得买无候选，识货并行兜底")
                 }
             }
+
+            // 识货：社区页补充源（鞋服/数码）；当当+值得买均无候选时充当商品候选兜底。
+            // 与上述串行块无数据依赖，放并行 jobs 不拖慢主流程。
+            val needShihuoCandidate = jdSku == null && _state.value.product == null
 
             val jobs = listOf(
                 launch {
@@ -268,6 +274,28 @@ class MainViewModel @Inject constructor(
                     if (_state.value.posts.isEmpty()) {
                         val posts = repository.searchSmzdm(keyword)
                         _state.update { it.copy(posts = posts) }
+                    }
+                },
+                launch {
+                    val items = repository.searchShihuo(keyword)
+                    android.util.Log.i("PriceLens", "识货结果: ${items.size} 条")
+                    if (items.isEmpty()) {
+                        _state.update { it.copy(shihuoItems = items) }
+                        return@launch
+                    }
+                    _state.update { st ->
+                        val candidate = if (needShihuoCandidate && st.product == null)
+                            items.firstOrNull { it.price > 0 }?.let { sh ->
+                                JdApi.JdProduct(
+                                    skuId = "",
+                                    title = sh.title,
+                                    price = sh.price,
+                                    originalPrice = null,
+                                    image = sh.image,
+                                    url = sh.url
+                                )
+                            } else null
+                        st.copy(shihuoItems = items, product = candidate ?: st.product)
                     }
                 }
             )

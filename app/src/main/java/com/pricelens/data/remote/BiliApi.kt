@@ -1,5 +1,7 @@
 package com.pricelens.data.remote
 
+import com.pricelens.util.ContentRisk
+import com.pricelens.util.ContentRiskRules
 import com.pricelens.util.WbiSigner
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,7 +18,9 @@ class BiliApi @Inject constructor(private val client: ApiClient) {
         val author: String,
         val play: Long,
         val pic: String,
-        val bvid: String
+        val bvid: String,
+        /** 内容风险判定（诚实豆沙包思路轻量版：商单/夸大宣传标记） */
+        val risk: ContentRisk = ContentRisk.NONE
     )
 
     /** wbi key 会随版本轮换，进程内缓存一份 */
@@ -51,6 +55,8 @@ class BiliApi @Inject constructor(private val client: ApiClient) {
             val rawTitle = item.optString("title")
                 .replace(Regex("<[^>]+>"), "")
                 .replace("&quot;", "\"").replace("&amp;", "&")
+            val tags = item.optString("tag")
+            val union = item.optInt("is_union_video") == 1
             videos += BiliVideo(
                 title = rawTitle,
                 cleanTitle = rawTitle,
@@ -58,7 +64,8 @@ class BiliApi @Inject constructor(private val client: ApiClient) {
                 play = item.optLong("play"),
                 pic = if (item.optString("pic").startsWith("http"))
                     item.optString("pic") else "https:${item.optString("pic")}",
-                bvid = item.optString("bvid")
+                bvid = item.optString("bvid"),
+                risk = ContentRiskRules.assess("$rawTitle $tags", union)
             )
         }
         return videos

@@ -11,7 +11,9 @@ import com.pricelens.data.remote.DangdangApi
 import com.pricelens.data.remote.GwdangApi
 import com.pricelens.data.remote.JdApi
 import com.pricelens.data.remote.ManmanbuyApi
+import com.pricelens.data.remote.ShihuoApi
 import com.pricelens.data.remote.SmzdmApi
+import com.pricelens.util.ContentRisk
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.json.JSONArray
@@ -32,6 +34,7 @@ class PriceRepository @Inject constructor(
     private val gwdangApi: GwdangApi,
     private val smzdmApi: SmzdmApi,
     private val dangdangApi: DangdangApi,
+    private val shihuoApi: ShihuoApi,
 ) {
 
     // ---------- 商品（L1 → L2 → L3，写回） ----------
@@ -111,6 +114,17 @@ class PriceRepository @Inject constructor(
         val items = dangdangApi.searchProducts(keyword)
         if (items.isNotEmpty()) {
             memoryCache.put(key, dangdangJson(items), CacheTTL.SMZDM_FEED)
+        }
+        return items
+    }
+
+    /** 识货搜索（社区页补充源：鞋服/数码等当当覆盖不到的品类，含国补标记） */
+    suspend fun searchShihuo(keyword: String): List<ShihuoApi.ShihuoItem> {
+        val key = "sh:search:$keyword"
+        memoryCache.get(key)?.let { return parseShihuo(it) }
+        val items = shihuoApi.searchProducts(keyword)
+        if (items.isNotEmpty()) {
+            memoryCache.put(key, shihuoJson(items), CacheTTL.SMZDM_FEED)
         }
         return items
     }
@@ -202,7 +216,10 @@ class PriceRepository @Inject constructor(
     private fun videosJson(list: List<BiliApi.BiliVideo>): String = JSONArray().apply {
         list.forEach { v ->
             put(JSONObject().put("title", v.title).put("author", v.author)
-                .put("play", v.play).put("pic", v.pic).put("bvid", v.bvid))
+                .put("play", v.play).put("pic", v.pic).put("bvid", v.bvid)
+                .put("sponsored", v.risk.sponsored).put("hype", v.risk.hype)
+                .put("sw", v.risk.sponsorWord ?: JSONObject.NULL)
+                .put("hw", v.risk.hypeWord ?: JSONObject.NULL))
         }
     }.toString()
 
@@ -212,7 +229,13 @@ class PriceRepository @Inject constructor(
             val o = arr.optJSONObject(i) ?: return@mapNotNull null
             BiliApi.BiliVideo(
                 o.optString("title"), o.optString("title"), o.optString("author"),
-                o.optLong("play"), o.optString("pic"), o.optString("bvid")
+                o.optLong("play"), o.optString("pic"), o.optString("bvid"),
+                risk = ContentRisk(
+                    sponsored = o.optBoolean("sponsored"),
+                    hype = o.optBoolean("hype"),
+                    sponsorWord = if (o.isNull("sw")) null else o.optString("sw"),
+                    hypeWord = if (o.isNull("hw")) null else o.optString("hw")
+                )
             )
         }
     } catch (_: Exception) { emptyList() }
@@ -278,6 +301,32 @@ class PriceRepository @Inject constructor(
                 mall = o.optString("mall"),
                 positive = o.optInt("positive"),
                 negative = o.optInt("negative")
+            )
+        }
+    } catch (_: Exception) { emptyList() }
+
+    private fun shihuoJson(list: List<ShihuoApi.ShihuoItem>): String = JSONArray().apply {
+        list.forEach { s ->
+            put(JSONObject().put("id", s.goodsId).put("title", s.title)
+                .put("price", s.price).put("image", s.image)
+                .put("sales", s.salesInfo).put("brand", s.brand)
+                .put("subsidy", s.hasSubsidy).put("url", s.url))
+        }
+    }.toString()
+
+    private fun parseShihuo(json: String): List<ShihuoApi.ShihuoItem> = try {
+        val arr = JSONArray(json)
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            ShihuoApi.ShihuoItem(
+                goodsId = o.optLong("id"),
+                title = o.optString("title"),
+                price = o.optDouble("price"),
+                image = o.optString("image"),
+                salesInfo = o.optString("sales"),
+                brand = o.optString("brand"),
+                hasSubsidy = o.optBoolean("subsidy"),
+                url = o.optString("url")
             )
         }
     } catch (_: Exception) { emptyList() }

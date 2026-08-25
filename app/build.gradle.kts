@@ -25,8 +25,8 @@ android {
         applicationId = "com.pricelens"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "2.4.3"
+        versionCode = 12
+        versionName = "2.4.4"
     }
 
     signingConfigs {

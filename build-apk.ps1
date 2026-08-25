@@ -30,8 +30,8 @@ $DEBUG_KEY_ALIAS = 'androiddebugkey'
 $DEBUG_KEY_PASS  = 'android'
 
 # ----- 升级版本号 -----
-$NEW_VERSION_NAME = '2.4.3'
-$NEW_VERSION_CODE = 11
+$NEW_VERSION_NAME = '2.4.4'
+$NEW_VERSION_CODE = 12
 
 # ============================================================
 #  以下逻辑通常无需改动
