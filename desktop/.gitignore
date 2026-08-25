@@ -3,3 +3,9 @@ dist/
 npm-install.log
 *.tmp.js
 ico-report.txt
+
+# build/ 下仅忽略产物，保留打包资源（icon.ico / installer.nsh / generate-icon.js）
+!build/
+build/*.tgz
+build/win-unpacked/
+

@@ -42,12 +42,21 @@ contextBridge.exposeInMainWorld('priceLens', {
 
   /* ── 盯价提醒 ── */
   watch: {
-    set:   (cfg)  => ipcRenderer.invoke('watch:set', cfg),
-    get:   ()     => ipcRenderer.invoke('watch:get'),
-    clear: ()     => ipcRenderer.invoke('watch:clear'),
+    set:       (cfg)  => ipcRenderer.invoke('watch:set', cfg),
+    get:       ()     => ipcRenderer.invoke('watch:get'),
+    clear:     ()     => ipcRenderer.invoke('watch:clear'),
+    checkNow:  ()     => ipcRenderer.invoke('watch:check-now'),
   },
   onWatchTriggered: (cb) => {
     ipcRenderer.on('watch:triggered', (_event, payload) => cb(payload));
+  },
+
+  /* ── 自定义脚本（主进程 PowerShell 执行） ── */
+  scripts: {
+    list:   ()            => ipcRenderer.invoke('scripts:list'),
+    save:   (cfg)         => ipcRenderer.invoke('scripts:save', cfg),
+    remove: (id)          => ipcRenderer.invoke('scripts:remove', id),
+    run:    (id)          => ipcRenderer.invoke('scripts:run', id),
   },
 
   /* ── 主题变化推送（跟随系统模式） ── */

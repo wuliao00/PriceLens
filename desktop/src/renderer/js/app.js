@@ -14,6 +14,7 @@ import { renderPriceView } from './components/price-chart.js';
 import { renderVideoView } from './components/video-grid.js';
 import { renderCouponView } from './components/coupon-list.js';
 import { renderCommunityView } from './components/comment-feed.js';
+import { renderScriptsView } from './components/scripts-page.js';
 import { renderSkeleton } from './components/skeleton.js';
 import { showToast } from './components/toast.js';
 import { createRouter } from './router.js';
@@ -75,6 +76,9 @@ const views = {
           product: state.product || {},
           error: state.errors.community,
         }),
+  },
+  scripts: {
+    render: (c) => renderScriptsView(c, {}),
   },
 };
 

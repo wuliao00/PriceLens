@@ -1,8 +1,8 @@
 {
   "name": "pricelens",
   "productName": "PriceLens",
-  "version": "2.0.0",
-  "description": "PriceLens v2.0 —— 极简主义全网比价决策工具：种草 / 盯价 / 找券 / 社区验证",
+  "version": "2.1.0",
+  "description": "PriceLens v2.1 —— 极简主义全网比价决策工具：种草 / 盯价（30 分钟后台轮询）/ 找券 / 社区验证 / 自定义脚本",
   "author": "PriceLens Team",
   "license": "MIT",
   "private": true,

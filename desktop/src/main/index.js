@@ -7,13 +7,15 @@
  *      禁 webview、拒绝全部权限申请
  *   3. 主题广播（nativeTheme 变化 → 渲染进程）
  *   4. 单实例锁
+ *   5. 托盘常驻：关闭窗口 → 最小化到托盘，盯价后台任务（30 分钟轮询）持续运行
  *
  * 安全红线（规范 §15）：nodeIntegration 永远 false。
  */
 'use strict';
 
-const { app, BrowserWindow, nativeTheme, session } = require('electron');
+const { app, BrowserWindow, nativeTheme, session, Tray, Menu, nativeImage } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs');
 const { registerIpcHandlers } = require('./ipc-handlers');
 const { initStorage } = require('./cache/storage');
 const { createLogger } = require('./utils/logger');
@@ -21,6 +23,8 @@ const { createLogger } = require('./utils/logger');
 const logger = createLogger(() => path.join(app.getPath('userData'), 'logs'));
 
 let mainWindow = null;
+let tray = null;
+let quitting = false; // 托盘「退出」置位后才真正退出
 
 /**
  * 创建主窗口。
@@ -57,6 +61,14 @@ function createWindow() {
   // 首帧就绪后再显示，配合渲染层 300ms 入场动画
   win.once('ready-to-show', () => win.show());
 
+  // 托盘常驻：关闭按钮 → 隐藏到托盘（盯价后台任务继续跑）；托盘选「退出」才真退出
+  win.on('close', (event) => {
+    if (!quitting) {
+      event.preventDefault();
+      win.hide();
+    }
+  });
+
   const devServerUrl = process.env.VITE_DEV_URL || 'http://localhost:5173';
   if (process.argv.includes('--dev')) {
     win.loadURL(devServerUrl).catch((err) => logger.error(`加载开发服务器失败: ${err.message}`));
@@ -79,6 +91,48 @@ function broadcastTheme() {
   });
 }
 
+/**
+ * 创建托盘图标与菜单：显示主窗口 / 立即检查盯价 / 退出。
+ * 图标缺失时跳过（不阻断启动）。
+ * @param {() => {checkWatch: () => Promise<void>}} getHandles
+ */
+function createTray(getHandles) {
+  const iconPath = path.join(app.getAppPath(), 'build', 'icon.ico');
+  if (!fs.existsSync(iconPath)) {
+    logger.warn(`托盘图标缺失（${iconPath}），跳过托盘常驻`);
+    return;
+  }
+  tray = new Tray(nativeImage.createFromPath(iconPath));
+  tray.setToolTip('PriceLens — 盯价后台任务运行中');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    {
+      label: '显示 PriceLens',
+      click: () => {
+        if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createWindow();
+        mainWindow.show();
+        mainWindow.focus();
+      },
+    },
+    {
+      label: '立即检查盯价',
+      click: () => getHandles()?.checkWatch().catch(() => {}),
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ]));
+  tray.on('double-click', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createWindow();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
@@ -86,6 +140,7 @@ if (!gotLock) {
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show(); // 可能隐藏在托盘，需重新显示
       mainWindow.focus();
     }
   });
@@ -102,17 +157,20 @@ if (!gotLock) {
 
     nativeTheme.on('updated', broadcastTheme);
 
-    registerIpcHandlers({ getMainWindow: () => mainWindow, logger });
+    const handles = registerIpcHandlers({ getMainWindow: () => mainWindow, logger });
 
     mainWindow = createWindow();
     broadcastTheme();
+    createTray(() => handles);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
     });
   });
 
+  // 托盘常驻：窗口全部隐藏/关闭后不退出，盯价后台任务继续轮询；
+  // 无托盘（图标缺失）时退化为传统行为。
   app.on('window-all-closed', () => {
-    app.quit();
+    if (!tray || process.platform !== 'win32') app.quit();
   });
 }

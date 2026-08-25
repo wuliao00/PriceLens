@@ -1,8 +1,8 @@
 # PriceLens — 极简全网比价助手
 
 > **双端开源** · **永久免费** · **本地优先** · **MIT License**  
-> Android 无障碍增强版 + Windows Electron 便携版  
-> 作者：**莫** | 版本：Android v2.3.0 / Desktop v2.0.0
+> Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）  
+> 作者：**莫** | 版本：Android v2.4.4 / Desktop v2.1.0
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -29,25 +29,25 @@
 | **京东/淘宝/拼多多** 商品页自动读价 | ✅ 无障碍服务 | ✅ 网页解析 |
 | **哔哩哔哩** 翻车/推荐视频识别 | ✅ | ✅ |
 | **什么值得买/慢慢买/购物党** 爬取 | ✅ | ✅ |
+| **识货（shihuo.cn）** 比价兜底源 | ✅ | ⏳ 计划中 |
+| **商单/夸大宣传标记**（诚实豆沙包规则） | ✅ | ⏳ 计划中 |
 | **咕咚/Keep** 运动装备比价 | ✅ | ✅ |
 | 价格历史曲线（最低/最高/大促标注） | ✅ | ✅ |
 | 优惠券一键复制 | ✅ | ✅ |
-| 盯价后台任务（30min 周期） | ✅ WorkManager | ⏳ 计划中 |
-| 自定义脚本 | ✅ Shizuku ADB | ⏳ 计划中 |
-| 数据存储 | 本机 Room + TLRU | 本机 SQLite + IndexedDB |
-| 分发方式 | APK（需签名） | ZIP 便携版（免安装） |
+| 盯价后台任务（30min 周期） | ✅ WorkManager | ✅ 托盘常驻 + 启动自动恢复 |
+| 自定义脚本 | ✅ Shizuku ADB | ✅ PowerShell 本机执行 |
+| 数据存储 | 本机 Room + TLRU | 本机 JSON 缓存（LRU + TTL） |
+| 分发方式 | APK（需签名） | NSIS 安装器 + ZIP 便携版 |
 
 ---
 
-## 📸 界面预览
+## 📸 界面预览（Android 真机截图）
 
-> 📷 **建议替换为真实截图/GIF**（将图片放入 `assets/` 目录并更新下方路径）
+| B 站评测（含商单/夸大标记） | 社区 · 识货信息源 | 搜索 · 识货兜底 |
+|--------|----------|-------------|
+| ![Bilibili](assets/screenshots/android-bilibili.png) | ![Community Shihuo](assets/screenshots/android-community-shihuo.png) | ![Search iPhone](assets/screenshots/android-search-iphone.png) |
 
-### Android 端
-
-| 主界面 | 价格浮窗 | B站社区验证 | 价格曲线 |
-|--------|----------|-------------|----------|
-| ![Android Main](assets/android-main.svg) | ![Price Overlay](assets/android-overlay.svg) | ![Bili Verify](assets/android-bili.svg) | ![Price Chart](assets/android-chart.svg) |
+> 更多界面（价格曲线 / 优惠券 / 桌面端）见 [Releases](https://github.com/wuliao00/PriceLens/releases) 附件；社区贡献截图欢迎 PR 至 `assets/screenshots/`。
 
 ### Windows 桌面端
 
@@ -100,7 +100,7 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 
 ### Windows 版（桌面端）
 
-**下载**：见上方 [国内加速下载](#国内加速下载推荐) 表格 → `PriceLens-2.0.0-win.zip`（116 MB，解压即用）
+**下载**：见上方 [国内加速下载](#国内加速下载推荐) 表格，或 [Releases](https://github.com/wuliao00/PriceLens/releases) 中的 NSIS 安装器 / ZIP 便携版
 
 **源码构建**：
 ```bash
@@ -116,8 +116,8 @@ npm run dev:web      # 仅启动 Vite 开发服务器（http://localhost:5173）
 # 3. 生成应用图标（已在 postinstall 自动运行，也可手动）
 npm run icon         # 生成 build/icon.ico (256×256 PNG-in-ICO)
 
-# 4. 打包分发版（仅 ZIP 便携版，避免 NSIS 兼容性问题）
-npm run build        # 产出 dist/PriceLens-<version>-win.zip (116 MB)
+# 4. 打包分发版（NSIS 安装器 + ZIP 便携版）
+npm run build        # 产出 dist/PriceLens-<version>-x64.exe 与 .zip（免安装）
 
 # 5. 可选：安装 Playwright 用于动态渲染页面爬取
 # npm install playwright
@@ -125,20 +125,20 @@ npm run build        # 产出 dist/PriceLens-<version>-win.zip (116 MB)
 ```
 
 **构建产物说明**：
-- `dist/win-unpacked/` — 解压后的应用目录（可直接运行 `PriceLens.exe`）
-- `dist/PriceLens-2.0.0-win.zip` — 便携版分发包，解压即用，无需安装
+- `dist/PriceLens-<version>-x64.exe` — NSIS 安装器（可自选安装目录，卸载时询问是否清理数据）
+- `dist/PriceLens-<version>-x64.zip` — 便携版，解压即用，无需安装
 
 **配置文件**：
-- `electron-builder.yml` — 仅打包 `zip` 目标，`asar: true`，排除 `node_modules/*/test*` 等体积优化
+- `electron-builder.yml` — `nsis + zip` 双目标，`asar: true`，排除 `*.map` 体积优化
 - `vite.config.js` — 渲染进程构建配置，`base: './'` 保证相对路径可在 ZIP 内运行
-- `package.json` — `productName: "PriceLens"`、`version: "2.0.0"` 同步至安装包元数据
+- `package.json` — `productName: "PriceLens"`、`version: "2.1.0"` 同步至安装包元数据
 
 > 💡 桌面端爬虫与 Android 端**同源同策略**，解析器复用 `desktop/src/main/crawlers/`。  
 > 💡 `optionalDependencies` 中的 `playwright` 仅用于需要 JS 渲染的页面（如 SPA 商品页），未安装时自动降级为静态解析。
 
 ---
 
-## ✨ 核心特性（v2.3.0 / v2.0.0）
+## ✨ 核心特性（v2.4.4 / v2.1.0）
 
 ### 🔍 智能比价
 - **全平台覆盖**：京东、淘宝、拼多多、哔哩哔哩、什么值得买、慢慢买、购物党、咕咚、Keep
@@ -149,6 +149,12 @@ npm run build        # 产出 dist/PriceLens-<version>-win.zip (116 MB)
 - **B站社区验证**：翻车视频红色标记、推荐视频绿色标记、关键词高亮
 - **值得买值/不值进度条**：直观判断商品口碑
 - **优惠券一键复制**：自动识别可用券，Snackbar 提示复制成功
+- **识货（shihuo.cn）信息源**：解析网页 SSR 数据（免签名免逆向），特定商品在社区/找券无数据时兜底补齐，支持国补标签与付款人数；京东/当当均无结果时自动以识货商品兜底展示价格曲线入口（v2.4.4 新增）
+- **商单/夸大宣传防护**：参考「诚实豆沙包」鉴定思路移植为本地规则引擎——商单词库（商单/恰饭/含广/商务合作…）+ 夸大话术词库（史上最强/天花板/闭眼入…）+ B站联合投稿标记；命中视频挂标签并沉底展示，只标记不删除（v2.4.4 新增）
+
+### 🧩 桌面端自动化（v2.1.0 新增）
+- **盯价后台任务**：30 分钟周期轮询目标价，低于目标价时系统通知；关闭窗口后托盘常驻继续轮询，重启自动恢复未完成任务，托盘菜单可“立即检查”
+- **自定义脚本**：预置 3 个只读安全脚本（系统信息/磁盘空间/本机 IP），自定义脚本可新建/编辑/删除并本地持久化，以 PowerShell 本机权限执行（对应 Android 端 Shizuku），输出实时展示，120 秒超时保护 + 64KB 内容上限 + 200KB 输出截断
 
 ### ⚡ 极致性能
 - **60fps 动画铁律**：`graphicsLayer` + `drawBehind`，时长 ≤ 350ms，无 bounce
@@ -188,17 +194,20 @@ PriceLens/
 │       ├── util/                     # RateLimiter / WbiSigner / PriceFormatter
 │       └── di/                       # Hilt 依赖注入
 │
-├── desktop/                          # Electron 桌面端
+├── desktop/                          # Electron 桌面端（v2.1.0：盯价后台 + 自定义脚本）
 │   ├── src/main/
 │   │   ├── crawlers/                 # 同源爬虫：jd/gwdang/bili/smzdm/manmanbuy
-│   │   ├── cache/                    # SQLite + LRU/TTL 缓存
-│   │   ├── ipc-handlers.js           # 主渲染进程通信
-│   │   └── preload.js                # 安全预加载脚本
+│   │   ├── cache/                    # JSON LRU/TTL 缓存 + settings 存储
+│   │   ├── scripts/                  # 自定义脚本管理器（PowerShell 执行）
+│   │   ├── index.js                  # 主进程：窗口 + 托盘常驻（盯价后台）
+│   │   ├── ipc-handlers.js           # 主渲染进程通信（含 30min 盯价轮询）
+│   │   └── preload.js                # 安全预加载脚本（白名单 API）
 │   ├── src/renderer/
-│   │   ├── js/components/            # UI 组件：价格图表/优惠券/搜索/骨架屏
+│   │   ├── js/components/            # UI 组件：价格图表/优惠券/脚本页/骨架屏
 │   │   ├── css/                      # CSS 变量设计系统
 │   │   └── index.html
-│   ├── electron-builder.yml          # 仅 zip 便携版
+│   ├── build/                        # 图标生成器 + NSIS 卸载片段 + icon.ico
+│   ├── electron-builder.yml          # NSIS 安装器 + zip 便携版
 │   └── package.json
 │
 ├── build.gradle.kts
@@ -245,7 +254,7 @@ UA 轮换 ×5 池
 1. **首次构建需 Android SDK**：本仓库为完整源码，未预编译；请在 Android Studio 中 Sync 后 Build
 2. **电商控件 ID 随版本变化**：`PriceNodeMatcher` 三张 ID 表需实机用 Layout Inspector 校准；启发式兜底已保证不至于完全失效
 3. **页面解析器随目标站改版需同步调整**：桌面端与 Android 端爬虫同源，改版需双端同步
-4. **桌面端盯价/脚本功能计划中**：当前桌面端为查询型工具，后台盯价与自定义脚本仅 Android 端支持
+4. **桌面端识货/商单标记计划中**：桌面端已具备盯价后台与自定义脚本（v2.1.0）；识货数据源与商单/夸大标记当前仅 Android 端（v2.4.4），桌面端后续同步
 
 ---
 
@@ -340,7 +349,7 @@ A: Android 端使用 `WorkManager` 周期性任务（默认 30 分钟），受�
 <details>
 <summary><strong>Q: 桌面端能否像手机端一样自动盯价？</strong></summary>
 
-A: 目前桌面端为查询型工具，**后台盯价功能计划中**（见 [Issue #盯价](https://github.com/wuliao00/PriceLens/issues)）。可手动点击刷新获取最新价格。
+A: **已支持（v2.1.0）**。在「盯价」页设置目标价后，主进程以 30 分钟周期轮询慢慢买当前价，低于目标价时发系统通知；关闭窗口后应用驻留托盘继续轮询，重启后自动恢复任务。托盘右键菜单可「立即检查」或退出。
 </details>
 
 <details>

@@ -10,3 +10,9 @@ captures/
 *.aab
 *.keystore
 !debug.keystore
+
+# 本地验证截图与临时文件（保留本机，不入库）
+s*.png
+_del*.tmp
+_release_notes_*.md
+_cleanup.ps1
