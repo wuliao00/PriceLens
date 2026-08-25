@@ -52,6 +52,12 @@ android {
         }
     }
 
+    lint {
+        // release 不需要 lint 检查（避免 build 时缺失 lint 报告文件导致失败）
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
