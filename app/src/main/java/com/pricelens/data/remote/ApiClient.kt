@@ -98,16 +98,18 @@ class ApiClient @Inject constructor(
         }
         var attempt = 0
         while (attempt <= 1) {
-            val result = rateLimiter.withLimit(domain) { executeOnce(build, domain) }
+            val result = rateLimiter.withLimit(domain) { executeOnce(build, domain, url) }
             if (result != null) return result
             attempt++
         }
+        android.util.Log.w("PriceLens", "NET 失败(重试后仍无数据): $url")
         return null
     }
 
     private fun executeOnce(
         build: (okhttp3.Headers) -> okhttp3.Response,
-        domain: String
+        domain: String,
+        url: String
     ): String? {
         return try {
             val headers = okhttp3.Headers.Builder()
@@ -117,15 +119,33 @@ class ApiClient @Inject constructor(
             build(headers).use { resp ->
                 when {
                     resp.code == 403 || resp.code == 412 -> {
+                        android.util.Log.w("PriceLens", "NET 403/412 反爬拦截: $domain")
                         rateLimiter.penalize(domain)
                         null
                     }
-                    resp.isSuccessful -> resp.body?.string()
-                    else -> null
+                    resp.isSuccessful -> {
+                        val body = resp.body?.string()
+                        android.util.Log.i("PriceLens", "NET ${resp.code} len=${body?.length ?: 0} $url")
+                        // 反爬软拦截（如 202 + JS challenge 页）：内容过短视为无效，避免误判为"无数据"
+                        if (body != null && body.length < 512 && isAntiBotChallenge(body)) {
+                            android.util.Log.w("PriceLens", "NET 疑似反爬拦截页: $domain")
+                            rateLimiter.penalize(domain)
+                            null
+                        } else body
+                    }
+                    else -> {
+                        android.util.Log.w("PriceLens", "NET ${resp.code} $url")
+                        null
+                    }
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.w("PriceLens", "NET 异常 ${e.javaClass.simpleName}: $url")
             null
         }
     }
+
+    /** 常见反爬 JS challenge 页特征（如什么值得买的 probe.js 探测页） */
+    private fun isAntiBotChallenge(body: String): Boolean =
+        body.contains("probe.js") || body.contains("challenge") && body.contains("script")
 }

@@ -7,6 +7,7 @@ import com.pricelens.data.local.entity.PriceHistoryEntity
 import com.pricelens.data.local.entity.ProductEntity
 import com.pricelens.data.local.entity.SearchRecordEntity
 import com.pricelens.data.remote.BiliApi
+import com.pricelens.data.remote.DangdangApi
 import com.pricelens.data.remote.GwdangApi
 import com.pricelens.data.remote.JdApi
 import com.pricelens.data.remote.ManmanbuyApi
@@ -30,6 +31,7 @@ class PriceRepository @Inject constructor(
     private val biliApi: BiliApi,
     private val gwdangApi: GwdangApi,
     private val smzdmApi: SmzdmApi,
+    private val dangdangApi: DangdangApi,
 ) {
 
     // ---------- 商品（L1 → L2 → L3，写回） ----------
@@ -100,6 +102,17 @@ class PriceRepository @Inject constructor(
             memoryCache.put(key, postsJson(posts), CacheTTL.SMZDM_FEED)
         }
         return posts
+    }
+
+    /** 关键词搜索商品候选：当当搜索（SSR 稳定，主数据源） */
+    suspend fun searchDangdang(keyword: String): List<DangdangApi.DangdangItem> {
+        val key = "dd:search:$keyword"
+        memoryCache.get(key)?.let { return parseDangdang(it) }
+        val items = dangdangApi.searchProducts(keyword)
+        if (items.isNotEmpty()) {
+            memoryCache.put(key, dangdangJson(items), CacheTTL.SMZDM_FEED)
+        }
+        return items
     }
 
     // ---------- 搜索记录 / 收藏 ----------
@@ -229,6 +242,29 @@ class PriceRepository @Inject constructor(
                 .put("positive", p.positive).put("negative", p.negative))
         }
     }.toString()
+
+    private fun dangdangJson(list: List<DangdangApi.DangdangItem>): String = JSONArray().apply {
+        list.forEach { d ->
+            put(JSONObject().put("sku", d.skuId).put("title", d.title)
+                .put("price", d.price).put("originalPrice", d.originalPrice ?: JSONObject.NULL)
+                .put("image", d.image).put("url", d.url))
+        }
+    }.toString()
+
+    private fun parseDangdang(json: String): List<DangdangApi.DangdangItem> = try {
+        val arr = JSONArray(json)
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            DangdangApi.DangdangItem(
+                skuId = o.optString("sku"),
+                title = o.optString("title"),
+                price = o.optDouble("price"),
+                originalPrice = if (o.isNull("originalPrice")) null else o.optDouble("originalPrice"),
+                image = o.optString("image"),
+                url = o.optString("url")
+            )
+        }
+    } catch (_: Exception) { emptyList() }
 
     private fun parsePosts(json: String): List<SmzdmApi.SmzdmPost> = try {
         val arr = JSONArray(json)

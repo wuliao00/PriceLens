@@ -55,12 +55,19 @@ object ShizukuHelper {
     /** 重算当前状态（Binder 回调触发；ON_RESUME 时也可兜底调用） */
     fun refresh() {
         val ctx = appCtx ?: return
-        _status.value = when {
-            !isInstalled(ctx) -> ShizukuState.NOT_INSTALLED
-            !isAlive() -> ShizukuState.INSTALLED_NOT_RUNNING
-            !isGranted() -> ShizukuState.RUNNING_NOT_GRANTED
+        val installed = isInstalled(ctx)
+        val alive = installed && isAlive()
+        val granted = alive && isGranted()
+        val newState = when {
+            !installed -> ShizukuState.NOT_INSTALLED
+            !alive -> ShizukuState.INSTALLED_NOT_RUNNING
+            !granted -> ShizukuState.RUNNING_NOT_GRANTED
             else -> ShizukuState.READY
         }
+        if (newState != _status.value) {
+            android.util.Log.i("PriceLens", "Shizuku 状态: ${_status.value} -> $newState (installed=$installed alive=$alive granted=$granted)")
+        }
+        _status.value = newState
     }
 
     /** Shizuku 官方包名（Manifest <queries> 已声明，Android 11+ 可见） */

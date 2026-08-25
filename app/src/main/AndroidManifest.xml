@@ -74,13 +74,15 @@
                 tools:node="remove" />
         </provider>
 
-        <!-- Shizuku：免 root 授权执行开启无障碍的 shell 命令 -->
+        <!-- Shizuku：免 root 授权执行开启无障碍的 shell 命令。
+             注意：不要给 provider 加 android:permission="android.permission.DIALOG"，
+             DIALOG 是签名级权限，会导致 Shizuku 服务（shell uid）无法向本应用推送 binder，
+             表现为"已授权/服务已启动，但应用内一直显示服务未启动" -->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
             android:multiprocess="false"
             android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.DIALOG" />
+            android:exported="true" />
     </application>
 </manifest>

@@ -165,26 +165,57 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             repository.recordSearch(keyword)
             val jdSku = extractJdSku(keyword)
+            android.util.Log.i("PriceLens", "搜索开始: [$keyword] jdSku=$jdSku")
 
-            // 纯关键词且非京东链接：先搜值得买爆料，第一条带价格的作为商品候选
-            //（与桌面版 searchProducts 的 keyword 分支同款流程）
+            // 纯关键词且非京东链接：商品候选优先当当搜索（SSR 稳定），值得买爆料兜底。
+            // 值得买/慢慢买等源近年均上线反爬，当当作为主数据源保证"搜商品名有结果"。
             if (jdSku == null) {
-                val posts = repository.searchSmzdm(keyword)
-                val candidate = posts.firstOrNull { it.price != null && it.url.startsWith("http") }
-                if (candidate != null) {
+                var filled = false
+                val ddItems = repository.searchDangdang(keyword)
+                android.util.Log.i("PriceLens", "当当结果: ${ddItems.size} 条")
+                val ddCandidate = ddItems.firstOrNull { it.price > 0 }
+                if (ddCandidate != null) {
                     _state.update { st ->
                         st.copy(
-                            posts = posts,
                             product = JdApi.JdProduct(
                                 skuId = "",
-                                title = candidate.title,
-                                price = candidate.price ?: 0.0,
-                                originalPrice = null,
-                                image = candidate.image,
-                                url = candidate.url
+                                title = ddCandidate.title,
+                                price = ddCandidate.price,
+                                originalPrice = ddCandidate.originalPrice,
+                                image = ddCandidate.image,
+                                url = ddCandidate.url
                             )
                         )
                     }
+                    filled = true
+                }
+
+                val posts = repository.searchSmzdm(keyword)
+                android.util.Log.i("PriceLens", "值得买结果: ${posts.size} 条")
+                if (!filled) {
+                    val candidate = posts.firstOrNull { it.price != null && it.url.startsWith("http") }
+                    if (candidate != null) {
+                        _state.update { st ->
+                            st.copy(
+                                posts = posts,
+                                product = JdApi.JdProduct(
+                                    skuId = "",
+                                    title = candidate.title,
+                                    price = candidate.price ?: 0.0,
+                                    originalPrice = null,
+                                    image = candidate.image,
+                                    url = candidate.url
+                                )
+                            )
+                        }
+                        filled = true
+                    }
+                }
+                if (posts.isNotEmpty()) {
+                    _state.update { it.copy(posts = posts) }
+                }
+                if (!filled) {
+                    android.util.Log.w("PriceLens", "关键词 [$keyword] 无商品候选（当当/值得买均无结果）")
                 }
             }
 
@@ -241,6 +272,8 @@ class MainViewModel @Inject constructor(
                 }
             )
             jobs.forEach { it.join() }
+            val s = _state.value
+            android.util.Log.i("PriceLens", "搜索完成: product=${s.product != null} history=${s.history != null} videos=${s.videos.size} coupons=${s.coupons.size} posts=${s.posts.size}")
             _state.update { it.copy(loading = false) }
         }
     }

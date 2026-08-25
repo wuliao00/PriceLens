@@ -31,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +66,9 @@ fun SettingsScreen(
     val context = LocalContext.current
     val dynamicTheme by viewModel.dynamicTheme.collectAsStateWithLifecycle()
     val cacheStats by viewModel.cacheStats.collectAsStateWithLifecycle()
+
+    // 进入设置页自动计算一次缓存占用（否则一直停在"计算中…"）
+    LaunchedEffect(Unit) { viewModel.refreshCacheStats() }
 
     Scaffold(
         topBar = {
