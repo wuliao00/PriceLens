@@ -2,7 +2,7 @@
 
 > **双端开源** · **永久免费** · **本地优先** · **MIT License**  
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）  
-> 作者：**莫** | 版本：Android v2.4.4 / Desktop v2.1.0
+> 作者：**莫** | 版本：Android v2.5.0 / Desktop v2.1.0
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -54,6 +54,20 @@
 | 主界面 | 价格历史 | 优惠券 | 搜索结果 |
 |--------|----------|--------|----------|
 | ![Desktop Main](assets/desktop-main.svg) | ![Desktop Chart](assets/desktop-chart.svg) | ![Desktop Coupon](assets/desktop-coupon.svg) | ![Desktop Search](assets/desktop-search.svg) |
+
+#### 桌面端实机截图（v2.1.0）
+
+| 主界面 | 搜索概览 | 设置 |
+|--------|----------|------|
+| ![桌面版主界面](assets/screenshots/desktop-main.png) | ![桌面端搜索概览](assets/screenshots/desktop-search.png) | ![桌面端设置](assets/screenshots/desktop-settings.png) |
+| 首次启动的空态引导：粘贴商品链接 / B 站 BV 号即可开始 | 粘贴 B 站链接后呈现商品概览卡与四个快捷视图入口 | 外观 / 缓存 / 盯价 / 关于，全部本机可配 |
+
+| 盯价 | B 站评测 | 找券 | 社区评价 |
+|------|----------|------|----------|
+| ![桌面端盯价](assets/screenshots/desktop-price.png) | ![桌面端B站评测](assets/screenshots/desktop-bilibili.png) | ![桌面端找券](assets/screenshots/desktop-coupons.png) | ![桌面端社区](assets/screenshots/desktop-community.png) |
+| 盯价视图：目标商品暂无价格数据时呈现优雅空态 | B 站评测视图（渲染层键名小瑕疵致空态，主进程取数正常） | 优惠券数据源暂不可达时优雅降级并给出提示 | 社区数据源不可达时明确展示降级原因 |
+
+> 实机截图摄于 2026-08-27（亮色主题；截图会话已预同意免责协议，画面无首启弹窗遮挡）。截图时部分上游数据源（京东 / 什么值得买）暂不可达，相关视图按设计呈现优雅降级 / 空态；截图脚本见 `desktop/_capture.js`。
 
 ---
 
@@ -138,7 +152,7 @@ npm run build        # 产出 dist/PriceLens-<version>-x64.exe 与 .zip（免安
 
 ---
 
-## ✨ 核心特性（v2.4.4 / v2.1.0）
+## ✨ 核心特性（v2.5.0 / v2.1.0）
 
 ### 🔍 智能比价
 - **全平台覆盖**：京东、淘宝、拼多多、哔哩哔哩、什么值得买、慢慢买、购物党、咕咚、Keep
@@ -161,10 +175,20 @@ npm run build        # 产出 dist/PriceLens-<version>-x64.exe 与 .zip（免安
 - **分级缓存 ≤ 30MB**：L1 内存 TLRU + L2 Room + Coil + OkHttp 精细预算控制
 - **反爬规范**：同域名限流、UA 轮换、熔断机制，保护目标站点
 
-### 🎨 Material You 设计
-- Android 12+ 动态取色，低版本回退品牌蓝
-- 暗色模式跟随系统，圆角 16-12-8、间距 4dp 基准
-- 卡片无投影无粗边框，靠 tonalElevation 色差分层
+### 🎨 设计体系（v2.5.0 重构）
+
+**四大设计理念**，各自有明确的代码落点：
+- **清晰**：设计令牌体系（`ui/theme/` 的 Color / Type / Shape / Motion / Badge），颜色、字阶、圆角、动效曲线一处定义，六个屏幕全部引用令牌、零硬编码样式，信息层级一目了然。
+- **顺从**：顶栏随滚动自动隐去/浮现，界面顺应用户意图而不争抢注意力；状态一律单向流动，加载 / 空态 / 错误各司其职，绝不阻塞操作。
+- **深度**：长按卡片浮起（scale + 阴影微交互）与场景转场动画，在扁平卡片间建立空间层次感，全部走 `graphicsLayer` 绘制通道、时长 ≤ 350ms。
+- **极简**：通用组件库（AppTopBar / SearchBar / PriceCard / SourceStatusRow / EmptyState / ShimmerSkeleton 等）六屏复用，同一视觉只实现一次，新页面只做拼装。
+
+### 🏛️ 架构（v2.5.0 同步）
+
+- **分片 ViewModel**：上帝级 `MainViewModel` 拆为 `SearchViewModel` / `PriceWatchViewModel` / `ProfileViewModel` + 领域层 `ProductCandidateResolver`，状态经 `AsyncValue` 解耦（加载/成功/空/拦截/网络错误五态独立建模）。
+- **三级缓存**：`PriceRepository` 声明式编排 —— L1 内存 TLRU → L2 Room（结构化商品 + 通用 `cache_entries`）→ L3 网络，命中写回、失效降级返回旧快照。
+- **源健康降级**：`SourceHealth` 连续失败计数，超阈值暂时跳过该数据源直接回退旧快照；错误按 `CrawlerResult` 四态（Success/Empty/Blocked/Network）可视化呈现。
+- **Material You**：Android 12+ 动态取色，低版本回退品牌蓝；暗色模式跟随系统，圆角 16-12-8、间距 4dp 基准；卡片无投影无粗边框，靠 tonalElevation 色差分层。
 
 ### 🛡️ 隐私优先
 - **零埋点、零上报**：所有数据仅存本机
@@ -181,16 +205,18 @@ PriceLens/
 │   └── src/main/java/com/pricelens/
 │       ├── accessibility/            # 无障碍服务：监听/匹配/浮窗
 │       ├── data/
-│       │   ├── remote/               # 爬虫：JD/淘宝/PDD/Bili/值得买/慢慢买
-│       │   ├── local/                # Room 数据库 + 实体 + DAO
+│       │   ├── remote/               # 解析器：JD/慢慢买/Bili/值得买/购物党/当当/识货 + ApiClient 管线 + CrawlerResult
+│       │   ├── local/                # Room 数据库 + 实体 + DAO（v2）
 │       │   ├── cache/                # TLRU 缓存 + 清理 Worker
-│       │   └── repository/           # 三级缓存编排
+│       │   └── repository/           # 声明式三级缓存编排 + SourceHealth 源健康降级
 │       ├── ui/
-│       │   ├── main/                 # MainActivity / ViewModel
-│       │   ├── overview|bilibili|price|coupon|community/
-│       │   ├── components/           # SearchBar / PriceCard / PriceOverlay / Shimmer
-│       │   └── theme/                # Material You 主题
-│       ├── worker/                   # 盯价 Worker
+│       │   ├── main/                 # MainActivity（无上帝 ViewModel）
+│       │   ├── overview|bilibili|price|coupon|community/  # 分片：Search/PriceWatch ViewModel
+│       │   ├── profile|settings|scripts/                  # 个人页 / 设置 / 脚本（ProfileViewModel）
+│       │   ├── components/           # 通用组件：AppTopBar/SearchBar/PriceCard/SourceStatusRow/Shimmer…
+│       │   └── theme/                # 设计令牌：Color/Type/Shape/Motion/Badge
+│       ├── domain/                   # 领域层：ProductCandidateResolver（多源候选解析）
+│       ├── worker/                   # 盯价 Worker（按平台分发）+ 开机自启
 │       ├── util/                     # RateLimiter / WbiSigner / PriceFormatter
 │       └── di/                       # Hilt 依赖注入
 │

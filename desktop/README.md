@@ -5,6 +5,18 @@
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue) ![Electron](https://img.shields.io/badge/Electron-%E2%89%A528-9feaf9) ![Framework](https://img.shields.io/badge/UI-%E5%8E%9F%E7%94%9FJS%20%E9%9B%B6%E6%A1%86%E6%9E%B6-green)
 
+## 界面预览
+
+| 主界面 | 搜索概览 | 设置 |
+|--------|----------|------|
+| ![主界面](../assets/screenshots/desktop-main.png) | ![搜索概览](../assets/screenshots/desktop-search.png) | ![设置](../assets/screenshots/desktop-settings.png) |
+
+| 盯价 | B 站评测 | 找券 | 社区 |
+|------|----------|------|------|
+| ![盯价](../assets/screenshots/desktop-price.png) | ![B 站评测](../assets/screenshots/desktop-bilibili.png) | ![找券](../assets/screenshots/desktop-coupons.png) | ![社区](../assets/screenshots/desktop-community.png) |
+
+> 截图见仓库 `assets/screenshots/`，与根目录 [README](../README.md) 界面预览章节同源。
+
 ## 功能一览
 
 | 模块 | 数据源 | 说明 |
