@@ -40,10 +40,8 @@ object WbiSigner {
         return imgKey to subKey
     }
 
-    private fun urlEncode(s: String): String =
-        java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
+    private fun urlEncode(s: String): String = java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
 
-    private fun md5(s: String): String =
-        MessageDigest.getInstance("MD5").digest(s.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
+    private fun md5(s: String): String = MessageDigest.getInstance("MD5").digest(s.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
 }

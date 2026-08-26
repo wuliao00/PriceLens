@@ -1,8 +1,8 @@
 # PriceLens API 文档
 
-**版本**：v1.0  
-**适用版本**：Android v2.3.0+ / Desktop v2.0.0+  
-**更新日期**：2026-08-24
+**版本**：v1.1  
+**适用版本**：Android v2.5.0+ / Desktop v2.0.0+  
+**更新日期**：2026-08-26
 
 ---
 
@@ -43,21 +43,32 @@
 
 ## 🕷️ 爬虫接口
 
-### 统一接口定义
+### Android 端：解析器 + 统一管线 + 仓储编排（无统一 Crawler 接口）
+
+> ⚠️ 早期版本文档描述过统一的 `Crawler` 接口（`data/remote/Crawler.kt`），
+> **该接口在实际代码中不存在**。Android 端真实架构为三层：
 
 ```kotlin
-// Android: data/remote/Crawler.kt
-interface Crawler {
-    suspend fun search(keyword: String): Result<List<ProductSummary>>
-    suspend fun getDetail(productId: String): Result<ProductDetail>
-    suspend fun getPriceHistory(productId: String): Result<List<PricePoint>>
-    suspend fun getCoupons(productId: String): Result<List<Coupon>>
-    suspend fun getCommunityInfo(productId: String): Result<CommunityInfo>
-}
+// ① data/remote/*Api.kt —— 平台解析器（无状态，只解析、不抛错）
+JdApi         // 京东：p.3.cn 批量查价 + item SSR 页标题/主图
+ManmanbuyApi  // 慢慢买：价格历史曲线（最低/最高/大促）
+BiliApi       // 哔哩哔哩：视频搜索（WBI 签名）
+GwdangApi     // 购物党：优惠券搜索
+SmzdmApi      // 什么值得买：社区帖子搜索
+DangdangApi   // 当当：商品搜索（SSR 主数据源）
+ShihuoApi     // 识货：商品搜索（兜底源，含国补标记）
+
+// ② data/remote/ApiClient.kt —— 统一 HTTP 管线：
+//    CrawlerResult 四态结果 + 限流/熔断 + singleflight 去重 + 重试，
+//    并保留 getHtml()/getJson() 旧签名兼容桥（asNullable）
+
+// ③ data/repository/PriceRepository.kt —— 声明式三级缓存编排：
+//    CachedSource(key/TTL/编解码器/源名/取数钩子) →
+//    L1 内存 TLRU → L2 Room → L3 网络 → 写回 + 失败降级旧快照（SourceHealth）
 ```
 
 ```javascript
-// Desktop: src/main/crawlers/index.js
+// Desktop: src/main/crawlers/index.js（桌面端保留基类风格）
 class Crawler {
     async search(keyword) { /* ... */ }
     async getDetail(productId) { /* ... */ }
@@ -67,19 +78,19 @@ class Crawler {
 }
 ```
 
-### 支持平台与实现
+### 支持平台与实现（Android 实际能力矩阵）
 
-| 平台 | 爬虫类 | 搜索 | 详情 | 价格历史 | 优惠券 | 社区 |
-|------|--------|------|------|----------|--------|------|
-| 京东 | `JdCrawler` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| 淘宝/天猫 | `TaoBaoCrawler` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| 拼多多 | `PddCrawler` | ✅ | ✅ | ✅ | ❌ | ❌ |
-| 哔哩哔哩 | `BiliCrawler` | ✅ | ✅ | ❌ | ❌ | ✅ |
-| 什么值得买 | `SmzdmCrawler` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 慢慢买 | `ManmanbuyCrawler` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| 购物党 | `GwdangCrawler` | ❌ | ✅ | ✅ | ✅ | ❌ |
-| 咕咚 | `CodoonCrawler` | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Keep | `KeepCrawler` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| 平台 | 解析器 | 查价 | 详情/标题 | 价格历史 | 优惠券 | 社区/搜索 |
+|------|--------|------|-----------|----------|--------|-----------|
+| 京东 | `JdApi` | ✅（p.3.cn 批量） | ✅ | ❌ | ❌ | ❌ |
+| 慢慢买 | `ManmanbuyApi` | ❌ | ❌ | ✅ | ❌ | ❌ |
+| 哔哩哔哩 | `BiliApi` | ❌ | ❌ | ❌ | ❌ | ✅ 视频搜索 |
+| 购物党 | `GwdangApi` | ❌ | ❌ | ❌ | ✅ | ❌ |
+| 什么值得买 | `SmzdmApi` | ❌ | ❌ | ❌ | ❌ | ✅ 帖子搜索 |
+| 当当 | `DangdangApi` | ❌ | ✅（SSR 搜索） | ❌ | ❌ | ✅ |
+| 识货 | `ShihuoApi` | ❌ | ✅（SSR 搜索） | ❌ | ❌ | ✅ 兜底源 |
+| 淘宝/拼多多/咕咚/Keep | 无障碍读价 | ✅（本机账号实时读价，无爬虫） | — | — | — | — |
+| 盯价（后台） | `worker/PriceCheckWorker` | ✅ 京东（其他平台接入中） | — | — | — | — |
 
 ### 请求参数规范
 
@@ -393,7 +404,40 @@ CREATE TABLE watch_tasks (
 
 ## ❌ 错误码
 
-### 统一错误格式
+### Android：`CrawlerResult` 四态结果模型（v2.5.0 起）
+
+旧模型中 `ApiClient` 吞掉所有异常、一律返回 `null`，上层无法区分“真的没有数据”与“被反爬拦截/网络故障”。
+重构后显式建模为四种结局（`data/remote/CrawlerResult.kt`）：
+
+```kotlin
+sealed interface CrawlerResult<out T> {
+    /** 成功：拿到有效响应体（HTML/JSON 原文） */
+    data class Success<T>(val data: T) : CrawlerResult<T>
+
+    /** 请求成功但内容为空/无效（非反爬） */
+    data object Empty : CrawlerResult<Nothing>
+
+    /** 反爬拦截：403/412、JS challenge 页、风控异常 */
+    data class Blocked(val reason: String) : CrawlerResult<Nothing>
+
+    /** 网络层失败：超时 / DNS / 连接重置 / 非 2xx 状态码 */
+    data class Network(val cause: Throwable) : CrawlerResult<Nothing>
+}
+```
+
+| 结果类型 | 语义 | 可重试 | 处理策略 |
+|----------|------|--------|----------|
+| `Success` | 拿到有效响应 | — | 写回 L1 内存 / L2 Room 缓存 |
+| `Empty` | 服务端成功但无内容 | ❌ | UI 空态展示，不触发熔断 |
+| `Blocked` | 反爬拦截（403/412/风控） | ❌ | `RateLimiter` 熔断 5min + `SourceHealth` 降级 |
+| `Network` | 网络层失败 | ✅ | 指数退避重试，`SourceHealth` 连续失败计数 |
+
+配套能力：
+- **兼容桥**：`asNullable()` 将 Success → data、其余 → null，旧的 `String?` / `JSONObject?` 签名方法内部委托新管线，8 个 `*Api` 解析类零改动。
+- **UI 映射**：ViewModel 层将 `Blocked` 映射为 `AsyncValue.Error`（携带 `CrawlerBlockedException`），`SourceStatusRow` 组件可视化各数据源健康度。
+- **源健康降级**：`data/repository/SourceHealth.kt` 记录连续失败，超阈值时暂时跳过该源、直接回退旧快照（`PriceRepository.staleKeys` 可观察）。
+
+### Desktop：统一错误格式
 
 ```typescript
 interface ApiError {
@@ -404,7 +448,7 @@ interface ApiError {
 }
 ```
 
-### 常见错误码
+### 常见错误码（Desktop / 通用概念表）
 
 | 错误码 | HTTP 状态 | 说明 | 可重试 | 处理建议 |
 |--------|-----------|------|--------|----------|
@@ -418,15 +462,14 @@ interface ApiError {
 | `STORAGE_FULL` | - | 本地存储空间不足 | ❌ | 清理缓存提示用户 |
 | `PERMISSION_DENIED` | - | 权限不足（无障碍/悬浮窗） | ❌ | 引导用户授权 |
 
-### 熔断机制
+### 熔断与限流机制
 
 ```kotlin
-// 实现参考：util/RateLimiter.kt / utils/rate-limiter.js
-class CircuitBreaker {
-    // 状态：CLOSED(正常) → OPEN(熔断) → HALF_OPEN(探测)
-    // 触发条件：连续 5 次 403/429/timeout
-    // 恢复条件：HALF_OPEN 状态下 3 次成功请求
-    // 熔断时长：5 分钟（可配置）
+// 实现位置：util/RateLimiter.kt（Android） / utils/rate-limiter.js（Desktop）
+//  - 同域名 ≤ 1 req/3s，并发域名 ≤ 3，10s 超时 + 失败重试 1 次，UA 轮换 ×5 池
+class RateLimiter {
+    // 熔断：403/429 连续触发 → 该域名暂停请求 5 分钟（状态持久化，重启不丢）
+    // 恢复：熔断到期后半开探测，成功则恢复正常调度
 }
 ```
 
@@ -437,6 +480,7 @@ class CircuitBreaker {
 | API 版本 | Android 最低版本 | Desktop 最低版本 | 变更说明 |
 |---------|------------------|------------------|----------|
 | v1 | 2.3.0 | 2.0.0 | 初始版本 |
+| v1.1 | 2.5.0 | 2.0.0 | 错误模型对齐 `CrawlerResult` 四态；爬虫接口章节修正为解析器 + ApiClient 管线 + PriceRepository 编排（删除不存在的统一 `Crawler` 接口描述） |
 
 > 遵循语义化版本：Breaking Change 升主版本号，新增功能升次版本号，Bug 修复升修订号。
 
@@ -447,6 +491,7 @@ class CircuitBreaker {
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
 | v1.0 | 2026-08-24 | 初始版本发布 |
+| v1.1 | 2026-08-26 | 错误码对齐 `CrawlerResult`；修正爬虫接口架构描述 |
 
 ---
 

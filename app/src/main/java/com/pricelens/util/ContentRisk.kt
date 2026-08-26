@@ -11,10 +11,14 @@ package com.pricelens.util
  * 原则：只标记、沉底展示，不删除 —— 把判断权留给用户，避免误杀真实评测。
  */
 data class ContentRisk(
-    val sponsored: Boolean,          // 疑似商单/恰饭
-    val hype: Boolean,               // 含夸大宣传话术
-    val sponsorWord: String? = null, // 命中的商单词（UI 展示用）
-    val hypeWord: String? = null     // 命中的夸大词（UI 展示用）
+    // 疑似商单/恰饭
+    val sponsored: Boolean,
+    // 含夸大宣传话术
+    val hype: Boolean,
+    // 命中的商单词（UI 展示用）
+    val sponsorWord: String? = null,
+    // 命中的夸大词（UI 展示用）
+    val hypeWord: String? = null
 ) {
     val flagged: Boolean get() = sponsored || hype
 

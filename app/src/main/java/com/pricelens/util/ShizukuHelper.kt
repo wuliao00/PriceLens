@@ -65,7 +65,7 @@ object ShizukuHelper {
             else -> ShizukuState.READY
         }
         if (newState != _status.value) {
-            android.util.Log.i("PriceLens", "Shizuku 状态: ${_status.value} -> $newState (installed=$installed alive=$alive granted=$granted)")
+            LogT.i("Shizuku 状态: ${_status.value} -> $newState (installed=$installed alive=$alive granted=$granted)")
         }
         _status.value = newState
     }
@@ -124,14 +124,13 @@ object ShizukuHelper {
         }
     }
 
-    private fun userServiceArgs(context: Context): rikka.shizuku.Shizuku.UserServiceArgs =
-        rikka.shizuku.Shizuku.UserServiceArgs(
-            ComponentName(context, ShizukuShellService::class.java)
-        )
-            .daemon(false)
-            .processNameSuffix("shell")
-            .debuggable(BuildConfig.DEBUG)
-            .version(1)
+    private fun userServiceArgs(context: Context): rikka.shizuku.Shizuku.UserServiceArgs = rikka.shizuku.Shizuku.UserServiceArgs(
+        ComponentName(context, ShizukuShellService::class.java)
+    )
+        .daemon(false)
+        .processNameSuffix("shell")
+        .debuggable(BuildConfig.DEBUG)
+        .version(1)
 
     /**
      * 自定义脚本入口：经 Shizuku（ADB/shell 权限）执行任意 shell 命令，
@@ -162,7 +161,9 @@ object ShizukuHelper {
                 } finally {
                     try {
                         rikka.shizuku.Shizuku.unbindUserService(
-                            userServiceArgs(context), this, true
+                            userServiceArgs(context),
+                            this,
+                            true
                         )
                     } catch (_: Exception) {
                     }

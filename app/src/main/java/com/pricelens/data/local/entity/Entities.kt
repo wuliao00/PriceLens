@@ -10,16 +10,21 @@ import androidx.room.PrimaryKey
     indices = [Index("lastAccessedAt"), Index("pinned")]
 )
 data class ProductEntity(
-    @PrimaryKey val id: String,          // 平台:商品ID，如 jd:100012043978
+    // 平台:商品ID，如 jd:100012043978
+    @PrimaryKey val id: String,
     val title: String,
     val currentPrice: Double,
     val originalPrice: Double?,
-    val platform: String,                // jd / tb / pdd
-    val imageUrl: String,                // 只存 URL，Coil 负责缓存位图
+    // jd / tb / pdd
+    val platform: String,
+    // 只存 URL，Coil 负责缓存位图
+    val imageUrl: String,
     val cachedAt: Long,
     val lastAccessedAt: Long,
-    val ttl: Long,                       // §4.3 实时价格默认 30min
-    val pinned: Boolean = false          // 收藏：TLRU 永不淘汰
+    // §4.3 实时价格默认 30min
+    val ttl: Long,
+    // 收藏：TLRU 永不淘汰
+    val pinned: Boolean = false
 )
 
 /** §4.5 价格历史：每天 1 个采样点，不存原始高频数据 */
@@ -30,7 +35,8 @@ data class ProductEntity(
 data class PriceHistoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val productId: String,
-    val date: String,                    // yyyy-MM-dd
+    // yyyy-MM-dd
+    val date: String,
     val price: Double,
     val isLowest: Boolean = false,
     val isHighest: Boolean = false
@@ -53,4 +59,33 @@ data class SearchRecordEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val keyword: String,
     val searchedAt: Long
+)
+
+/**
+ * §阶段3 通用 L2 缓存条目：历史价/券/搜索/值得买等非结构化结果的写回层。
+ * 结构化商品仍走 [ProductEntity]（收藏/最近浏览依赖其字段）。
+ */
+@Entity(
+    tableName = "cache_entries",
+    indices = [Index("cachedAt")]
+)
+data class CacheEntryEntity(
+    // 与 L1 TLRU 同 key（如 bili:search:xxx）
+    @PrimaryKey val entryKey: String,
+    // CacheCodec 编码后的 JSON 文本
+    val value: String,
+    // 写入时间（陈旧降级判断依据）
+    val cachedAt: Long,
+    // 新鲜窗口（毫秒）
+    val ttl: Long,
+    // 数据源名（bili/gwd/smz/dd/sh/mmb）
+    val source: String
+)
+
+/** §阶段3 域名熔断持久化：403 解封时间戳，重启后恢复（避免重启即撞反爬） */
+@Entity(tableName = "domain_penalties")
+data class DomainPenaltyEntity(
+    @PrimaryKey val domain: String,
+    // 解封时间戳（epoch millis）
+    val untilMs: Long
 )

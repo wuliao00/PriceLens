@@ -9,7 +9,7 @@ on:
     types: [published]
 
 env:
-  JAVA_VERSION: '17'
+  JAVA_VERSION: '21'
   NODE_VERSION: '20'
   GRADLE_VERSION: '8.5'
 
@@ -48,17 +48,17 @@ jobs:
       - name: 验证 Gradle Wrapper
         run: ./gradlew --version
       
-      - name: 代码风格检查
-        run: |
-          ./gradlew ktlintCheck detekt --no-daemon
-      
+      # 评审修复：拆回独立步骤、去掉 --continue，任一失败即阻断后续步骤。
+      # ktlint 门禁（org.jlleitschuh.gradle.ktlint 12.1.2，规则基线见根目录 .editorconfig；
+      # accessibility/ 与 data/remote/ 排除在风格检查外）。
       - name: 单元测试
-        run: |
-          ./gradlew test --no-daemon --continue
-      
-      - name: 构建 Debug APK
-        run: |
-          ./gradlew :app:assembleDebug --no-daemon
+        run: ./gradlew test --no-daemon
+
+      - name: ktlint 风格门禁
+        run: ./gradlew ktlintCheck --no-daemon
+
+      - name: 构建验证（Debug APK）
+        run: ./gradlew :app:assembleDebug --no-daemon
       
       - name: 上传 Debug APK
         uses: actions/upload-artifact@v4

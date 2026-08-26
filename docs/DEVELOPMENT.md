@@ -1,8 +1,8 @@
 # PriceLens 开发指南
 
-**版本**：v1.0  
-**适用版本**：Android v2.3.0+ / Desktop v2.0.0+  
-**更新日期**：2026-08-24
+**版本**：v1.1  
+**适用版本**：Android v2.5.0+ / Desktop v2.0.0+  
+**更新日期**：2026-08-26
 
 ---
 
@@ -72,40 +72,43 @@ PriceLens/
 │       │   ├── AndroidManifest.xml
 │       │   ├── java/com/pricelens/
 │       │   │   ├── accessibility/    # 无障碍服务核心
-│       │   │   │   ├── PriceAccessibilityService.kt
-│       │   │   │   ├── PriceNodeMatcher.kt    # 关键：控件 ID 匹配表
-│       │   │   │   ├── FloatWindowManager.kt
-│       │   │   │   └── UiTreeParser.kt
+│       │   │   │   ├── PriceMonitorService.kt     # 无障碍服务入口（监听/分发）
+│       │   │   │   ├── PriceNodeMatcher.kt        # 关键：控件 ID 匹配表
+│       │   │   │   ├── OverlayManager.kt          # 悬浮窗渲染/拖动/自动消失
+│       │   │   │   └── PriceEvents.kt             # 事件模型
 │       │   │   ├── data/
-│       │   │   │   ├── local/        # Room 数据库
+│       │   │   │   ├── local/        # Room 数据库（v2）
 │       │   │   │   │   ├── dao/
 │       │   │   │   │   ├── entity/
 │       │   │   │   │   └── AppDatabase.kt
-│       │   │   │   ├── remote/       # 爬虫实现
-│       │   │   │   │   ├── crawler/
-│       │   │   │   │   │   ├── JdCrawler.kt
-│       │   │   │   │   │   ├── TaoBaoCrawler.kt
-│       │   │   │   │   │   └── ...
-│       │   │   │   │   ├── ApiClient.kt        # 统一 HTTP 客户端
-│       │   │   │   │   └── WbiSigner.kt        # B站 WBI 签名
-│       │   │   │   ├── cache/        # TLRU 三级缓存
-│       │   │   │   │   ├── TlruCache.kt
-│       │   │   │   │   └── CacheManager.kt
-│       │   │   │   └── repository/   # Repository 模式编排
+│       │   │   │   ├── remote/       # 解析器 + 统一管线（无统一 Crawler 接口）
+│       │   │   │   │   ├── ApiClient.kt        # HTTP 管线：限流/熔断/singleflight
+│       │   │   │   │   ├── CrawlerResult.kt    # 四态结果（Success/Empty/Blocked/Network）
+│       │   │   │   │   ├── JdApi.kt / ManmanbuyApi.kt / BiliApi.kt /
+│       │   │   │   │   │   GwdangApi.kt / SmzdmApi.kt / DangdangApi.kt / ShihuoApi.kt
+│       │   │   │   ├── cache/        # L1 内存 TLRU + 清理 Worker
+│       │   │   │   │   └── TLRUCache.kt
+│       │   │   │   └── repository/   # 声明式三级缓存编排 + 源健康降级
+│       │   │   │       ├── PriceRepository.kt  # CachedSource 编排（L1→L2→L3）
+│       │   │   │       ├── CacheCodec.kt / CacheCodecs.kt  # L2 编解码器
+│       │   │   │       └── SourceHealth.kt     # 连续失败降级旧快照
+│       │   │   ├── domain/           # 领域层（阶段2 拆出）
+│       │   │   │   └── ProductCandidateResolver.kt  # 商品候选解析（多源兜底）
 │       │   │   ├── ui/
-│       │   │   │   ├── main/         # MainActivity + ViewModel
-│       │   │   │   ├── overview/     # 概览页
+│       │   │   │   ├── main/         # MainActivity（分片 ViewModel，无上帝 VM）
+│       │   │   │   ├── overview/     # 概览/搜索页 + SearchViewModel
 │       │   │   │   ├── bilibili/     # B站页
-│       │   │   │   ├── price/        # 价格页
+│       │   │   │   ├── price/        # 价格页 + PriceWatchViewModel
 │       │   │   │   ├── coupon/       # 优惠券页
 │       │   │   │   ├── community/    # 社区页
-│       │   │   │   ├── components/   # 复用组件
-│       │   │   │   └── theme/        # Material You 主题
-│       │   │   ├── worker/           # WorkManager 盯价任务
-│       │   │   ├── util/             # 工具类
-│       │   │   │   ├── RateLimiter.kt
-│       │   │   │   ├── PriceFormatter.kt
-│       │   │   │   └── ...
+│       │   │   │   ├── profile/      # 个人页 + ProfileViewModel
+│       │   │   │   ├── settings/     # 设置页
+│       │   │   │   ├── scripts/      # 自定义脚本页（Shizuku）
+│       │   │   │   ├── common/       # AsyncValue 等共享状态模型
+│       │   │   │   ├── components/   # 通用组件（AppTopBar/PriceCard/SourceStatusRow…）
+│       │   │   │   └── theme/        # 设计令牌：Color/Type/Shape/Motion/Badge
+│       │   │   ├── worker/           # PriceCheckWorker（盯价）+ BootCompletedReceiver
+│       │   │   ├── util/             # 工具类（RateLimiter/PriceFormatter/LogT…）
 │       │   │   └── di/               # Hilt 依赖注入
 │       │   └── res/
 │       └── test/                     # 单元测试
@@ -193,30 +196,36 @@ PriceLens/
 2. 更新对应平台的 ID 表
 3. 运行 `:app:connectedAndroidTest` 验证
 
-### 2. 爬虫同源策略
+### 2. 爬虫管线（解析器 + 统一 HTTP 管线 + 仓储编排）
 
-**Android**：`data/remote/crawler/*.kt`  
+**Android**：`data/remote/*Api.kt` + `data/remote/ApiClient.kt` + `data/repository/PriceRepository.kt`  
 **Desktop**：`desktop/src/main/crawlers/*.js`
 
 ```mermaid
 graph LR
-    A[统一接口 Crawler] --> B[JdCrawler]
-    A --> C[TaoBaoCrawler]
-    A --> D[PddCrawler]
-    A --> E[BiliCrawler]
-    A --> F[SmzdmCrawler]
-    A --> G[ManmanbuyCrawler]
-    A --> H[GwdangCrawler]
-    
-    B --> I[ApiClient: HTTP + 限流 + 重试 + 熔断]
+    A[PriceRepository 三级缓存编排] --> B[JdApi]
+    A --> C[ManmanbuyApi]
+    A --> D[BiliApi]
+    A --> E[GwdangApi]
+    A --> F[SmzdmApi]
+    A --> G[DangdangApi / ShihuoApi]
+
+    B --> I[ApiClient: CrawlerResult + 限流 + 熔断 + singleflight]
     C --> I
     D --> I
+    E --> I
+    F --> I
+    G --> I
 ```
 
+> ⚠️ Android 端**没有**统一 `Crawler` 接口（旧文档描述已过时）：
+> 各 `*Api` 是无状态解析器，统一能力（限流/熔断/重试/四态结果）全部沉淀在 `ApiClient`，
+> 缓存编排声明在 `PriceRepository` 的 `CachedSource`（见 `docs/API.md`）。
+
 **新增平台步骤**：
-1. Android 实现 `Crawler` 接口 → `JdCrawler.kt` 参考
-2. Desktop 实现同名 JS 类 → `jd.js` 参考
-3. 在 `CrawlerRegistry` / `getCrawler()` 注册
+1. Android 新建 `XxxApi.kt`（参考 `JdApi.kt`），通过构造注入 `ApiClient` 发请求、自行解析
+2. 在 `PriceRepository` 增加一个 `kvSource(...)` 声明式缓存方法（选配合适的 `CacheCodec`）
+3. Desktop 新增同名 JS 爬虫 → `jd.js` 参考
 4. 更新 `RateLimiter` 域名配置
 5. 编写测试用例
 
@@ -245,14 +254,17 @@ graph LR
             写入 L2 → 写入 L1 → 返回
 ```
 
-**缓存键规范**：
+**缓存键规范**（`PriceRepository` 实际使用）：
 ```
-search:jd:手机:1:{}          → 搜索结果
-detail:jd:100012345678       → 商品详情
-history:jd:100012345678      → 价格历史
-coupons:jd:100012345678      → 优惠券
-community:bili:BV1xx411c7xx  → 社区信息
+jd:product:100012345678      → 京东商品详情（L2 结构化 products 表）
+mmb:history:<商品页 URL>      → 价格历史（慢慢买）
+bili:search:<关键词>          → B站视频搜索
+gwd:coupon:<关键词>           → 优惠券（购物党）
+smz:search:<关键词>           → 值得买帖子
+dd:search:<关键词>            → 当当商品搜索（主源）
+sh:search:<关键词>            → 识货商品搜索（兜底源）
 ```
+> 非结构化结果统一落 `cache_entries` 表（L2），商品详情落结构化 `products` 表。
 
 ---
 
@@ -261,10 +273,17 @@ community:bili:BV1xx411c7xx  → 社区信息
 ### 单元测试
 
 ```bash
-# Android
-./gradlew test                    # 单元测试
+# Android（Linux/macOS）
+./gradlew test                    # 单元测试（当前 49 用例全绿）
 ./gradlew connectedAndroidTest    # 仪器化测试 (需真机/模拟器)
+```
 
+```powershell
+# Android（Windows PowerShell，注意用 ; 而非 && 分隔命令）
+.\gradlew.bat test                # 单元测试
+.\gradlew.bat :app:assembleDebug  # 调试包验证
+.\gradlew.bat test ktlintCheck :app:assembleDebug  # 提交前完整门禁
+```
 # Desktop
 npm test                          # Jest 单元测试
 ```
@@ -275,9 +294,9 @@ npm test                          # Jest 单元测试
 |------|----------|
 | `PriceNodeMatcher` | 各平台 ID 表匹配率、启发式兜底不误触发 |
 | `RateLimiter` | 限流准确性、熔断触发/恢复、并发安全 |
-| `CacheManager` | 三级回落、TTL 过期、容量淘汰、并发一致性 |
-| `Crawler` | 解析器健壮性、异常 HTML 容错、反爬应对 |
-| `WbiSigner` | B站 WBI 签名算法正确性 |
+| `TLRUCache` / 三级缓存 | 三级回落、TTL 过期、容量淘汰、并发一致性 |
+| `*Api` 解析器 | 解析健壮性、异常 HTML 容错、反爬应对 |
+| `AsyncValue` / ViewModel | 状态机流转、Blocked → Error 映射 |
 
 ### 集成测试清单
 
@@ -353,14 +372,14 @@ gh release create vX.Y.Z dist/PriceLens-X.Y.Z-win.zip ...
 # 过滤 PriceLens 标签
 adb logcat -s PriceLens:* *:S
 
-# 无障碍服务事件
-adb logcat -s AccessibilityService:V PriceAccessibilityService:V
+# 无障碍服务事件（v2.5.0 起服务类名为 PriceMonitorService）
+adb logcat -s AccessibilityService:V PriceMonitorService:V
 
-# 网络请求
-adb logcat -s OkHttp:V ApiClient:V
+# 网络请求（统一 TAG：LogT 封装，日志前缀均为 PriceLens）
+adb logcat -s PriceLens:V | findstr "ApiClient\|Api"
 
-# 盯价 Worker
-adb logcat -s PriceWatchWorker:V WorkManager:V
+# 盯价 Worker（PriceCheckWorker）
+adb logcat -s PriceLens:V WorkManager:V
 ```
 
 ### Desktop 日志分析
@@ -508,6 +527,7 @@ Closes #123
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
 | v1.0 | 2026-08-24 | 初始版本发布 |
+| v1.1 | 2026-08-26 | 文件名对齐新架构（PriceMonitorService / 分片 ViewModel / *Api 解析器），补充 Windows 测试命令 |
 
 ---
 

@@ -15,6 +15,7 @@ import { renderVideoView } from './components/video-grid.js';
 import { renderCouponView } from './components/coupon-list.js';
 import { renderCommunityView } from './components/comment-feed.js';
 import { renderScriptsView } from './components/scripts-page.js';
+import { initDisclaimer } from './components/disclaimer.js';
 import { renderSkeleton } from './components/skeleton.js';
 import { showToast } from './components/toast.js';
 import { createRouter } from './router.js';
@@ -404,6 +405,9 @@ function boot() {
     // 仅"跟随系统"时由系统切换驱动；手动设置由 setTheme 直接驱动
     if (res.pref === 'system') applyTheme(res.effective);
   });
+
+  /* 免责协议：首次启动展示，同意后持久化不再弹出 */
+  initDisclaimer();
 
   /* 路由 */
   const content = document.getElementById('main-content');

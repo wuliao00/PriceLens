@@ -38,6 +38,7 @@
 .btn:active { transform: scale(0.97); }
 .btn--primary { background: var(--accent); color: #fff; }
 .btn--primary:hover { background: var(--accent); filter: brightness(1.1); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
 .btn--danger { color: var(--danger); }
 .btn--text {
   padding: var(--sp-1) var(--sp-2);
@@ -152,6 +153,21 @@
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--sp-3);
 }
+
+/* 免责协议：正文可滚动容器 + 底部同意按钮 */
+.disclaimer-scroll {
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+  padding-right: var(--sp-2);
+  margin-bottom: var(--sp-5);
+}
+.disclaimer-para {
+  font-size: var(--fs-body);
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+.disclaimer-para + .disclaimer-para { margin-top: var(--sp-4); }
+.disclaimer-actions { display: flex; justify-content: flex-end; }
 
 /* 分段控件（主题三选一） */
 .segment {

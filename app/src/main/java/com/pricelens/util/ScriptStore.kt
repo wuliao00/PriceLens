@@ -11,7 +11,8 @@ import org.json.JSONObject
 object ScriptStore {
 
     data class Script(
-        val id: String,          // System.nanoTime 生成
+        // System.nanoTime 生成
+        val id: String,
         val name: String,
         val content: String,
         val builtin: Boolean = false
@@ -107,8 +108,11 @@ object ScriptStore {
 
     fun update(context: Context, id: String, name: String, content: String): List<Script> {
         val updated = loadCustom(context).map {
-            if (it.id == id) it.copy(name = name.trim().ifEmpty { it.name }, content = content)
-            else it
+            if (it.id == id) {
+                it.copy(name = name.trim().ifEmpty { it.name }, content = content)
+            } else {
+                it
+            }
         }
         saveCustom(context, updated)
         return updated

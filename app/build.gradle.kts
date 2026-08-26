@@ -7,6 +7,18 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
+    id("org.jlleitschuh.gradle.ktlint")
+}
+
+// ktlint 风格门禁（v2.5.0 接入）：规则放宽项见根目录 .editorconfig。
+// accessibility/ 与 data/remote/ 为敏感解析链路，按红线要求排除在风格检查外，避免格式化触碰。
+ktlint {
+    android.set(true)
+    filter {
+        exclude("**/accessibility/**")
+        exclude("**/data/remote/**")
+        exclude("**/build/**")
+    }
 }
 
 // 发布签名从 local.properties 读取（该文件被 .gitignore 排除）。
@@ -25,8 +37,8 @@ android {
         applicationId = "com.pricelens"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "2.4.4"
+        versionCode = 13
+        versionName = "2.5.0"
     }
 
     signingConfigs {
@@ -67,8 +79,8 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = true   // Shizuku UserService 需要 BuildConfig.DEBUG
-        aidl = true          // IShellService.aidl（Shizuku 命令通道）
+        buildConfig = true // Shizuku UserService 需要 BuildConfig.DEBUG
+        aidl = true // IShellService.aidl（Shizuku 命令通道）
     }
 }
 
@@ -113,4 +125,9 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
+
+    // 单元测试（重构前测试安全网，阶段0）
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("app.cash.turbine:turbine:1.1.0")
 }

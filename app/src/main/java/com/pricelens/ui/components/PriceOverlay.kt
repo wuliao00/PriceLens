@@ -38,12 +38,7 @@ import com.pricelens.ui.theme.Dims
  * §2.3 弹窗进入 200ms spring(dampingRatio=0.8)；动画只走 graphicsLayer 绘制通道。
  */
 @Composable
-fun PriceOverlay(
-    price: String,
-    title: String,
-    onCompare: () -> Unit,
-    onDismiss: () -> Unit
-) {
+fun PriceOverlay(price: String, title: String, onCompare: () -> Unit, onDismiss: () -> Unit) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
 
