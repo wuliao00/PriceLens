@@ -49,12 +49,6 @@
 
 > 更多界面（价格曲线 / 优惠券 / 桌面端）见 [Releases](https://github.com/wuliao00/PriceLens/releases) 附件；社区贡献截图欢迎 PR 至 `assets/screenshots/`。
 
-### Windows 桌面端
-
-| 主界面 | 价格历史 | 优惠券 | 搜索结果 |
-|--------|----------|--------|----------|
-| ![桌面主界面](assets/desktop-main.svg) | ![桌面图表](assets/desktop-chart.svg) | ![桌面优惠券](assets/desktop-coupon.svg) | ![桌面搜索](assets/desktop-search.svg) |
-
 #### 桌面端实机截图（v2.1.0）
 
 | 盯价 | B 站评测 | 找券 | 社区评价 |
