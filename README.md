@@ -4,15 +4,15 @@
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）  
 > 作者：**莫** | 版本：Android v2.5.0 / Desktop v2.1.0
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
 [![Windows](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/wuliao00/PriceLens/releases)
 [![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF.svg)](https://kotlinlang.org/)
 [![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4.svg)](https://developer.android.com/jetpack/compose)
 [![Electron](https://img.shields.io/badge/Framework-Electron-47848F.svg)](https://www.electronjs.org/)
 [![Vite](https://img.shields.io/badge/Build-Vite-646CFF.svg)](https://vitejs.dev/)
-[![Release](https://img.shields.io/github/v/release/wuliao00/PriceLens?label=Latest%20Release)](https://github.com/wuliao00/PriceLens/releases)
-[![Stars](https://img.shields.io/github/stars/wuliao00/PriceLens?style=social)](https://github.com/wuliao00/PriceLens/stargazers)
+[![发布](https://img.shields.io/github/v/release/wuliao00/PriceLens?label=Latest%20Release)](https://github.com/wuliao00/PriceLens/releases)
+[![Star数](https://img.shields.io/github/stars/wuliao00/PriceLens?style=social)](https://github.com/wuliao00/PriceLens/stargazers)
 
 ---
 
@@ -45,7 +45,7 @@
 
 | B 站评测（含商单/夸大标记） | 社区 · 识货信息源 | 搜索 · 识货兜底 |
 |--------|----------|-------------|
-| ![Bilibili](assets/screenshots/android-bilibili.png) | ![Community Shihuo](assets/screenshots/android-community-shihuo.png) | ![Search iPhone](assets/screenshots/android-search-iphone.png) |
+| ![Bilibili](assets/screenshots/android-bilibili.png) | ![社区实货](assets/screenshots/android-community-shihuo.png) | ![搜索iPhone](assets/screenshots/android-search-iphone.png) |
 
 > 更多界面（价格曲线 / 优惠券 / 桌面端）见 [Releases](https://github.com/wuliao00/PriceLens/releases) 附件；社区贡献截图欢迎 PR 至 `assets/screenshots/`。
 
@@ -53,14 +53,9 @@
 
 | 主界面 | 价格历史 | 优惠券 | 搜索结果 |
 |--------|----------|--------|----------|
-| ![Desktop Main](assets/desktop-main.svg) | ![Desktop Chart](assets/desktop-chart.svg) | ![Desktop Coupon](assets/desktop-coupon.svg) | ![Desktop Search](assets/desktop-search.svg) |
+| ![桌面主界面](assets/desktop-main.svg) | ![桌面图表](assets/desktop-chart.svg) | ![桌面优惠券](assets/desktop-coupon.svg) | ![桌面搜索](assets/desktop-search.svg) |
 
 #### 桌面端实机截图（v2.1.0）
-
-| 主界面 | 搜索概览 | 设置 |
-|--------|----------|------|
-| ![桌面版主界面](assets/screenshots/desktop-main.png) | ![桌面端搜索概览](assets/screenshots/desktop-search.png) | ![桌面端设置](assets/screenshots/desktop-settings.png) |
-| 首次启动的空态引导：粘贴商品链接 / B 站 BV 号即可开始 | 粘贴 B 站链接后呈现商品概览卡与四个快捷视图入口 | 外观 / 缓存 / 盯价 / 关于，全部本机可配 |
 
 | 盯价 | B 站评测 | 找券 | 社区评价 |
 |------|----------|------|----------|
