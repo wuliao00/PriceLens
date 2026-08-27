@@ -66,8 +66,8 @@
 
 | 平台 | 蓝奏云 | 夸克网盘 | GitHub Release |
 |------|--------|----------|----------------|
-| **Android** | [PriceLens比价助手_v2.3_免费开源_作者莫.apk](https://www.ilanzou.com/s/K1DKLuCg) | [PriceLens比价助手_v2.3_免费开源_作者莫.apk](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
-| **Windows** | [PriceLens-2.0.0-win.zip](https://www.ilanzou.com/s/K1DKLuCg) | [PriceLens-2.0.0-win.zip](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+| **Android** | [PriceLens-Android-2.5.1.apk](https://www.ilanzou.com/s/K1DKLuCg) | [PriceLens-Android-2.5.1.apk](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+| **Windows** | [PriceLens-Desktop-Setup-2.1.0.exe](https://www.ilanzou.com/s/K1DKLuCg) | PriceLens-Desktop-Setup-2.1.0.exe]（https://pan.quark.cn/s/33e192dc914d?pwd=WWnG）| [Release](https://github.com/wuliao00/PriceLens/releases) |
 
 > ⚠️ **蓝奏云无需提取码**，夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
 
