@@ -64,12 +64,12 @@
 
 ### 国内加速下载（推荐）
 
-| 平台 | 蓝奏云 | 夸克网盘 | GitHub Release |
+| 平台 | 蓝奏云（推荐，国内加速） | 夸克网盘（备选） | GitHub Release |
 |------|--------|----------|----------------|
-| **Android** | [PriceLens-Android-2.5.1.apk](https://www.ilanzou.com/s/K1DKLuCg) | [PriceLens-Android-2.5.1.apk](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+| **Android** | [PriceLens-Android-2.5.1.apk](https://www.ilanzou.com/s/hrqKVtJO?code=4455) | [PriceLens-Android-2.5.1.apk](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
 [PriceLens-Desktop-Setup-2.1.0.exe]（https://pan.quark.cn/s/33e192dc914d?pwd=WWnG）
 
- ⚠️ **蓝奏云无需提取码**，夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
+ ⚠️ **蓝奏云提取码：4455**（已含在链接参数中，打开即可下载）；夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
 
 ---
 
