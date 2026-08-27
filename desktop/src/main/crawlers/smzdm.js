@@ -46,6 +46,10 @@ async function searchDeals(q) {
     `https://search.smzdm.com/?c=home&s=${encodeURIComponent(q)}&v=b&order=time`,
     { headers: { Referer: 'https://www.smzdm.com/' } },
   );
+  /* 异常短页：非真实搜索结果（如反爬挑战页），避免误报「页面结构变更」 */
+  if (html.length < 1000) {
+    throw new Error('什么值得买（smzdm）返回了异常页面（疑似反爬拦截），无法解析搜索结果');
+  }
   const $ = cheerio.load(html);
   const deals = [];
 

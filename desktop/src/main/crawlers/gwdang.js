@@ -48,11 +48,18 @@ async function fetchTrendHtml(url) {
     }
   } catch (err) {
     if (err.code === 'ERATE_LIMIT') throw err; // 限流直接上抛，不再消耗 playwright
+    if (/服务端错误 5\d{2}/.test(err.message)) {
+      // 实测：www.gwdang.com 持续返回 503 错误页（GBK 短页），服务端拒绝访问，
+      // 非 SPA 壳问题；不再降级 playwright（渲染后仍是 503），直接给出准确原因。
+      const e = new Error(`购物党（gwdang）接口拒绝访问（${err.message.replace(/^服务端错误\s*/, 'HTTP ')}），疑似服务端反爬限流，请稍后重试`);
+      e.code = 'EBLOCKED';
+      throw e;
+    }
   }
 
   const browser = await tryLaunchPlaywright();
   if (!browser) {
-    const e = new Error('购物党页面需要浏览器渲染，请先安装可选依赖：npm i -D playwright && npx playwright install chromium');
+    const e = new Error('购物党（gwdang）趋势页为动态渲染，当前环境未安装可选浏览器组件（playwright），无法获取券数据');
     e.code = 'EDEGRADE';
     throw e;
   }

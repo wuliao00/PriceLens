@@ -145,12 +145,20 @@ async function rawRequest(url, opts = {}) {
 
         if (res.statusCode === 403 || res.statusCode === 412 || res.statusCode === 429) {
           limiter.pause(hostname);
-          throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000);
+          throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000, `HTTP ${res.statusCode}`);
+        }
+        // WAF 人机验证挑战（实测：smzdm 返回 202 + x-waf-captcha-* Cookie，
+        // 非真实内容；若不当拦截会被误判为「页面结构变更/解析失败」）
+        const setCookieRaw = res.headers['set-cookie'];
+        const cookieText = Array.isArray(setCookieRaw) ? setCookieRaw.join('; ') : String(setCookieRaw || '');
+        if (res.statusCode === 202 && /waf-captcha|captcha/i.test(cookieText)) {
+          limiter.pause(hostname);
+          throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000, 'WAF 人机验证拦截');
         }
         // 验证码页面嗅探（200 但内容是人机校验）
         if (/<captcha|verify\.gd\.sogou|滑动验证|请输入验证码|geetest/i.test(text)) {
           limiter.pause(hostname);
-          throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000);
+          throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000, '触发人机验证');
         }
         return { status: res.statusCode, body: text, url };
       } catch (err) {
