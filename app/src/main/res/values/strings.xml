@@ -9,4 +9,169 @@
     <string name="disclaimer_title">免费声明 · 作者：莫</string>
     <string name="disclaimer_body">作者：莫\n\n本软件（PriceLens 比价助手）永久免费开源，不收取任何费用，没有付费版、没有会员、没有内购。\n\n⚠ 任何人以任何形式向您收费（付费下载、付费解锁、 VIP 会员、代装服务等），都是骗子，请勿上当！\n\n您的数据仅保存在手机本地，绝不上传。</string>
     <string name="disclaimer_ok">我知道了，是免费的</string>
+    <!-- 倒计时期间同意按钮文案：%1$s=同意文案，%2$d=剩余秒数 -->
+    <string name="disclaimer_ok_countdown">%1$s（%2$d）</string>
+
+    <!-- 底部导航 -->
+    <string name="tab_overview">概览</string>
+    <string name="tab_bilibili">B站</string>
+    <string name="tab_price">盯价</string>
+    <string name="tab_coupon">找券</string>
+    <string name="tab_community">社区</string>
+    <string name="tab_profile">我的</string>
+
+    <!-- 顶栏搜索 -->
+    <string name="search_hint">搜索商品名 / 粘贴链接</string>
+    <string name="search_cd_search">搜索</string>
+    <string name="search_cd_clear">清空</string>
+    <string name="cd_settings">设置</string>
+    <string name="cd_back">返回</string>
+    <string name="disclaimer_hide">不再提示</string>
+
+    <!-- 数据源状态 -->
+    <string name="src_label_history">历史价</string>
+    <string name="src_label_bili">B站</string>
+    <string name="src_label_coupon">优惠券</string>
+    <string name="src_label_posts">爆料</string>
+    <string name="src_label_shihuo">识货</string>
+    <string name="src_label_dangdang">当当</string>
+    <string name="src_state_loading">加载中</string>
+    <string name="src_state_ok">正常</string>
+    <string name="src_state_blocked">反爬</string>
+    <string name="src_state_failed">失败</string>
+    <string name="src_state_idle">未查询</string>
+
+    <!-- 通用状态 -->
+    <string name="error_load_failed">加载失败</string>
+    <string name="error_retry_hint">网络异常或被反爬拦截，可重新搜索试试</string>
+    <string name="empty_search_first">请先搜索商品</string>
+
+    <!-- 概览页 -->
+    <string name="overview_not_found">未找到「%1$s」的比价数据</string>
+    <string name="overview_guide_acc_title">推荐：无障碍自动比价</string>
+    <string name="overview_guide_acc_desc">直接打开京东/淘宝/拼多多商品页，PriceLens 用本机登录账号自动识别实时价并弹出比价浮窗，数据最准。</string>
+    <string name="overview_guide_acc_action">去开启</string>
+    <string name="overview_guide_link_title">粘贴商品链接</string>
+    <string name="overview_guide_link_desc">复制京东/淘宝/拼多多的商品链接，粘贴到上方搜索框，直接查看历史价格与优惠券。</string>
+    <string name="overview_guide_bili_title">查看B站评测</string>
+    <string name="overview_guide_bili_desc">B站真实用户评测不受商品数据源限制，搜索「%1$s」看看大家的实际体验。</string>
+    <string name="overview_guide_bili_action">切换到 B站</string>
+    <string name="overview_live_price">%1$s · 实时价 ¥%2$s</string>
+    <string name="overview_live_default_source">本机账号</string>
+    <string name="overview_fact_lowest">历史最低</string>
+    <string name="overview_fact_coupon">优惠券</string>
+    <string name="overview_fact_advice">建议</string>
+    <string name="overview_no_coupon">无</string>
+    <string name="overview_coupon_yuan">%1$d 元</string>
+    <string name="overview_advice_low">可入</string>
+    <string name="overview_advice_suspicious">观望</string>
+    <string name="overview_advice_normal">常态</string>
+    <string name="overview_no_data">—</string>
+
+    <!-- B站页 -->
+    <string name="bili_empty_hint">搜索后聚合 B 站真实评测</string>
+    <string name="bili_risk_hint">%1$d 条视频被标记为疑似商单/含夸大宣传话术，已沉底展示（规则识别仅供参考）</string>
+    <string name="bili_risk_sponsored">疑似商单</string>
+    <string name="bili_risk_hype">夸大宣传</string>
+    <string name="bili_cd_cover">视频封面</string>
+
+    <!-- 盯价页 -->
+    <string name="price_empty_hint">搜索后展示历史价格曲线与买卖时机</string>
+    <string name="price_title">历史价格</string>
+    <string name="price_lowest">最低 %1$s</string>
+    <string name="price_highest">最高 %1$s</string>
+    <string name="price_copy_current">复制当前价 %1$s</string>
+    <string name="price_export_hint">导出图片（长按曲线卡片）</string>
+
+    <!-- 找券页 -->
+    <string name="coupon_empty_hint">搜索后聚合购物党 / 京东联盟优惠券</string>
+    <string name="coupon_net_price">到手价</string>
+    <string name="coupon_copied">已复制券码</string>
+    <string name="coupon_threshold">满 %1$d 可用</string>
+    <string name="coupon_no_threshold">无门槛</string>
+    <string name="coupon_copy">复制</string>
+    <string name="coupon_amount">¥%1$d</string>
+
+    <!-- 社区页 -->
+    <string name="community_empty_hint">搜索后聚合识货商品与什么值得买最新爆料</string>
+    <string name="community_shihuo">识货</string>
+    <string name="community_smzdm">什么值得买</string>
+    <string name="community_subsidy">国补</string>
+    <string name="community_worth_votes">值 %1$d / 不值 %2$d</string>
+
+    <!-- 个人页 -->
+    <string name="profile_tagline">全网比价决策工具 · v%1$s</string>
+    <string name="profile_free_badge">永久免费 · 付费即骗</string>
+    <string name="profile_stat_favorites">收藏</string>
+    <string name="profile_stat_watching">盯价中</string>
+    <string name="profile_stat_cache">缓存</string>
+    <string name="profile_section_history">搜索历史</string>
+    <string name="profile_section_pinned">我的收藏（%1$d）</string>
+    <string name="profile_section_targets">盯价目标（%1$d）</string>
+    <string name="profile_pinned_empty">暂无收藏。概览页长按商品卡可加入收藏，收藏的缓存永不淘汰。</string>
+    <string name="profile_targets_empty">暂无盯价目标。设置目标价后，后台每 30 分钟检查并推送降价提醒。</string>
+    <string name="profile_scripts_title">自定义脚本（Shizuku）</string>
+    <string name="profile_scripts_desc">ADB 权限执行，预置+自建</string>
+    <string name="profile_settings_title">设置</string>
+    <string name="profile_settings_desc">权限 · 外观 · 缓存 · 关于</string>
+    <string name="profile_footer">作者：莫 · PriceLens v%1$s 永久免费\n任何收费行为都是骗子</string>
+    <string name="profile_cd_delete_target">删除盯价</string>
+    <string name="profile_target_price">目标 %1$s</string>
+
+    <!-- 脚本页 -->
+    <string name="scripts_title">自定义脚本</string>
+    <string name="scripts_cd_new">新建脚本</string>
+    <string name="scripts_cd_delete">删除</string>
+    <string name="scripts_cd_edit">编辑</string>
+    <string name="scripts_cd_run">运行</string>
+    <string name="scripts_ready_hint">Shizuku 已就绪，脚本将以 ADB（shell）权限执行，请只运行你信任的内容。</string>
+    <string name="scripts_not_ready_hint">需要 Shizuku 已启动并授权后才能运行脚本（设置 → Shizuku 一键授权）。</string>
+    <string name="scripts_run_failed">[执行失败] </string>
+    <string name="scripts_no_output">(无输出)</string>
+    <string name="scripts_editor_new">新建脚本</string>
+    <string name="scripts_editor_edit">编辑脚本</string>
+    <string name="scripts_name_label">脚本名称</string>
+    <string name="scripts_content_label">Shell 脚本（以 ADB 权限执行）</string>
+    <string name="scripts_save">保存</string>
+    <string name="scripts_cancel">取消</string>
+
+    <!-- 降价通知 -->
+    <string name="notification_price_drop_title">%1$s 降价了！</string>
+    <string name="notification_price_drop_text">当前 ¥%1$s ≤ 目标 ¥%2$s</string>
+
+    <!-- 设置页 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_section_appearance">外观</string>
+    <string name="settings_section_permission">权限</string>
+    <string name="settings_section_data">数据</string>
+    <string name="settings_section_about">关于</string>
+    <string name="settings_dynamic_color_title">Material You 动态取色</string>
+    <string name="settings_dynamic_color_desc">跟随系统壁纸取色（Android 12+）；关闭后使用品牌蓝</string>
+    <string name="settings_cache_title">缓存占用（上限 30MB）</string>
+    <string name="settings_cache_refresh">刷新</string>
+    <string name="settings_cache_clear">清理</string>
+    <string name="settings_about_version">版本 %1$s</string>
+    <string name="settings_about_privacy">比价数据仅存本机，绝不上传服务器</string>
+    <string name="settings_about_disclaimer">免费声明</string>
+    <string name="settings_footer">作者：莫 · PriceLens 永久免费开源\n任何收费行为都是骗子，请勿上当</string>
+    <string name="perm_action_granted">✓ %1$s</string>
+    <string name="perm_enabled">已开启</string>
+    <string name="perm_go_enable">去开启</string>
+    <string name="perm_acc_title">无障碍服务（自动比价）</string>
+    <string name="perm_acc_desc">打开京东/淘宝/拼多多商品页，用本机登录账号自动识别实时价并弹比价浮窗。仅监听这三个应用。</string>
+    <string name="perm_overlay_title">悬浮窗权限（比价浮窗）</string>
+    <string name="perm_overlay_desc">无障碍检测到价格后，在其他应用上方显示比价浮窗。</string>
+    <string name="perm_notif_title">通知权限（降价提醒）</string>
+    <string name="perm_notif_desc">后台盯价达到目标价时推送提醒，不发送任何营销通知。</string>
+    <string name="perm_shizuku_title">Shizuku 一键授权（可选）</string>
+    <string name="perm_shizuku_desc_not_installed">未安装 Shizuku。安装后可一键开启无障碍+悬浮窗，免手动设置。</string>
+    <string name="perm_shizuku_desc_not_alive">Shizuku 已安装，但服务未启动（手机重启后服务会自动停止，属正常现象）。请打开 Shizuku 点「启动」重新运行服务，启动后本页会自动刷新。</string>
+    <string name="perm_shizuku_desc_not_granted">Shizuku 服务运行中。点击「授权」并在弹窗中允许后，将自动开启无障碍+悬浮窗+通知权限（GKD 式一键体验）。</string>
+    <string name="perm_shizuku_desc_ready">无障碍与悬浮窗均已就绪，无需 Shizuku 介入。</string>
+    <string name="perm_shizuku_desc_idle">点击即可一键开启无障碍服务并授予悬浮窗权限。</string>
+    <string name="perm_shizuku_install">安装 Shizuku</string>
+    <string name="perm_shizuku_open">打开 Shizuku</string>
+    <string name="perm_shizuku_grant">授权 Shizuku</string>
+    <string name="perm_shizuku_done">已完成</string>
+    <string name="perm_shizuku_oneclick">一键开启</string>
 </resources>

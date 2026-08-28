@@ -55,12 +55,19 @@ object ShizukuHelper {
     /** 重算当前状态（Binder 回调触发；ON_RESUME 时也可兜底调用） */
     fun refresh() {
         val ctx = appCtx ?: return
-        _status.value = when {
-            !isInstalled(ctx) -> ShizukuState.NOT_INSTALLED
-            !isAlive() -> ShizukuState.INSTALLED_NOT_RUNNING
-            !isGranted() -> ShizukuState.RUNNING_NOT_GRANTED
+        val installed = isInstalled(ctx)
+        val alive = installed && isAlive()
+        val granted = alive && isGranted()
+        val newState = when {
+            !installed -> ShizukuState.NOT_INSTALLED
+            !alive -> ShizukuState.INSTALLED_NOT_RUNNING
+            !granted -> ShizukuState.RUNNING_NOT_GRANTED
             else -> ShizukuState.READY
         }
+        if (newState != _status.value) {
+            LogT.i("Shizuku 状态: ${_status.value} -> $newState (installed=$installed alive=$alive granted=$granted)")
+        }
+        _status.value = newState
     }
 
     /** Shizuku 官方包名（Manifest <queries> 已声明，Android 11+ 可见） */
@@ -117,14 +124,13 @@ object ShizukuHelper {
         }
     }
 
-    private fun userServiceArgs(context: Context): rikka.shizuku.Shizuku.UserServiceArgs =
-        rikka.shizuku.Shizuku.UserServiceArgs(
-            ComponentName(context, ShizukuShellService::class.java)
-        )
-            .daemon(false)
-            .processNameSuffix("shell")
-            .debuggable(BuildConfig.DEBUG)
-            .version(1)
+    private fun userServiceArgs(context: Context): rikka.shizuku.Shizuku.UserServiceArgs = rikka.shizuku.Shizuku.UserServiceArgs(
+        ComponentName(context, ShizukuShellService::class.java)
+    )
+        .daemon(false)
+        .processNameSuffix("shell")
+        .debuggable(BuildConfig.DEBUG)
+        .version(1)
 
     /**
      * 自定义脚本入口：经 Shizuku（ADB/shell 权限）执行任意 shell 命令，
@@ -155,7 +161,9 @@ object ShizukuHelper {
                 } finally {
                     try {
                         rikka.shizuku.Shizuku.unbindUserService(
-                            userServiceArgs(context), this, true
+                            userServiceArgs(context),
+                            this,
+                            true
                         )
                     } catch (_: Exception) {
                     }
@@ -175,31 +183,34 @@ object ShizukuHelper {
 
     /**
      * 一键开启无障碍 + 悬浮窗 + 通知权限。完成后回调 true/false。
+     *
      * 命令保持幂等：已在列表中则不重复追加；低版本无通知运行时权限时忽略报错。
+     * 写完 settings 后再主动 ping 一次 UserService（避免 R8 混淆下"看似 OK 实则未连"）。
      */
     fun oneClickSetup(context: Context, onDone: (Boolean) -> Unit) {
         if (!isAlive() || !isGranted()) {
             onDone(false)
             return
         }
-        val svc = "com.pricelens/com.pricelens.accessibility.PriceMonitorService"
-        // 一条 shell 完成读-改-写，避免多次往返
-        val cmd = """
-            CUR=`settings get secure enabled_accessibility_services`
-            case "`echo ${'$'}CUR`" in
-              *com.pricelens*) ;;
-              *) if [ -z "${'$'}CUR" ] || [ "${'$'}CUR" = "null" ]; then
-                     settings put secure enabled_accessibility_services "$svc";
-                 else
-                     settings put secure enabled_accessibility_services "`echo ${'$'}CUR`:$svc";
-                 fi ;;
-            esac
-            settings put secure accessibility_enabled 1
-            appops set com.pricelens SYSTEM_ALERT_WINDOW allow
-            pm grant com.pricelens android.permission.POST_NOTIFICATIONS || true
-            echo SETUP_DONE
-        """.trimIndent()
+        // 脚本实现与 ScriptStore 预置脚本共用（accessibilitySetupScript）：
+        // 组件名是 Kotlin 变量，经插值直接写入脚本；shell 层变量由函数内部转义。
+        // 此前误用 ${'$'}svc 转义，导致脚本引用未定义 shell 变量、写入空值，一键开启必失败。
+        val cmd = ScriptStore.accessibilitySetupScript(ScriptStore.ACCESSIBILITY_COMPONENT)
 
-        execViaShizuku(context, cmd) { ok, _ -> onDone(ok) }
+        execViaShizuku(context, cmd) { ok, output ->
+            val writeOk = ok && output.contains("SETUP_OK")
+            if (writeOk) {
+                // 写入成功 → 自动跳无障碍设置页（部分 ROM 还需要用户在系统弹窗里点"确定"）
+                // 这样把"系统拒绝"的最后一个确认步骤也自动引导到位
+                try {
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                } catch (_: Exception) {
+                }
+            }
+            onDone(writeOk)
+        }
     }
 }

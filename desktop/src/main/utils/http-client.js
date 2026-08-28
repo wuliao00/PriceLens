@@ -1,7 +1,7 @@
 /**
  * PriceLens HTTP 客户端（主进程爬虫专用）
  * --------------------------------------
- * 基于 undici，统一实现规范 §7.1 的请求纪律：
+ * 基于 Node 内置 fetch（undici 实现），统一实现规范 §7.1 的请求纪律：
  *   - 同域名 ≤ 1 req / 3s（RateLimiter）
  *   - 最大并发域名数 3（信号量）
  *   - 单请求超时 10s，超时/网络错误重试 1 次
@@ -11,7 +11,6 @@
  */
 'use strict';
 
-const { request } = require('undici');
 const RateLimiter = require('./rate-limiter');
 const { RateLimitedError } = require('./rate-limiter');
 
@@ -32,9 +31,9 @@ const USER_AGENTS = [
 
 const MOBILE_UA = USER_AGENTS[4];
 
-/** UA 池随机取一个 */
+/** UA 池随机取一个（randint 范围须为 [0, length)，否则第 5 个 UA 永不轮换） */
 function pickUA() {
-  return USER_AGENTS[Math.floor(Math.random() * (USER_AGENTS.length - 1))];
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
 /* ── Cookie Jar：domain → { name: value } ─────────────── */
@@ -53,11 +52,13 @@ function storeCookies(domain, setCookieHeader) {
   cookieJar.set(domain, jar);
 }
 
-/** 取域名的 Cookie 串（覆盖到注册域，如 item.jd.com → jd.com 也命中） */
+/** 取域名的 Cookie 串（请求 hostname 属于 cookie 域才回带，如 item.jd.com 命中 jd.com 的 Cookie） */
 function cookieHeaderFor(hostname) {
   const parts = [];
   for (const [domain, jar] of cookieJar) {
-    if (hostname === domain || hostname.endsWith(`.${domain}`) || domain.endsWith(hostname)) {
+    // 判断方向：请求 hostname 是否属于 cookie 域（等于该域或为其子域），
+    // 不能反向用 domain.endsWith(hostname)，否则会把 A 站 Cookie 泄漏给其父域/无关域
+    if (hostname === domain || hostname.endsWith(`.${domain}`)) {
       for (const [k, v] of jar) parts.push(`${k}=${v}`);
     }
   }
@@ -95,15 +96,32 @@ function isRetryable(err) {
   const name = err && err.name;
   const code = err && (err.code || err.cause?.code);
   return name === 'TimeoutError' || name === 'AbortError' || name === 'Error' ||
+    name === 'TypeError' /* fetch 网络错误 */ ||
     code === 'ECONNRESET' || code === 'ECONNREFUSED' || code === 'EPIPE' ||
     code === 'UND_ERR_SOCKET' || code === 'UND_ERR_CONNECT_TIMEOUT';
 }
 
 /**
- * 底层请求：限流 → 并发槽 → undici request → 状态码/验证码检查。
+ * 从 fetch Headers 取 set-cookie 列表。
+ * Node 19.7+ 提供 getSetCookie()（set-cookie 在 Headers.get 中会被逗号拼接，
+ * 而 Cookie 值本身可能含逗号，故不能用 get 的结果直接切分）。
+ * @param {Headers} headers
+ * @returns {string[]|undefined}
+ */
+function getSetCookie(headers) {
+  if (typeof headers.getSetCookie === 'function') {
+    const list = headers.getSetCookie();
+    return list.length ? list : undefined;
+  }
+  const v = headers.get('set-cookie');
+  return v ? [v] : undefined;
+}
+
+/**
+ * 底层请求：限流 → 并发槽 → fetch → 状态码/验证码检查。
  * @param {string} url
  * @param {{method?: string, headers?: object, body?: string|null,
- *          timeoutMs?: number, maxRedirects?: number, mobileUA?: boolean}} [opts]
+ *          timeoutMs?: number, mobileUA?: boolean}} [opts]
  * @returns {Promise<{status: number, body: string, url: string}>}
  */
 async function rawRequest(url, opts = {}) {
@@ -112,7 +130,6 @@ async function rawRequest(url, opts = {}) {
     headers = {},
     body = null,
     timeoutMs = TIMEOUT_MS,
-    maxRedirects = 3,
     mobileUA = false,
   } = opts;
 
@@ -133,26 +150,35 @@ async function rawRequest(url, opts = {}) {
     let lastErr = null;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = await request(url, {
+        // fetch 默认 follow 重定向（上限 20 次），与原 undici maxRedirects:3 相比
+        // 容错更高，重定向环会在 20 次后由 fetch 抛错并被 isRetryable 处理
+        const res = await fetch(url, {
           method,
           headers: finalHeaders,
           body,
           signal: AbortSignal.timeout(timeoutMs),
-          maxRedirects,
         });
-        const text = await res.body.text();
-        storeCookies(hostname, res.headers['set-cookie']);
+        const text = await res.text();
+        storeCookies(hostname, getSetCookie(res.headers));
 
-        if (res.statusCode === 403 || res.statusCode === 412 || res.statusCode === 429) {
+        if (res.status === 403 || res.status === 412 || res.status === 429) {
           limiter.pause(hostname);
-          throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000);
+          throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000, `HTTP ${res.status}`);
+        }
+        // WAF 人机验证挑战（实测：smzdm 返回 202 + x-waf-captcha-* Cookie，
+        // 非真实内容；若不当拦截会被误判为「页面结构变更/解析失败」）
+        const setCookieRaw = getSetCookie(res.headers);
+        const cookieText = Array.isArray(setCookieRaw) ? setCookieRaw.join('; ') : String(setCookieRaw || '');
+        if (res.status === 202 && /waf-captcha|captcha/i.test(cookieText)) {
+          limiter.pause(hostname);
+          throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000, 'WAF 人机验证拦截');
         }
         // 验证码页面嗅探（200 但内容是人机校验）
         if (/<captcha|verify\.gd\.sogou|滑动验证|请输入验证码|geetest/i.test(text)) {
           limiter.pause(hostname);
-          throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000);
+          throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000, '触发人机验证');
         }
-        return { status: res.statusCode, body: text, url };
+        return { status: res.status, body: text, url };
       } catch (err) {
         if (err instanceof RateLimitedError) throw err;
         lastErr = err;
@@ -169,7 +195,7 @@ async function rawRequest(url, opts = {}) {
   }
 }
 
-/** 把 undici/Node 错误规整成可读 Error */
+/** 把 fetch/Node 错误规整成可读 Error */
 function normalizeError(err, url) {
   if (err && err.name === 'TimeoutError') {
     return new Error(`请求超时（10s）: ${new URL(url).hostname}`);
@@ -177,7 +203,9 @@ function normalizeError(err, url) {
   if (err && err.name === 'AbortError') {
     return new Error(`请求超时（10s）: ${new URL(url).hostname}`);
   }
-  return new Error(`网络错误 ${new URL(url).hostname}: ${(err && err.message) || '未知'}`);
+  // fetch 网络错误 message 固定为 'fetch failed'，真实原因在 cause 里
+  const detail = (err && (err.cause?.message || err.message)) || '未知';
+  return new Error(`网络错误 ${new URL(url).hostname}: ${detail}`);
 }
 
 /* ── 对外 API ─────────────────────────────────────────── */

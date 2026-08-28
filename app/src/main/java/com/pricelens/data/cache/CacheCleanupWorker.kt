@@ -9,6 +9,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.pricelens.data.local.AppDatabase
+import com.pricelens.data.repository.RevalidateHub
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.util.concurrent.TimeUnit
@@ -25,6 +26,7 @@ class CacheCleanupWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val db: AppDatabase,
     private val memoryCache: TLRUCache<String>,
+    private val hub: RevalidateHub
 ) : CoroutineWorker(context, params) {
 
     enum class Mode { LIGHT, FULL, EMERGENCY }
@@ -35,17 +37,23 @@ class CacheCleanupWorker @AssistedInject constructor(
             Mode.LIGHT -> {
                 memoryCache.clearExpired()
                 db.productDao().deleteExpired(now)
+                db.cacheEntryDao().deleteExpired(now)
                 db.searchRecordDao().deleteOlderThan(now - 30L * 24 * 3600 * 1000)
             }
             Mode.FULL -> {
                 memoryCache.clearExpired()
+                hub.clearAll() // 同步清理重验证注册表，防无界堆积
                 db.productDao().deleteExpired(now)
+                db.cacheEntryDao().deleteExpired(now)
+                // 陈旧快照保留上限 7 天（降级兜底用，防无界堆积）
+                db.cacheEntryDao().deleteOlderThan(now - 7L * 24 * 3600 * 1000)
                 db.priceHistoryDao().deleteOlderThan(thirtyDaysAgoDate())
                 db.searchRecordDao().deleteOlderThan(now - 30L * 24 * 3600 * 1000)
-                db.openHelper.writableDatabase.execSQL("VACUUM")  // 压缩数据库文件
+                db.openHelper.writableDatabase.execSQL("VACUUM") // 压缩数据库文件
             }
             Mode.EMERGENCY -> {
                 memoryCache.clear()
+                hub.clearAll() // 内存全清时注册表一并清空
                 db.productDao().deleteNonPinnedOlderThan(now - 3L * 24 * 3600 * 1000)
                 db.priceHistoryDao().deleteOlderThan(thirtyDaysAgoDate())
                 db.openHelper.writableDatabase.execSQL("VACUUM")
@@ -77,7 +85,7 @@ class CacheCleanupWorker @AssistedInject constructor(
                 "cache_cleanup_daily",
                 ExistingPeriodicWorkPolicy.KEEP,
                 PeriodicWorkRequestBuilder<CacheCleanupWorker>(1, TimeUnit.DAYS)
-                    .setInitialDelay(hoursUntil(3), TimeUnit.HOURS)  // 凌晨 3 点
+                    .setInitialDelay(hoursUntil(3), TimeUnit.HOURS) // 凌晨 3 点
                     .setInputData(workDataOf(KEY_MODE to Mode.FULL.name))
                     .build()
             )

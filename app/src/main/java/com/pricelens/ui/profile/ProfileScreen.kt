@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,42 +29,48 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.BuildConfig
 import com.pricelens.R
 import com.pricelens.ui.components.AppImage
-import com.pricelens.ui.components.BadgeTone
+import com.pricelens.ui.components.EmptyText
 import com.pricelens.ui.components.PriceBadge
 import com.pricelens.ui.components.PriceCard
-import com.pricelens.ui.main.MainViewModel
+import com.pricelens.ui.components.SectionHeader
+import com.pricelens.ui.overview.SearchViewModel
+import com.pricelens.ui.price.PriceWatchViewModel
+import com.pricelens.ui.theme.BadgeTone
 import com.pricelens.ui.theme.Dims
+import com.pricelens.ui.theme.PriceType
 import com.pricelens.util.PriceFormatter
 import com.pricelens.util.UrlOpener
 
 /**
  * 个人页（“我的”）：资料头 + 统计 + 搜索历史 + 我的收藏 + 盯价管理 + 设置入口。
+ * 阶段4：文案全走 strings.xml、区块标题统一 SectionHeader、空态走 EmptyText。
  */
 @Composable
-fun ProfileScreen(
-    viewModel: MainViewModel,
-    onOpenSettings: () -> Unit,
-    onOpenScripts: () -> Unit = {}
-) {
-    LaunchedEffect(Unit) { viewModel.refreshCacheStats() }
+fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
+    val profileViewModel: ProfileViewModel = hiltViewModel()
+    val priceWatchViewModel: PriceWatchViewModel = hiltViewModel()
+    val searchViewModel: SearchViewModel = hiltViewModel()
 
-    val pinned by viewModel.pinnedProducts.collectAsStateWithLifecycle()
-    val targets by viewModel.watchTargets.collectAsStateWithLifecycle()
-    val history by viewModel.searchHistory.collectAsStateWithLifecycle()
-    val cacheStats by viewModel.cacheStats.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { profileViewModel.refreshCacheStats() }
+
+    val pinned by profileViewModel.pinnedProducts.collectAsStateWithLifecycle()
+    val targets by priceWatchViewModel.watchTargets.collectAsStateWithLifecycle()
+    val history by profileViewModel.searchHistory.collectAsStateWithLifecycle()
+    val cacheStats by profileViewModel.cacheStats.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(Dims.SpacingXL)
+        contentPadding = PaddingValues(Dims.SpacingXL)
     ) {
         item(key = "header") { ProfileHeader() }
         item(key = "stats") {
@@ -74,15 +81,19 @@ fun ProfileScreen(
             )
         }
         if (history.isNotEmpty()) {
-            item(key = "history_title") { SectionTitle("搜索历史") }
+            item(key = "history_title") {
+                SectionHeader(stringResource(R.string.profile_section_history))
+            }
             item(key = "history") {
-                HistoryChips(history = history) { viewModel.research(it) }
+                HistoryChips(history = history) { searchViewModel.research(it) }
             }
         }
-        item(key = "pinned_title") { SectionTitle("我的收藏（${pinned.size}）") }
+        item(key = "pinned_title") {
+            SectionHeader(stringResource(R.string.profile_section_pinned, pinned.size))
+        }
         if (pinned.isEmpty()) {
             item(key = "pinned_empty") {
-                EmptyText("暂无收藏。概览页长按商品卡可加入收藏，收藏的缓存永不淘汰。")
+                EmptyText(stringResource(R.string.profile_pinned_empty))
             }
         } else {
             items(pinned, key = { it.id }) { product ->
@@ -90,24 +101,29 @@ fun ProfileScreen(
                     title = product.title,
                     price = product.currentPrice,
                     image = product.imageUrl,
-                    url = if (product.platform == "jd")
-                        "https://item.jd.com/${product.id.removePrefix("jd:")}.html" else ""
+                    url = if (product.platform == "jd") {
+                        "https://item.jd.com/${product.id.removePrefix("jd:")}.html"
+                    } else {
+                        ""
+                    }
                 ) {
-                    viewModel.research(product.title.take(30))
+                    searchViewModel.research(product.title.take(30))
                 }
             }
         }
-        item(key = "targets_title") { SectionTitle("盯价目标（${targets.size}）") }
+        item(key = "targets_title") {
+            SectionHeader(stringResource(R.string.profile_section_targets, targets.size))
+        }
         if (targets.isEmpty()) {
             item(key = "targets_empty") {
-                EmptyText("暂无盯价目标。设置目标价后，后台每 30 分钟检查并推送降价提醒。")
+                EmptyText(stringResource(R.string.profile_targets_empty))
             }
         } else {
             items(targets, key = { it.productId }) { target ->
                 TargetRow(
                     title = target.title,
                     targetPrice = target.targetPrice,
-                    onDelete = { viewModel.removeTarget(target.productId) }
+                    onDelete = { priceWatchViewModel.removeTarget(target.productId) }
                 )
             }
         }
@@ -122,9 +138,12 @@ fun ProfileScreen(
                     )
                     Spacer(Modifier.size(Dims.SpacingM))
                     Column(Modifier.weight(1f)) {
-                        Text("自定义脚本（Shizuku）", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "ADB 权限执行，预置+自建",
+                            stringResource(R.string.profile_scripts_title),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            stringResource(R.string.profile_scripts_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -142,10 +161,13 @@ fun ProfileScreen(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Spacer(Modifier.size(Dims.SpacingM))
-                    Text("设置", style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f))
                     Text(
-                        "权限 · 外观 · 缓存 · 关于",
+                        stringResource(R.string.profile_settings_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        stringResource(R.string.profile_settings_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -154,11 +176,13 @@ fun ProfileScreen(
         }
         item(key = "footer") {
             Text(
-                "作者：莫 · PriceLens v${BuildConfig.VERSION_NAME} 永久免费\n任何收费行为都是骗子",
+                stringResource(R.string.profile_footer, BuildConfig.VERSION_NAME),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(vertical = Dims.SpacingXL),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = Dims.SpacingXL),
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -170,22 +194,22 @@ private fun ProfileHeader() {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 painter = painterResource(R.drawable.ic_launcher),
-                contentDescription = "PriceLens",
+                contentDescription = stringResource(R.string.app_name),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(Dims.SpacingXXXL + Dims.SpacingXL)
                     .clip(MaterialTheme.shapes.medium)
             )
             Spacer(Modifier.size(Dims.SpacingL))
             Column {
-                Text("PriceLens", style = MaterialTheme.typography.titleLarge)
+                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "全网比价决策工具 · v${BuildConfig.VERSION_NAME}",
+                    stringResource(R.string.profile_tagline, BuildConfig.VERSION_NAME),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(Dims.SpacingS))
-                PriceBadge("永久免费 · 付费即骗", BadgeTone.POSITIVE)
+                PriceBadge(stringResource(R.string.profile_free_badge), BadgeTone.POSITIVE)
             }
         }
     }
@@ -195,11 +219,14 @@ private fun ProfileHeader() {
 private fun StatsRow(pinnedCount: Int, targetCount: Int, cacheStats: String) {
     Spacer(Modifier.height(Dims.SpacingL))
     Row(horizontalArrangement = Arrangement.spacedBy(Dims.SpacingM)) {
-        StatCard("收藏", pinnedCount.toString(), Modifier.weight(1f))
-        StatCard("盯价中", targetCount.toString(), Modifier.weight(1f))
+        StatCard(stringResource(R.string.profile_stat_favorites), pinnedCount.toString(), Modifier.weight(1f))
+        StatCard(stringResource(R.string.profile_stat_watching), targetCount.toString(), Modifier.weight(1f))
         PriceCard(modifier = Modifier.weight(1.4f)) {
-            Text("缓存", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                stringResource(R.string.profile_stat_cache),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(Dims.SpacingS))
             Text(
                 cacheStats,
@@ -213,22 +240,18 @@ private fun StatsRow(pinnedCount: Int, targetCount: Int, cacheStats: String) {
 @Composable
 private fun StatCard(label: String, value: String, modifier: Modifier = Modifier) {
     PriceCard(modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(Dims.SpacingS))
-        Text(value, style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary)
+        Text(
+            value,
+            style = PriceType.PriceLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = Dims.SpacingXL, bottom = Dims.SpacingS)
-    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -249,16 +272,24 @@ private fun PinnedRow(title: String, price: Double, image: String, url: String, 
         if (url.startsWith("http")) UrlOpener.open(context, url)
     }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            AppImage(url = image, contentDescription = title, modifier = Modifier.size(44.dp))
+            AppImage(
+                url = image,
+                contentDescription = title,
+                modifier = Modifier.size(Dims.SpacingXXXL + Dims.SpacingM)
+            )
             Spacer(Modifier.size(Dims.SpacingM))
             Column(Modifier.weight(1f)) {
                 Text(
-                    title, style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                    title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     PriceFormatter.format(price),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontFeatureSettings = "tnum"
+                    ),
                     color = MaterialTheme.colorScheme.primary
                 )
             }
@@ -273,11 +304,16 @@ private fun TargetRow(title: String, targetPrice: Double, onDelete: () -> Unit) 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    title, style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                    title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    "目标 ${PriceFormatter.format(targetPrice)}",
+                    stringResource(
+                        R.string.profile_target_price,
+                        PriceFormatter.format(targetPrice)
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -285,20 +321,11 @@ private fun TargetRow(title: String, targetPrice: Double, onDelete: () -> Unit) 
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Filled.Delete,
-                    contentDescription = "删除盯价",
+                    contentDescription = stringResource(R.string.profile_cd_delete_target),
                     tint = MaterialTheme.colorScheme.error
                 )
             }
         }
     }
     Spacer(Modifier.height(Dims.SpacingS))
-}
-
-@Composable
-private fun EmptyText(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
 }
