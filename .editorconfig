@@ -1,0 +1,28 @@
+# PriceLens ktlint 规则基线（v2.5.0 接入门禁时建立）。
+# 仓库代码此前未经统一格式化，接入策略：先跑一次 ./gradlew ktlintFormat 自动修复，
+# 无法自动修复或历史包袱较重的规则在此合理放宽。
+
+root = true
+
+[*.{kt,kts}]
+# 与 kotlin.code.style=official 对齐
+ktlint_code_style = android_studio
+indent_size = 4
+insert_final_newline = true
+
+# 历史代码存在较多超长注释行（中文文档注释），自动换行无法安全折行，放宽上限
+max_line_length = 140
+
+# Compose @Composable 函数按惯例使用 PascalCase；测试函数放宽
+ktlint_function_naming_ignore_when_annotated_with = Composable,Test
+
+# 屏幕文件（如 OverviewScreen.kt）以顶层 Composable 函数为主，文件名规则放宽
+ktlint_standard_filename = disabled
+
+# 设计令牌（ui/theme/Motion.kt 的 MotionDurations.Fast/Standard/Slow）采用语义化
+# PascalCase 命名而非 SCREAMING_SNAKE_CASE，为 Compose 设计系统惯例，放宽属性命名规则；
+# 其余属性命名约束由 Code Review 兜底（影响面可接受：仅命名风格，不涉及行为）
+ktlint_standard_property-naming = disabled
+
+# 中文注释与行尾空格格式由 ktlintFormat 处理，但允许注释以任意空白起始对齐
+ktlint_standard_comment-wrapping = disabled

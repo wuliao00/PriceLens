@@ -16,6 +16,7 @@ import javax.inject.Inject
 class PriceLensApp : Application(), Configuration.Provider {
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
+
     @Inject lateinit var imageLoader: ImageLoader
 
     override val workManagerConfiguration: Configuration

@@ -1,18 +1,32 @@
-# PriceLens v2.0
+# PriceLens v2.1
 
 > 极简主义全网比价决策工具 —— 30 秒完成「种草 → 盯价 → 找券 → 社区验证」四步购物决策闭环。
+> v2.1 新增：**盯价后台任务（30min 周期、托盘常驻）** 与 **自定义脚本（PowerShell）**。
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue) ![Electron](https://img.shields.io/badge/Electron-%E2%89%A528-9feaf9) ![Framework](https://img.shields.io/badge/UI-%E5%8E%9F%E7%94%9FJS%20%E9%9B%B6%E6%A1%86%E6%9E%B6-green)
+
+## 界面预览
+
+| 主界面 | 搜索概览 | 设置 |
+|--------|----------|------|
+| ![主界面](../assets/screenshots/desktop-main.png) | ![搜索概览](../assets/screenshots/desktop-search.png) | ![设置](../assets/screenshots/desktop-settings.png) |
+
+| 盯价 | B 站评测 | 找券 | 社区 |
+|------|----------|------|------|
+| ![盯价](../assets/screenshots/desktop-price.png) | ![B 站评测](../assets/screenshots/desktop-bilibili.png) | ![找券](../assets/screenshots/desktop-coupons.png) | ![社区](../assets/screenshots/desktop-community.png) |
+
+> 截图见仓库 `assets/screenshots/`，与根目录 [README](../README.md) 界面预览章节同源。
 
 ## 功能一览
 
 | 模块 | 数据源 | 说明 |
 |---|---|---|
 | 🌱 种草 | B 站（WBI 签名） | 评测视频聚合，自动标注 ⚠️避坑 / 👍推荐 |
-| 📈 盯价 | 慢慢买 | 手写 SVG 历史价格曲线，历史低价/先涨后降检测，目标价系统通知 |
+| 📈 盯价 | 慢慢买 | 手写 SVG 历史价格曲线，历史低价/先涨后降检测，目标价系统通知；**30 分钟后台轮询，托盘常驻，重启自动恢复** |
 | 🎫 找券 | 购物党 | 隐藏优惠券 + 到手价 countUp 滚动，一键复制券码 |
 | 💬 社区 | 什么值得买 | 最新爆料、值/不值比例条、热评关键词高亮、近 7 天更低价横幅 |
 | 🛒 商品 | 京东 p.3.cn | 支持直接粘贴京东/淘宝/B 站链接搜索 |
+| 📜 脚本 | 本机 PowerShell | 预置 3 个只读安全脚本 + 自定义脚本增删改查，输出实时展示，120s 超时保护 |
 
 本地 JSON 缓存（LRU 200MB / TTL / stale-while-revalidate），**断网重启仍可查看上次数据**。
 
@@ -54,8 +68,8 @@ npm run build        # NSIS 安装器 + 便携 zip，输出到 dist/
 
 产物（目标 < 80MB）：
 
-- `dist/PriceLens Setup x.x.x.exe` — NSIS 安装器（可自定义目录，卸载时询问是否清缓存）
-- `dist/PriceLens-x.x.x-win.zip` — 便携版
+- `dist/PriceLens-x.x.x-x64.exe` — NSIS 安装器（可自定义目录，卸载时询问是否清缓存）
+- `dist/PriceLens-x.x.x-x64.zip` — 便携版，解压即用
 
 ## 快捷键
 
@@ -73,9 +87,16 @@ npm run build        # NSIS 安装器 + 便携 zip，输出到 dist/
 %APPDATA%/pricelens/
 ├── cache/            # JSON 缓存（products/history/bilibili/smzdm/coupons）
 │   └── _index.json   # 索引：key → { file, ts, ttl }
-├── settings.json     # 主题 / 盯价配置
+├── settings.json     # 主题 / 盯价配置（重启自动恢复轮询）
+├── scripts.json      # 自定义脚本（名称 + 内容）
 └── logs/crawl.log    # 爬虫日志
 ```
+
+## 盯价后台与托盘（v2.1）
+
+- 在「盯价」页设置目标价后，主进程以 **30 分钟周期**轮询当前价；低于目标价 → 系统通知 + 侧边栏红点，回升 2% 以上后自动重置可再次提醒。
+- 关闭窗口 → 最小化到托盘继续轮询；托盘右键：显示主窗口 / 立即检查盯价 / 退出；双击托盘图标还原窗口。
+- 应用重启后自动恢复未完成的盯价任务（配置持久化于 settings.json）。
 
 ## 安全架构（红线清单）
 
@@ -87,6 +108,12 @@ npm run build        # NSIS 安装器 + 便携 zip，输出到 dist/
 - ✅ 主进程全部 `fs.promises` 异步 IO
 
 安全自检：`npx electronegativity -c ./src`（应无 HIGH/CRITICAL）。
+
+## 浏览器联动与致谢（摘要）
+
+**浏览器联动（剪贴板桥）**：在浏览器商品页复制商品链接 → 粘贴到 PriceLens 搜索框即可搜索（本版原生支持京东 / 淘宝 / B 站链接直达）。进阶玩法：在浏览器安装购物党官方油猴脚本秒查站内历史价格，再回到本应用完成盯价、找券与社区验证。
+
+**致谢**：盯价模块数据来自慢慢买公开页面，找券模块数据来自购物党公开页面（解析规则由本项目自行分析公开页面编写，相关平台/插件未贡献代码）。完整致谢、推荐插件清单（含推广内容披露）与免责声明见根目录 [README · 致谢](../README.md#-致谢) 与 [README · 浏览器联动](../README.md#-浏览器联动剪贴板桥)。
 
 ## 项目结构
 

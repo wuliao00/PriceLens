@@ -29,6 +29,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,10 +38,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pricelens.R
 import com.pricelens.ui.components.PriceCard
 import com.pricelens.ui.theme.Dims
 import com.pricelens.util.ScriptStore
@@ -63,34 +68,49 @@ fun ScriptScreen(onBack: () -> Unit) {
     val shizukuState by ShizukuHelper.status.collectAsStateWithLifecycle()
     val shizukuReady = shizukuState == ShizukuHelper.ShizukuState.READY
 
+    // 评审修复：与主屏 AppTopBar 一致，顶栏随内容滚动隐去（enterAlways）
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+    // 非组合上下文（运行回调）使用的文案预先解析
+    val runFailedPrefix = stringResource(R.string.scripts_run_failed)
+    val noOutputText = stringResource(R.string.scripts_no_output)
+
     fun reload() {
         scripts = ScriptStore.builtins + ScriptStore.loadCustom(context)
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
-                title = { Text("自定义脚本") },
+                title = { Text(stringResource(R.string.scripts_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back)
+                        )
                     }
-                }
+                },
+                scrollBehavior = scrollBehavior
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { creating = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "新建脚本")
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.scripts_cd_new))
             }
         }
     ) { inner ->
         Column(Modifier.padding(inner).fillMaxSize().padding(horizontal = Dims.SpacingL)) {
             Text(
-                if (shizukuReady) "Shizuku 已就绪，脚本将以 ADB（shell）权限执行，请只运行你信任的内容。"
-                else "需要 Shizuku 已启动并授权后才能运行脚本（设置 → Shizuku 一键授权）。",
+                stringResource(
+                    if (shizukuReady) R.string.scripts_ready_hint else R.string.scripts_not_ready_hint
+                ),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (shizukuReady) MaterialTheme.colorScheme.onSurfaceVariant
-                else MaterialTheme.colorScheme.error,
+                color = if (shizukuReady) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
                 modifier = Modifier.padding(vertical = Dims.SpacingS)
             )
 
@@ -106,15 +126,20 @@ fun ScriptScreen(onBack: () -> Unit) {
                             ShizukuHelper.runCustomScript(context, script.content) { ok, out ->
                                 runningId = null
                                 output = script.id to buildString {
-                                    append(if (ok) "" else "[执行失败] ")
-                                    append(out.ifEmpty { if (ok) "(无输出)" else "" })
+                                    append(if (ok) "" else runFailedPrefix)
+                                    append(out.ifEmpty { if (ok) noOutputText else "" })
                                 }
                                 reload()
                             }
                         },
                         onEdit = { editing = script },
-                        onDelete = if (script.builtin) null else {
-                            { ScriptStore.remove(context, script.id); reload() }
+                        onDelete = if (script.builtin) {
+                            null
+                        } else {
+                            {
+                                ScriptStore.remove(context, script.id)
+                                reload()
+                            }
                         }
                     )
                     output?.let { (id, out) ->
@@ -182,14 +207,17 @@ private fun ScriptCard(
                     IconButton(onClick = onDelete) {
                         Icon(
                             Icons.Filled.Delete,
-                            contentDescription = "删除",
+                            contentDescription = stringResource(R.string.scripts_cd_delete),
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
                 }
                 IconButton(onClick = onEdit) {
-                    Icon(Icons.Filled.Edit, contentDescription = "编辑",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        Icons.Filled.Edit,
+                        contentDescription = stringResource(R.string.scripts_cd_edit),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 IconButton(onClick = onRun, enabled = enabled && !running) {
                     if (running) {
@@ -200,9 +228,12 @@ private fun ScriptCard(
                     } else {
                         Icon(
                             Icons.Filled.PlayArrow,
-                            contentDescription = "运行",
-                            tint = if (enabled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                            contentDescription = stringResource(R.string.scripts_cd_run),
+                            tint = if (enabled) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
                 }
@@ -219,23 +250,25 @@ private fun ScriptCard(
 }
 
 @Composable
-private fun ScriptEditor(
-    initial: ScriptStore.Script?,
-    onDismiss: () -> Unit,
-    onSave: (name: String, content: String) -> Unit
-) {
+private fun ScriptEditor(initial: ScriptStore.Script?, onDismiss: () -> Unit, onSave: (name: String, content: String) -> Unit) {
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var content by remember { mutableStateOf(initial?.content ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "新建脚本" else "编辑脚本") },
+        title = {
+            Text(
+                stringResource(
+                    if (initial == null) R.string.scripts_editor_new else R.string.scripts_editor_edit
+                )
+            )
+        },
         text = {
             Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("脚本名称") },
+                    label = { Text(stringResource(R.string.scripts_name_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -243,7 +276,7 @@ private fun ScriptEditor(
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
-                    label = { Text("Shell 脚本（以 ADB 权限执行）") },
+                    label = { Text(stringResource(R.string.scripts_content_label)) },
                     minLines = 6,
                     maxLines = 12,
                     textStyle = MaterialTheme.typography.bodySmall.copy(
@@ -255,11 +288,11 @@ private fun ScriptEditor(
         },
         confirmButton = {
             Button(onClick = { onSave(name, content) }, enabled = content.isNotBlank()) {
-                Text("保存")
+                Text(stringResource(R.string.scripts_save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.scripts_cancel)) }
         }
     )
 }

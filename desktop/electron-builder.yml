@@ -7,13 +7,19 @@ directories:
 files:
   - src/**/*
   - package.json
+  # 托盘图标需随包分发（运行时 nativeImage 读取）
+  - build/icon.ico
   - "!**/*.map"
 asar: true
+asarUnpack:
+  # asar 内文件无法被原生 API 读取，托盘图标需解包到 app.asar.unpacked
+  - build/icon.ico
 win:
   target:
+    - nsis
     - zip
   icon: build/icon.ico
-  signingHashAlgorithms: [sha256]
+  artifactName: ${productName}-${version}-${arch}.${ext}
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

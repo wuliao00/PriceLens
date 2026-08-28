@@ -14,6 +14,8 @@ import { renderPriceView } from './components/price-chart.js';
 import { renderVideoView } from './components/video-grid.js';
 import { renderCouponView } from './components/coupon-list.js';
 import { renderCommunityView } from './components/comment-feed.js';
+import { renderScriptsView } from './components/scripts-page.js';
+import { initDisclaimer } from './components/disclaimer.js';
 import { renderSkeleton } from './components/skeleton.js';
 import { showToast } from './components/toast.js';
 import { createRouter } from './router.js';
@@ -39,9 +41,10 @@ let modalEl = null;
 const views = {
   overview: { render: renderOverview },
   bilibili: {
-    render: (c) => (state.loading.bilibili && !state.data.videos)
+    /* 主进程按模块名 'bilibili' 写入 state.data，读取端须对齐（曾误读 state.data.videos 致空态） */
+    render: (c) => (state.loading.bilibili && !state.data.bilibili)
       ? c.appendChild(renderSkeleton('bilibili'))
-      : renderVideoView(c, { videos: state.data.videos, error: state.errors.bilibili }),
+      : renderVideoView(c, { videos: state.data.bilibili?.videos ?? null, error: state.errors.bilibili }),
   },
   price: {
     render: (c) => (state.loading.history && !state.data.history)
@@ -50,8 +53,12 @@ const views = {
           history: state.data.history,
           product: state.product || {},
           watch: state.watch,
+          error: state.errors.history,
           onSetWatch: setWatch,
           onClearWatch: clearWatch,
+          onRetrySearch: focusSearch,
+          onRetry: () => retryModule('history'),
+          onOpenProduct: state.url ? () => openExternalSafe(state.url) : null,
         }),
   },
   coupons: {
@@ -63,6 +70,7 @@ const views = {
           currentPrice: state.data.coupons?.currentPrice ?? null,
           product: state.product || {},
           error: state.errors.coupons,
+          onRetry: () => retryModule('coupons'),
         }),
   },
   community: {
@@ -74,7 +82,11 @@ const views = {
           ratio: state.data.community?.ratio ?? null,
           product: state.product || {},
           error: state.errors.community,
+          onRetry: () => retryModule('community'),
         }),
+  },
+  scripts: {
+    render: (c) => renderScriptsView(c, {}),
   },
 };
 
@@ -140,7 +152,7 @@ function historySummary() {
 }
 function videosSummary() {
   if (state.loading.bilibili) return '加载中…';
-  const v = state.data.videos;
+  const v = state.data.bilibili?.videos;
   if (!v) return state.errors.bilibili ? '暂不可用' : '暂无数据';
   return `${v.length} 条评测`;
 }
@@ -196,33 +208,65 @@ async function doSearch(q, opts = {}) {
     router.rerender();
 
     /* 并行拉取四个模块（各自独立降级，互不影响） */
-    loadModule('history', async () => {
-      if (!state.url) throw new Error('该商品没有可追溯的商城链接');
-      const r = await window.priceLens.getHistory(state.url, opts);
-      if (!r.ok) throw new Error(r.error);
-      return r;
-    });
-    loadModule('bilibili', async () => {
-      const r = await window.priceLens.getBiliVideos(`${state.keyword} 评测`, opts);
-      if (!r.ok) throw new Error(r.error);
-      return r;
-    });
-    loadModule('coupons', async () => {
-      if (!state.url) throw new Error('该商品没有可查询优惠券的链接');
-      const r = await window.priceLens.getCoupons(state.url, opts);
-      if (!r.ok) throw new Error(r.error);
-      return r;
-    });
-    loadModule('community', async () => {
-      const r = await window.priceLens.getComments(state.keyword, opts);
-      if (!r.ok) throw new Error(r.error);
-      return r;
-    });
+    for (const name of ['history', 'bilibili', 'coupons', 'community']) {
+      loadModule(name, makeFetcher(name, opts));
+    }
   } catch (err) {
     state.errors.search = err.message || '搜索失败';
     setStatus('搜索失败');
     router.rerender();
   }
+}
+
+/**
+ * 构造单模块取数函数（搜索与重试共用）。
+ * @param {'history'|'bilibili'|'coupons'|'community'} name
+ * @param {{refresh?: boolean}} [opts] refresh=true 时跳过缓存（重试）
+ * @returns {() => Promise<any>}
+ */
+function makeFetcher(name, opts = {}) {
+  switch (name) {
+    case 'history':
+      return async () => {
+        if (!state.url) throw new Error('该商品没有可追溯的商城链接');
+        const r = await window.priceLens.getHistory(state.url, opts);
+        if (!r.ok) throw new Error(r.error);
+        return r;
+      };
+    case 'bilibili':
+      return async () => {
+        const r = await window.priceLens.getBiliVideos(`${state.keyword} 评测`, opts);
+        if (!r.ok) throw new Error(r.error);
+        return r;
+      };
+    case 'coupons':
+      return async () => {
+        if (!state.url) throw new Error('该商品没有可查询优惠券的链接');
+        const r = await window.priceLens.getCoupons(state.url, opts);
+        if (!r.ok) throw new Error(r.error);
+        return r;
+      };
+    case 'community':
+      return async () => {
+        const r = await window.priceLens.getComments(state.keyword, opts);
+        if (!r.ok) throw new Error(r.error);
+        return r;
+      };
+    default:
+      return async () => { throw new Error(`未知模块 ${name}`); };
+  }
+}
+
+/** 单模块重试：跳过缓存强刷（降级视图的「重试」按钮入口） */
+function retryModule(name) {
+  if (state.loading[name]) return;
+  loadModule(name, makeFetcher(name, { refresh: true }));
+  router.rerender();
+}
+
+/** 聚焦搜索框（空态引导入口） */
+function focusSearch() {
+  searchApi?.focus();
 }
 
 /**
@@ -400,6 +444,9 @@ function boot() {
     // 仅"跟随系统"时由系统切换驱动；手动设置由 setTheme 直接驱动
     if (res.pref === 'system') applyTheme(res.effective);
   });
+
+  /* 免责协议：首次启动展示，同意后持久化不再弹出 */
+  initDisclaimer();
 
   /* 路由 */
   const content = document.getElementById('main-content');

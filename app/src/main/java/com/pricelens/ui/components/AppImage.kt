@@ -8,9 +8,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import coil.request.ImageRequest
 import com.pricelens.R
+import com.pricelens.ui.theme.Dims
 
 /**
  * 统一图片加载：按 CDN 域名补 Referer/UA（防 403 防盗链），
@@ -21,7 +21,7 @@ fun AppImage(
     url: String?,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    corner: Dp = 8.dp,
+    corner: Dp = Dims.ChipCorner,
     contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
@@ -53,8 +53,8 @@ private const val UA_MOBILE =
 /** 常见图床防盗链：不带 Referer 直接 403 */
 private fun refererFor(url: String?): String? = when {
     url == null -> null
-    url.contains("hdslb.com") -> "https://www.bilibili.com"          // B 站封面
-    url.contains("360buyimg.com") -> "https://www.jd.com"            // 京东商品图
+    url.contains("hdslb.com") -> "https://www.bilibili.com" // B 站封面
+    url.contains("360buyimg.com") -> "https://www.jd.com" // 京东商品图
     url.contains("zdmimg.com") || url.contains("smzdm.com") -> "https://www.smzdm.com"
     url.contains("taobaocdn") || url.contains("alicdn") -> "https://www.taobao.com"
     url.contains("yangkeduo") || url.contains("pddpic") -> "https://mobile.yangkeduo.com"
