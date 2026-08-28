@@ -362,6 +362,27 @@ function registerIpcHandlers({ getMainWindow, logger }) {
   ipcMain.handle('scripts:run', async (_e, id) => {
     if (typeof id !== 'string' || !id) return { ok: false, error: '缺少脚本 ID' };
     try {
+      // 安全边界：渲染进程只能传脚本 id，且执行前须经主进程确认对话框，
+      // 防止渲染层被注入后静默触发任意 PowerShell 命令（RCE）。
+      const script = await scripts.findById(id);
+      if (!script) return { ok: false, error: '脚本不存在' };
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) {
+        const preview = script.content.length > 400
+          ? `${script.content.slice(0, 400)}\n…(共 ${script.content.length} 字符)`
+          : script.content;
+        const { response } = await dialog.showMessageBox(win, {
+          type: 'warning',
+          title: '确认执行脚本',
+          message: `以 PowerShell 执行脚本「${script.name}」？`,
+          detail: `脚本将以本机用户权限运行，请确认内容可信：\n\n${preview}`,
+          buttons: ['取消', '执行'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        });
+        if (response !== 1) return { ok: false, error: '已取消执行' };
+      }
       const res = await scripts.runScript(id);
       logger.info(`脚本执行 ${id}: ${res.ok ? '成功' : `失败(${res.exitCode ?? res.error})`}`);
       return res;

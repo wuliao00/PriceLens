@@ -32,9 +32,9 @@ const USER_AGENTS = [
 
 const MOBILE_UA = USER_AGENTS[4];
 
-/** UA 池随机取一个 */
+/** UA 池随机取一个（randint 范围须为 [0, length)，否则第 5 个 UA 永不轮换） */
 function pickUA() {
-  return USER_AGENTS[Math.floor(Math.random() * (USER_AGENTS.length - 1))];
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
 /* ── Cookie Jar：domain → { name: value } ─────────────── */
@@ -53,11 +53,13 @@ function storeCookies(domain, setCookieHeader) {
   cookieJar.set(domain, jar);
 }
 
-/** 取域名的 Cookie 串（覆盖到注册域，如 item.jd.com → jd.com 也命中） */
+/** 取域名的 Cookie 串（请求 hostname 属于 cookie 域才回带，如 item.jd.com 命中 jd.com 的 Cookie） */
 function cookieHeaderFor(hostname) {
   const parts = [];
   for (const [domain, jar] of cookieJar) {
-    if (hostname === domain || hostname.endsWith(`.${domain}`) || domain.endsWith(hostname)) {
+    // 判断方向：请求 hostname 是否属于 cookie 域（等于该域或为其子域），
+    // 不能反向用 domain.endsWith(hostname)，否则会把 A 站 Cookie 泄漏给其父域/无关域
+    if (hostname === domain || hostname.endsWith(`.${domain}`)) {
       for (const [k, v] of jar) parts.push(`${k}=${v}`);
     }
   }

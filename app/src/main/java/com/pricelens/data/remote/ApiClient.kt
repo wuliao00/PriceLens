@@ -203,7 +203,8 @@ class ApiClient @Inject constructor(
 
     /** 常见反爬 JS challenge 页特征（如什么值得买的 probe.js 探测页） */
     private fun isAntiBotChallenge(body: String): Boolean =
-        body.contains("probe.js") || body.contains("challenge") && body.contains("script")
+        // 括号显式化优先级：probe.js 命中，或（challenge 与 script 同时出现）；行为与加括号前一致
+        body.contains("probe.js") || (body.contains("challenge") && body.contains("script"))
 
     // ---------- 阶段3：singleflight 在途请求去重（仅新增重载，现有方法零改动） ----------
     //

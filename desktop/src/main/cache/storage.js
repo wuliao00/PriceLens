@@ -56,7 +56,9 @@ function getSettings() {
 function updateSettings(patch) {
   settings = { ...settings, ...patch };
   const file = path.join(app.getPath('userData'), 'settings.json');
-  fs.writeFile(file, JSON.stringify(settings, null, 2), 'utf-8').catch(() => {});
+  // 复用 writeJson 的 tmp + rename 原子写：
+  // 直接 writeFile 会违反本模块自身的原子写约定（并发写可互覆盖、断电产生半截文件）
+  writeJson(file, settings).catch(() => {});
   return settings;
 }
 

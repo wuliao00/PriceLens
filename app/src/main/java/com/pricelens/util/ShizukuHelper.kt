@@ -192,30 +192,10 @@ object ShizukuHelper {
             onDone(false)
             return
         }
-        val svc = "com.pricelens/com.pricelens.accessibility.PriceMonitorService"
-        // 一条 shell 完成读-改-写，避免多次往返
-        // 注意：用双引号包住 $VAR 防止 CUR 含空格/冒号时被 shell 拆分
-        val cmd = """
-            CUR="`settings get secure enabled_accessibility_services`"
-            case "${'$'}CUR" in
-              *"com.pricelens"*) ;;
-              *) if [ -z "${'$'}CUR" ] || [ "${'$'}CUR" = "null" ]; then
-                     settings put secure enabled_accessibility_services "${'$'}svc";
-                 else
-                     settings put secure enabled_accessibility_services "${'$'}CUR:${'$'}svc";
-                 fi ;;
-            esac
-            settings put secure accessibility_enabled 1
-            # Android 13+ 用 cmd appops 替代直接 appops set，兼容 MIUI/ColorOS
-            appops set --uid com.pricelens SYSTEM_ALERT_WINDOW allow || appops set com.pricelens SYSTEM_ALERT_WINDOW allow
-            pm grant com.pricelens android.permission.POST_NOTIFICATIONS || true
-            # 立即验证：写入是否生效（防止系统静默丢弃）
-            NEW="`settings get secure enabled_accessibility_services`"
-            case "${'$'}NEW" in
-              *"com.pricelens"*) echo SETUP_OK ;;
-              *) echo SETUP_FAIL ;;
-            esac
-        """.trimIndent()
+        // 脚本实现与 ScriptStore 预置脚本共用（accessibilitySetupScript）：
+        // 组件名是 Kotlin 变量，经插值直接写入脚本；shell 层变量由函数内部转义。
+        // 此前误用 ${'$'}svc 转义，导致脚本引用未定义 shell 变量、写入空值，一键开启必失败。
+        val cmd = ScriptStore.accessibilitySetupScript(ScriptStore.ACCESSIBILITY_COMPONENT)
 
         execViaShizuku(context, cmd) { ok, output ->
             val writeOk = ok && output.contains("SETUP_OK")

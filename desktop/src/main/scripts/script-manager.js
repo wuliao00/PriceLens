@@ -154,4 +154,4 @@ async function runScript(id) {
   });
 }
 
-module.exports = { listAll, saveScript, removeScript, runScript };
+module.exports = { listAll, saveScript, removeScript, runScript, findById };

@@ -1,8 +1,10 @@
 # PriceLens — 极简全网比价助手
 
+[简体中文](README.md) | [English](README.en.md)
+
 > **双端开源** · **永久免费** · **本地优先** · **MIT License**  
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）  
-> 作者：**莫** | 版本：Android v2.5.0 / Desktop v2.1.0
+> 作者：**莫** | 版本：Android v2.5.1 / Desktop v2.1.0
 
 [![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -75,10 +77,10 @@
 
 ### Android 版（手机端）
 
-**下载**：Release](https://github.com/wuliao00/PriceLens/releases) → PriceLens比价助手_v2.3_免费开源_作者莫.apk`
+**下载**：[Release](https://github.com/wuliao00/PriceLens/releases) → PriceLens比价助手_v2.5.1_免费开源_作者莫.apk
 
 **源码构建**：
-bash
+```bash
 # 1. 克隆仓库
 git clone https://github.com/wuliao00/PriceLens.git
 cd PriceLens
@@ -95,7 +97,7 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 # PRICLENS_KEY_ALIAS=pricelens
 # PRICLENS_KEY_PASSWORD=****
 ./gradlew :app:assembleRelease
-
+```
 
  🔐 **安全**：`local.properties`、`*.keystore` 已在 `.gitignore`，仓库中**无任何密码**。
 
@@ -103,7 +105,7 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 
 ### Windows 版（桌面端）
 
-**下载**：见上方 国内加速下载](#国内加速下载推荐) 表格，或 [Releases](https://github.com/wuliao00/PriceLens/releases) 中的 NSIS 安装器 / ZIP 便携版
+**下载**：见上方 [国内加速下载](#国内加速下载推荐) 表格，或 [Releases](https://github.com/wuliao00/PriceLens/releases) 中的 NSIS 安装器 / ZIP 便携版
 
 **源码构建**：
 ```bash
@@ -141,7 +143,7 @@ npm run build        # 产出 dist/PriceLens-<version>-x64.exe 与 .zip（免安
 
 ---
 
-## ✨ 核心特性（v2.5.0 / v2.1.0）
+## ✨ 核心特性（v2.5.1 / v2.1.0）
 
 ### 🔍 智能比价
 - **全平台覆盖**：京东、淘宝、拼多多、哔哩哔哩、什么值得买、慢慢买、购物党、咕咚、Keep
@@ -242,7 +244,7 @@ PriceLens/
 ├── gradle.properties
 ├── LICENSE
 ├── README.md                         # 本文件
-└── RELEASE_NOTES_v2.3.0.md           # 详细发布说明
+└── CHANGELOG.md                      # 变更日志（Keep a Changelog）
 ```
 
 ---
@@ -312,7 +314,7 @@ UA 轮换 ×5 池
 ### 代码规范
 
 - **Kotlin**：遵循 [Android 官方代码风格](https://developer.android.com/kotlin/style-guide)，使用 `ktlint` + `detekt`
-- **JavaScript/TypeScript**：ESLint + Prettier（`npm run lint`）
+- **JavaScript**：Node 语法门禁（`npm run lint`，基于 `node --check`）
 - **提交信息**：遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范（`feat:`, `fix:`, `docs:`, `chore:`, `refactor:` 等）
 
 > 💡 提交前请运行本地检查：`./gradlew ktlintCheck detekt` (Android) / `npm run lint` (Desktop)
@@ -349,10 +351,10 @@ A: 请检查：
 A: Release 页面提供 SHA256 校验值，可用以下命令验证：
 ```bash
 # Windows (PowerShell)
-Get-FileHash -Algorithm SHA256 PriceLens-2.0.0-win.zip
+Get-FileHash -Algorithm SHA256 PriceLens-2.1.0-win.zip
 
 # Linux/macOS
-sha256sum PriceLens-2.0.0-win.zip
+sha256sum PriceLens-2.1.0-win.zip
 ```
 </details>
 
@@ -412,7 +414,7 @@ A:
 | 文档 | 说明 | 链接 |
 |------|------|------|
 | **README** | 项目总览、快速开始、功能介绍 | [README.md](README.md) |
-| **Release Notes** | 版本更新详细记录 | [RELEASE_NOTES_v2.3.0.md](RELEASE_NOTES_v2.3.0.md) |
+| **变更日志** | 各版本更新记录（Keep a Changelog） | [CHANGELOG.md](CHANGELOG.md) |
 | **爬虫规范** | 双端共用的反爬/限流/重试策略 | [README.md#爬虫规范双端共用](README.md#-爬虫规范双端共用) |
 | **项目结构** | 代码目录组织与模块职责 | [README.md#项目结构](README.md#-项目结构) |
 | **贡献指南** | PR 流程、代码规范、欢迎方向 | [README.md#贡献指南](README.md#-贡献指南) |
@@ -452,4 +454,4 @@ PriceLens 的部分数据来自第三方网站的公开页面，感谢以下项�
 - **GitHub 仓库**：https://github.com/wuliao00/PriceLens
 - **Issue 反馈**：https://github.com/wuliao00/PriceLens/issues
 - **Release 下载**：https://github.com/wuliao00/PriceLens/releases
-- **Release Notes 详细版**：[RELEASE_NOTES_v2.3.0.md](RELEASE_NOTES_v2.3.0.md)
+- **变更日志**：[CHANGELOG.md](CHANGELOG.md)
