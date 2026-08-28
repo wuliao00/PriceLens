@@ -16,7 +16,7 @@
     "dev:web": "vite",
     "icon": "node build/generate-icon.js",
     "lint": "node build/lint.js",
-    "build": "electron-builder --win --x64",
+    "build": "electron-builder --win --x64 --publish never",
     "postinstall": "node build/generate-icon.js"
   },
   "dependencies": {
