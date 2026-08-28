@@ -518,6 +518,8 @@
 .empty-state .e-title { font-size: var(--fs-body); color: var(--text-secondary); }
 .empty-state .e-desc  { font-size: var(--fs-caption); max-width: 360px; line-height: 1.6; }
 .empty-state .btn { margin-top: var(--sp-2); }
+.empty-state .e-actions { display: flex; gap: var(--sp-3); margin-top: var(--sp-1); }
+.empty-state .e-actions .btn { margin-top: 0; }
 
 /* ══════════ 骨架变体 ══════════ */
 .sk-header { display: flex; gap: var(--sp-5); }

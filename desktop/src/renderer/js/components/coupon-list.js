@@ -14,16 +14,19 @@ import { showToast } from './toast.js';
  * @param {{coupons: Array<{title:string, amount:number, threshold:number,
  *   expireAt:string, code:string|null, link:string, stackable:boolean}> | null,
  *   finalPrice: number|null, currentPrice: number|null,
- *   product: object, error?: string}} ctx
+ *   product: object, error?: string, onRetry?: ()=>void}} ctx
  */
 export function renderCouponView(container, ctx) {
-  const { coupons, finalPrice, currentPrice, product, error } = ctx;
+  const { coupons, finalPrice, currentPrice, product, error, onRetry } = ctx;
 
   if (error && (!coupons || coupons.length === 0)) {
+    /* 降级态：展示具体源与错误类型，并提供重试入口 */
     container.appendChild(el('div', { class: 'card empty-state' },
       icon('ticket', 48),
-      el('div', { class: 'e-title', text: '优惠券数据源暂不可用' }),
-      el('div', { class: 'e-desc', text: error })));
+      el('div', { class: 'e-title', text: '找券数据源不可用' }),
+      el('div', { class: 'e-desc', text: error }),
+      onRetry ? el('div', { class: 'e-actions' },
+        el('button', { class: 'btn btn--primary', on: { click: onRetry } }, '重试')) : null));
     return;
   }
 

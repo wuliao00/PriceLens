@@ -18,13 +18,14 @@
         <package android:name="moe.shizuku.privileged.api" />
     </queries>
 
+    <!-- 网络安全：全部比价 API 域名均为 HTTPS（Shihuo 图片 http 链接已在 ShihuoApi 内改写为 https），
+         维持默认禁止明文流量，不启用 usesCleartextTraffic，无需 network_security_config -->
     <application
         android:name=".PriceLensApp"
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.PriceLens">
 
         <activity

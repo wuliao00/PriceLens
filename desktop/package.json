@@ -15,19 +15,19 @@
     "dev": "electron . --dev",
     "dev:web": "vite",
     "icon": "node build/generate-icon.js",
-    "build": "electron-builder --win --x64",
+    "lint": "node build/lint.js",
+    "build": "electron-builder --win --x64 --publish never",
     "postinstall": "node build/generate-icon.js"
   },
   "dependencies": {
-    "cheerio": "^1.0.0",
-    "undici": "^6.19.0"
+    "cheerio": "^1.0.0"
   },
   "optionalDependencies": {
     "playwright": "^1.40.0"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^24.13.3",
-    "vite": "^5.4.0"
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "vite": "^8.2.2"
   }
 }

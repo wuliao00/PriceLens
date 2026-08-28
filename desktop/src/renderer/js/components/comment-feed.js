@@ -20,16 +20,19 @@ const HIGHLIGHT_MAP = {
  * 渲染社区视图。
  * @param {HTMLElement} container
  * @param {{deals: Array|null, comments: Array|null, ratio: {up:number, down:number}|null,
- *   product: object, error?: string, onOpenDeal:(url:string)=>void}} ctx
+ *   product: object, error?: string, onRetry?: ()=>void, onOpenDeal:(url:string)=>void}} ctx
  */
 export function renderCommunityView(container, ctx) {
-  const { deals, comments, ratio, product, error } = ctx;
+  const { deals, comments, ratio, product, error, onRetry } = ctx;
 
   if (error && (!deals || deals.length === 0)) {
+    /* 降级态：展示具体源与错误类型（反爬拦截/超时/解析失败），并提供重试入口 */
     container.appendChild(el('div', { class: 'card empty-state' },
       icon('chat', 48),
-      el('div', { class: 'e-title', text: '什么值得买数据源暂不可用' }),
-      el('div', { class: 'e-desc', text: error })));
+      el('div', { class: 'e-title', text: '社区数据源不可用' }),
+      el('div', { class: 'e-desc', text: error }),
+      onRetry ? el('div', { class: 'e-actions' },
+        el('button', { class: 'btn btn--primary', on: { click: onRetry } }, '重试')) : null));
     return;
   }
   if (!deals || deals.length === 0) {

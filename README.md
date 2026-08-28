@@ -1,18 +1,20 @@
 # PriceLens — 极简全网比价助手
 
+[简体中文](README.md) | [English](README.en.md)
+
 > **双端开源** · **永久免费** · **本地优先** · **MIT License**  
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）  
-> 作者：**莫** | 版本：Android v2.5.0 / Desktop v2.1.0
+> 作者：**莫** | 版本：Android v2.5.1 / Desktop v2.1.0
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
 [![Windows](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/wuliao00/PriceLens/releases)
 [![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF.svg)](https://kotlinlang.org/)
 [![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4.svg)](https://developer.android.com/jetpack/compose)
 [![Electron](https://img.shields.io/badge/Framework-Electron-47848F.svg)](https://www.electronjs.org/)
 [![Vite](https://img.shields.io/badge/Build-Vite-646CFF.svg)](https://vitejs.dev/)
-[![Release](https://img.shields.io/github/v/release/wuliao00/PriceLens?label=Latest%20Release)](https://github.com/wuliao00/PriceLens/releases)
-[![Stars](https://img.shields.io/github/stars/wuliao00/PriceLens?style=social)](https://github.com/wuliao00/PriceLens/stargazers)
+[![发布](https://img.shields.io/github/v/release/wuliao00/PriceLens?label=Latest%20Release)](https://github.com/wuliao00/PriceLens/releases)
+[![Star数](https://img.shields.io/github/stars/wuliao00/PriceLens?style=social)](https://github.com/wuliao00/PriceLens/stargazers)
 
 ---
 
@@ -45,27 +47,16 @@
 
 | B 站评测（含商单/夸大标记） | 社区 · 识货信息源 | 搜索 · 识货兜底 |
 |--------|----------|-------------|
-| ![Bilibili](assets/screenshots/android-bilibili.png) | ![Community Shihuo](assets/screenshots/android-community-shihuo.png) | ![Search iPhone](assets/screenshots/android-search-iphone.png) |
+| ![Bilibili](assets/screenshots/android-bilibili.png) | ![社区实货](assets/screenshots/android-community-shihuo.png) | ![搜索iPhone](assets/screenshots/android-search-iphone.png) |
 
 > 更多界面（价格曲线 / 优惠券 / 桌面端）见 [Releases](https://github.com/wuliao00/PriceLens/releases) 附件；社区贡献截图欢迎 PR 至 `assets/screenshots/`。
 
-### Windows 桌面端
-
-| 主界面 | 价格历史 | 优惠券 | 搜索结果 |
-|--------|----------|--------|----------|
-| ![Desktop Main](assets/desktop-main.svg) | ![Desktop Chart](assets/desktop-chart.svg) | ![Desktop Coupon](assets/desktop-coupon.svg) | ![Desktop Search](assets/desktop-search.svg) |
-
 #### 桌面端实机截图（v2.1.0）
-
-| 主界面 | 搜索概览 | 设置 |
-|--------|----------|------|
-| ![桌面版主界面](assets/screenshots/desktop-main.png) | ![桌面端搜索概览](assets/screenshots/desktop-search.png) | ![桌面端设置](assets/screenshots/desktop-settings.png) |
-| 首次启动的空态引导：粘贴商品链接 / B 站 BV 号即可开始 | 粘贴 B 站链接后呈现商品概览卡与四个快捷视图入口 | 外观 / 缓存 / 盯价 / 关于，全部本机可配 |
 
 | 盯价 | B 站评测 | 找券 | 社区评价 |
 |------|----------|------|----------|
 | ![桌面端盯价](assets/screenshots/desktop-price.png) | ![桌面端B站评测](assets/screenshots/desktop-bilibili.png) | ![桌面端找券](assets/screenshots/desktop-coupons.png) | ![桌面端社区](assets/screenshots/desktop-community.png) |
-| 盯价视图：目标商品暂无价格数据时呈现优雅空态 | B 站评测视图（渲染层键名小瑕疵致空态，主进程取数正常） | 优惠券数据源暂不可达时优雅降级并给出提示 | 社区数据源不可达时明确展示降级原因 |
+| 盯价视图：商品未被慢慢买收录时给出优雅空态，提供「打开商品页 / 换商品搜索」引导 | B 站评测视图：按商品关键词渲染真实视频卡片（标题 / 播放量 / 时长） | 购物党 503 反爬限流时展示具体降级原因与重试入口 | 什么值得买反爬拦截时展示具体降级原因与重试入口 |
 
 > 实机截图摄于 2026-08-27（亮色主题；截图会话已预同意免责协议，画面无首启弹窗遮挡）。截图时部分上游数据源（京东 / 什么值得买）暂不可达，相关视图按设计呈现优雅降级 / 空态；截图脚本见 `desktop/_capture.js`。
 
@@ -75,18 +66,18 @@
 
 ### 国内加速下载（推荐）
 
-| 平台 | 蓝奏云 | 夸克网盘 | GitHub Release |
+| 平台 | 蓝奏云（推荐，国内加速） | 夸克网盘（备选） | GitHub Release |
 |------|--------|----------|----------------|
-| **Android** | [PriceLens比价助手_v2.3_免费开源_作者莫.apk](https://www.ilanzou.com/s/K1DKLuCg) | [PriceLens比价助手_v2.3_免费开源_作者莫.apk](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
-| **Windows** | [PriceLens-2.0.0-win.zip](https://www.ilanzou.com/s/K1DKLuCg) | [PriceLens-2.0.0-win.zip](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+| **Android** | [PriceLens-Android-2.5.1.apk](https://www.ilanzou.com/s/hrqKVtJO?code=4455) | [PriceLens-Android-2.5.1.apk](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+| **Windows** | [PriceLens-Desktop-Setup-2.1.0.exe](https://www.ilanzou.com/s/hrqKVtJO?code=4455)| [PriceLens-Desktop-Setup-2.1.0.exe](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
 
-> ⚠️ **蓝奏云无需提取码**，夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
+  ⚠️ **蓝奏云提取码：4455**（已含在链接参数中，打开即可下载）；夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
 
 ---
 
 ### Android 版（手机端）
 
-**下载**：[Release](https://github.com/wuliao00/PriceLens/releases) → `PriceLens比价助手_v2.3_免费开源_作者莫.apk`
+**下载**：[Release](https://github.com/wuliao00/PriceLens/releases) → PriceLens比价助手_v2.5.1_免费开源_作者莫.apk
 
 **源码构建**：
 ```bash
@@ -108,7 +99,7 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 ./gradlew :app:assembleRelease
 ```
 
-> 🔐 **安全**：`local.properties`、`*.keystore` 已在 `.gitignore`，仓库中**无任何密码**。
+ 🔐 **安全**：`local.properties`、`*.keystore` 已在 `.gitignore`，仓库中**无任何密码**。
 
 ---
 
@@ -152,7 +143,7 @@ npm run build        # 产出 dist/PriceLens-<version>-x64.exe 与 .zip（免安
 
 ---
 
-## ✨ 核心特性（v2.5.0 / v2.1.0）
+## ✨ 核心特性（v2.5.1 / v2.1.0）
 
 ### 🔍 智能比价
 - **全平台覆盖**：京东、淘宝、拼多多、哔哩哔哩、什么值得买、慢慢买、购物党、咕咚、Keep
@@ -194,6 +185,18 @@ npm run build        # 产出 dist/PriceLens-<version>-x64.exe 与 .zip（免安
 - **零埋点、零上报**：所有数据仅存本机
 - **权限最小化**：Android 仅需无障碍 + 悬浮窗 + 通知（均可一键关闭）
 - **开源透明**：MIT 协议，欢迎审计
+
+---
+
+## 🌉 浏览器联动（剪贴板桥）
+
+PriceLens 与浏览器之间不需要任何插件对接，一个剪贴板即可桥接：
+
+1. 在浏览器的商品页（京东 / 淘宝 / 哔哩哔哩等）**复制商品链接**；
+2. **粘贴到 PriceLens 搜索框**回车 —— 桌面版原生支持链接搜索，直接呈现价格曲线 / 优惠券 / 社区评价概览；
+3. 进阶玩法：在浏览器安装购物党官方油猴脚本（见下方[致谢](#-致谢)章节）秒查站内历史价格，再回到 PriceLens 完成盯价、评测与社区验证。
+
+> 💡 链接仅用于当次查询，全程本机解析，不上传、不留痕。
 
 ---
 
@@ -241,7 +244,7 @@ PriceLens/
 ├── gradle.properties
 ├── LICENSE
 ├── README.md                         # 本文件
-└── RELEASE_NOTES_v2.3.0.md           # 详细发布说明
+└── CHANGELOG.md                      # 变更日志（Keep a Changelog）
 ```
 
 ---
@@ -311,7 +314,7 @@ UA 轮换 ×5 池
 ### 代码规范
 
 - **Kotlin**：遵循 [Android 官方代码风格](https://developer.android.com/kotlin/style-guide)，使用 `ktlint` + `detekt`
-- **JavaScript/TypeScript**：ESLint + Prettier（`npm run lint`）
+- **JavaScript**：Node 语法门禁（`npm run lint`，基于 `node --check`）
 - **提交信息**：遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范（`feat:`, `fix:`, `docs:`, `chore:`, `refactor:` 等）
 
 > 💡 提交前请运行本地检查：`./gradlew ktlintCheck detekt` (Android) / `npm run lint` (Desktop)
@@ -348,10 +351,10 @@ A: 请检查：
 A: Release 页面提供 SHA256 校验值，可用以下命令验证：
 ```bash
 # Windows (PowerShell)
-Get-FileHash -Algorithm SHA256 PriceLens-2.0.0-win.zip
+Get-FileHash -Algorithm SHA256 PriceLens-2.1.0-win.zip
 
 # Linux/macOS
-sha256sum PriceLens-2.0.0-win.zip
+sha256sum PriceLens-2.1.0-win.zip
 ```
 </details>
 
@@ -411,7 +414,7 @@ A:
 | 文档 | 说明 | 链接 |
 |------|------|------|
 | **README** | 项目总览、快速开始、功能介绍 | [README.md](README.md) |
-| **Release Notes** | 版本更新详细记录 | [RELEASE_NOTES_v2.3.0.md](RELEASE_NOTES_v2.3.0.md) |
+| **变更日志** | 各版本更新记录（Keep a Changelog） | [CHANGELOG.md](CHANGELOG.md) |
 | **爬虫规范** | 双端共用的反爬/限流/重试策略 | [README.md#爬虫规范双端共用](README.md#-爬虫规范双端共用) |
 | **项目结构** | 代码目录组织与模块职责 | [README.md#项目结构](README.md#-项目结构) |
 | **贡献指南** | PR 流程、代码规范、欢迎方向 | [README.md#贡献指南](README.md#-贡献指南) |
@@ -422,6 +425,18 @@ A:
 | **GitHub Wiki** | 社区维护的扩展文档 | [Wiki](https://github.com/wuliao00/PriceLens/wiki) |
 
 > 📝 标记 `*(待创建)*` 的文档欢迎社区贡献，请参考 [贡献指南](README.md#-贡献指南)
+
+---
+
+## 🙏 致谢
+
+PriceLens 的部分数据来自第三方网站的公开页面，感谢以下项目与平台（各平台页面的解析规则均由本项目自行分析编写，以下平台与插件未向本项目贡献任何代码）：
+
+- **慢慢买**（<https://www.manmanbuy.com/>）：盯价模块的历史价格与当前价数据源；
+- **购物党**（<https://www.gwdang.com/>）：找券模块的优惠券数据源；其官方油猴脚本[《网购比价领券神器—购物党》](https://greasyfork.org/zh-CN/scripts/436876)（作者：购物党，安装量 30 万+，2025-09 仍在更新）是 PriceLens 的推荐浏览器伴侣——在浏览器中安装它可秒查站内 365 天历史价格曲线、全网同款比价与隐藏券，再配合 PriceLens 完成盯价、评测与社区验证。注意：该脚本包含官方领券与红包推广内容，请自行判断后使用；追求无推广体验可选《TENG 购物党比价脚本【官方纯净版】》（作者 samisold，无推广内容，但更新频率较低）。
+- **什么值得买、京东、哔哩哔哩**等平台的公开页面数据。
+
+> ⚠️ 以上数据均抓取自公开页面，本项目未获得上述平台的官方授权；若侵犯了您的权益，请联系我们删除。
 
 ---
 
@@ -439,4 +454,4 @@ A:
 - **GitHub 仓库**：https://github.com/wuliao00/PriceLens
 - **Issue 反馈**：https://github.com/wuliao00/PriceLens/issues
 - **Release 下载**：https://github.com/wuliao00/PriceLens/releases
-- **Release Notes 详细版**：[RELEASE_NOTES_v2.3.0.md](RELEASE_NOTES_v2.3.0.md)
+- **变更日志**：[CHANGELOG.md](CHANGELOG.md)

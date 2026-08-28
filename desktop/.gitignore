@@ -4,8 +4,11 @@ npm-install.log
 *.tmp.js
 ico-report.txt
 
-# build/ 下仅忽略产物，保留打包资源（icon.ico / installer.nsh / generate-icon.js）
+# 根 .gitignore 已忽略所有 build/ 目录；此处重新包含其中的源文件
+# （generate-icon.js / installer.nsh）。icon.ico 由 postinstall 运行
+# generate-icon.js 生成，属纯生成产物，不入库（首次 npm install 自动生成）
 !build/
+build/icon.ico
 build/*.tgz
 build/win-unpacked/
 

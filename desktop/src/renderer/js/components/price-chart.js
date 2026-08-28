@@ -16,14 +16,16 @@ import { showToast } from './toast.js';
  * @param {HTMLElement} container
  * @param {{history: {current:number, lowest:number, highest:number,
  *   points:Array<{date:string, price:number}>} | null,
- *   product: object, watch: object|null,
- *   onSetWatch: (target:number)=>void, onClearWatch: ()=>void}} ctx
+ *   product: object, watch: object|null, error?: string,
+ *   onSetWatch: (target:number)=>void, onClearWatch: ()=>void,
+ *   onRetrySearch?: ()=>void, onRetry?: ()=>void, onOpenProduct?: (()=>void)|null}} ctx
  */
 export function renderPriceView(container, ctx) {
-  const { history, product, watch, onSetWatch, onClearWatch } = ctx;
+  const { history, product, watch, error, onSetWatch, onClearWatch,
+    onRetrySearch, onRetry, onOpenProduct } = ctx;
 
   if (!history || !history.points || history.points.length < 2) {
-    container.appendChild(renderEmpty());
+    container.appendChild(renderEmpty({ product, error, onRetrySearch, onRetry, onOpenProduct }));
     return;
   }
 
@@ -73,15 +75,53 @@ function statItem(label, value, color) {
     el('div', { class: 's-value', text: value, style: color ? { color } : {} }));
 }
 
-/** 空状态 */
-function renderEmpty() {
+/**
+ * 空状态：区分「未搜索 / 数据源报错 / 源未收录」，均给出原因与可操作引导。
+ * @param {{product: object, error?: string, onRetrySearch?: ()=>void,
+ *   onRetry?: ()=>void, onOpenProduct?: (()=>void)|null}} ctx
+ */
+function renderEmpty({ product, error, onRetrySearch, onRetry, onOpenProduct }) {
+  const actions = el('div', { class: 'e-actions' });
+
+  /* 尚未搜索任何商品 */
+  if (!product || !product.title) {
+    if (onRetrySearch) {
+      actions.appendChild(el('button', { class: 'btn btn--primary', on: { click: onRetrySearch } }, '去搜索'));
+    }
+    return el('div', { class: 'card empty-state' },
+      icon('chart', 48),
+      el('div', { class: 'e-title', text: '先搜索商品，再看价格趋势' }),
+      el('div', {
+        class: 'e-desc',
+        text: '输入商品名或粘贴京东/淘宝商品链接后，这里会展示历史价格曲线，并可设置盯价提醒。',
+      }),
+      actions);
+  }
+
+  /* 数据源明确报错（限流/网络/接口拒绝） */
+  if (error) {
+    if (onRetry) actions.appendChild(el('button', { class: 'btn btn--primary', on: { click: onRetry } }, '重试'));
+    if (onRetrySearch) actions.appendChild(el('button', { class: 'btn', on: { click: onRetrySearch } }, '重新搜索'));
+    return el('div', { class: 'card empty-state' },
+      icon('chart', 48),
+      el('div', { class: 'e-title', text: '历史价格暂不可用' }),
+      el('div', { class: 'e-desc', text: error }),
+      actions);
+  }
+
+  /* 源正常但未收录该商品（新上架/长尾商品通常无历史记录） */
+  if (onOpenProduct) {
+    actions.appendChild(el('button', { class: 'btn btn--primary', on: { click: onOpenProduct } }, '打开商品页'));
+  }
+  if (onRetrySearch) actions.appendChild(el('button', { class: 'btn', on: { click: onRetrySearch } }, '换个商品搜索'));
   return el('div', { class: 'card empty-state' },
     icon('chart', 48),
     el('div', { class: 'e-title', text: '暂无历史价格数据' }),
     el('div', {
       class: 'e-desc',
-      text: '慢慢买可能未收录该商品，或数据源暂时限流。可尝试粘贴京东/淘宝商品链接重新搜索。',
-    }));
+      text: '慢慢买尚未收录该商品的历史价格记录（新上架商品通常无数据）。可以先去商城打开商品页浏览、积累数据后再来查看，或换一个商品搜索。',
+    }),
+    actions);
 }
 
 /** 盯价设置行 */
