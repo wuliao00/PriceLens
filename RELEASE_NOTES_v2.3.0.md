@@ -9,12 +9,13 @@
 
 ## 📦 下载地址
 
-| 平台 | 文件 | 大小 | 说明 |
-|------|------|------|------|
-| **Android** | `PriceLens比价助手_v2.3_免费开源_作者莫.apk` | ~18 MB | 无障碍增强版，支持京东/淘宝/拼多多/哔哩哔哩/什么值得买/慢慢买等 |
-| **Windows** | `PriceLens-2.0.0-win.zip` | 116 MB | 便携版免安装，解压即用，Electron + Vite 构建 |
+| 平台 | 文件 | 大小 | 说明 | 蓝奏云 | 夸克网盘 | GitHub Release |
+|------|------|------|------|--------|----------|----------------|
+| **Android** | `PriceLens比价助手_v2.3_免费开源_作者莫.apk` | ~18 MB | 无障碍增强版，支持京东/淘宝/拼多多/哔哩哔哩/什么值得买/慢慢买等 | [下载](https://www.ilanzou.com/s/K1DKLuCg) | [下载](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+| **Windows** | `PriceLens-2.0.0-win.zip` | 116 MB | 便携版免安装，解压即用，Electron + Vite 构建 | [下载](https://www.ilanzou.com/s/K1DKLuCg) | [下载](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
 
-> ⚠️ **安全提醒**：本项目永久免费、无内购、无广告、不收集用户数据。任何收费分发均为欺诈。
+> ⚠️ **安全提醒**：本项目永久免费、无内购、无广告、不收集用户数据。任何收费分发均为欺诈。  
+> ⚠️ **蓝奏云无需提取码**，夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
 
 ---
 

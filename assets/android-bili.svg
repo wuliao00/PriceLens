@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="700" viewBox="0 0 400 700">
+  <rect width="400" height="700" fill="#1a1a2e"/>
+  <text x="200" y="300" font-family="system-ui, sans-serif" font-size="24" fill="#ff6b6b" text-anchor="middle" dominant-baseline="middle">B站社区验证</text>
+  <text x="200" y="350" font-family="system-ui, sans-serif" font-size="16" fill="#8892b0" text-anchor="middle" dominant-baseline="middle">请替换为真实截图</text>
+  <text x="200" y="400" font-family="system-ui, sans-serif" font-size="14" fill="#4a4a6a" text-anchor="middle" dominant-baseline="middle">建议尺寸: 400×700 (9:16)</text>
+</svg>

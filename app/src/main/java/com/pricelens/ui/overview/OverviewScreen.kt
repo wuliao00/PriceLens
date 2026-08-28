@@ -2,135 +2,163 @@ package com.pricelens.ui.overview
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Accessibility
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.OndemandVideo
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pricelens.R
+import com.pricelens.data.remote.GwdangApi
 import com.pricelens.data.remote.JdApi
 import com.pricelens.data.remote.ManmanbuyApi
-import com.pricelens.ui.components.BadgeTone
+import com.pricelens.ui.common.AsyncValue
+import com.pricelens.ui.common.valueOrDefault
+import com.pricelens.ui.common.valueOrNull
+import com.pricelens.ui.components.AppImage
+import com.pricelens.ui.components.EmptyState
 import com.pricelens.ui.components.PriceBadge
 import com.pricelens.ui.components.PriceCard
 import com.pricelens.ui.components.PriceRow
 import com.pricelens.ui.components.ShimmerList
-import com.pricelens.ui.main.MainUiState
+import com.pricelens.ui.components.SourceStatusRow
+import com.pricelens.ui.theme.BadgeTone
 import com.pricelens.ui.theme.Dims
 import com.pricelens.util.PriceFormatter
+import com.pricelens.util.PriceJudgment
+import com.pricelens.util.UrlOpener
 
 /**
  * §3.5 概览页：一屏内看到 当前价 / 历史最低价 / 是否有券 / 是否建议购买。
  * §2.5 列表固定高度 + 稳定结构，避免无效重组。
+ *
+ * 阶段4：顶部接 [SourceStatusRow] 展示各数据源真实状态；引导卡统一 [EmptyState]；
+ * 数据源失败展示友好错误提示（旧数据仍兜底展示）。
  */
 @Composable
-fun OverviewScreen(state: MainUiState, onGoBilibili: () -> Unit = {}) {
-    if (state.loading && state.product == null) {
-        ShimmerList(); return
+fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = {}) {
+    val loading by searchViewModel.loading.collectAsStateWithLifecycle()
+    val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
+    val productAsync by searchViewModel.product.collectAsStateWithLifecycle()
+    val historyAsync by searchViewModel.history.collectAsStateWithLifecycle()
+    val judgment by searchViewModel.judgment.collectAsStateWithLifecycle()
+    val couponsAsync by searchViewModel.coupons.collectAsStateWithLifecycle()
+    val livePrice by searchViewModel.livePrice.collectAsStateWithLifecycle()
+    val realtimeSource by searchViewModel.realtimeSource.collectAsStateWithLifecycle()
+
+    // 适配数据源：AsyncValue → 渲染所需的纯值（Error 自动回退旧数据）
+    val product = productAsync.valueOrNull()?.toJdProduct()
+    val history = historyAsync.valueOrNull()
+    val coupons = couponsAsync.valueOrDefault(emptyList())
+
+    if (loading && product == null) {
+        ShimmerList()
+        return
     }
-    val product = state.product
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(Dims.SpacingXL)
+        contentPadding = PaddingValues(Dims.SpacingXL)
     ) {
+        item(key = "source_status") {
+            SourceStatusRow(searchViewModel)
+        }
         if (product == null) {
             item(key = "empty_title") {
+                Spacer(Modifier.height(Dims.SpacingL))
                 Text(
-                    "未找到「${state.keyword}」的比价数据",
+                    stringResource(R.string.overview_not_found, keyword),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             item(key = "guide_acc") {
-                val context = androidx.compose.ui.platform.LocalContext.current
-                GuideCard(
-                    title = "推荐：无障碍自动比价",
-                    desc = "直接打开京东/淘宝/拼多多商品页，PriceLens 用本机登录账号自动识别实时价并弹出比价浮窗，数据最准。",
-                    actionLabel = "去开启"
-                ) {
-                    context.startActivity(
-                        android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                    )
-                }
+                val context = LocalContext.current
+                Spacer(Modifier.height(Dims.SpacingL))
+                EmptyState(
+                    icon = Icons.Filled.Accessibility,
+                    title = stringResource(R.string.overview_guide_acc_title),
+                    desc = stringResource(R.string.overview_guide_acc_desc),
+                    actionLabel = stringResource(R.string.overview_guide_acc_action),
+                    onAction = {
+                        context.startActivity(
+                            android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                        )
+                    }
+                )
             }
             item(key = "guide_link") {
-                GuideCard(
-                    title = "粘贴商品链接",
-                    desc = "复制京东/淘宝/拼多多的商品链接，粘贴到上方搜索框，直接查看历史价格与优惠券。",
-                    actionLabel = null,
-                    onAction = null
+                Spacer(Modifier.height(Dims.SpacingL))
+                EmptyState(
+                    icon = Icons.Filled.Link,
+                    title = stringResource(R.string.overview_guide_link_title),
+                    desc = stringResource(R.string.overview_guide_link_desc)
                 )
             }
             item(key = "guide_bili") {
-                GuideCard(
-                    title = "查看B站评测",
-                    desc = "B站真实用户评测不受商品数据源限制，搜索「${state.keyword}」看看大家的实际体验。",
-                    actionLabel = "切换到 B站",
+                Spacer(Modifier.height(Dims.SpacingL))
+                EmptyState(
+                    icon = Icons.Filled.OndemandVideo,
+                    title = stringResource(R.string.overview_guide_bili_title),
+                    desc = stringResource(R.string.overview_guide_bili_desc, keyword),
+                    actionLabel = stringResource(R.string.overview_guide_bili_action),
                     onAction = onGoBilibili
                 )
             }
         } else {
-            item(key = "product") { ProductHeader(product, state) }
-            item(key = "meta") { QuickFacts(state) }
-        }
-    }
-}
-
-/** 空状态引导卡：图标 + 标题 + 说明 + 可选动作 */
-@Composable
-private fun GuideCard(
-    title: String,
-    desc: String,
-    actionLabel: String?,
-    onAction: (() -> Unit)? = null
-) {
-    Spacer(Modifier.height(Dims.SpacingL))
-    androidx.compose.material3.Surface(
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(Dims.SpacingL)) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(Dims.SpacingS))
-            Text(
-                desc,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (actionLabel != null && onAction != null) {
-                Spacer(Modifier.height(Dims.SpacingS))
-                androidx.compose.material3.TextButton(onClick = onAction) {
-                    Text(actionLabel)
+            // 数据源失败：友好提示，旧数据仍按 valueOrNull/valueOrDefault 兜底展示
+            if (historyAsync is AsyncValue.Error<*> || couponsAsync is AsyncValue.Error<*>) {
+                item(key = "error_hint") {
+                    Spacer(Modifier.height(Dims.SpacingM))
+                    EmptyState(
+                        icon = Icons.Filled.Warning,
+                        title = stringResource(R.string.error_load_failed),
+                        desc = stringResource(R.string.error_retry_hint)
+                    )
                 }
             }
+            item(key = "product") {
+                Spacer(Modifier.height(Dims.SpacingM))
+                ProductHeader(product, judgment, history, livePrice, realtimeSource)
+            }
+            item(key = "meta") { QuickFacts(history, coupons, judgment) }
         }
     }
 }
 
 @Composable
-private fun ProductHeader(product: JdApi.JdProduct, state: MainUiState) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+private fun ProductHeader(
+    product: JdApi.JdProduct,
+    judgment: PriceJudgment,
+    history: ManmanbuyApi.History?,
+    livePrice: Double?,
+    realtimeSource: String?
+) {
+    val context = LocalContext.current
     PriceCard(
         modifier = Modifier.fillMaxWidth(),
         // 启动关联应用：点击商品卡 → 优先唤起京东/淘宝 App，未安装回退浏览器
-        onClick = { com.pricelens.util.UrlOpener.open(context, product.url) }
+        onClick = { UrlOpener.open(context, product.url) }
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            com.pricelens.ui.components.AppImage(
+            AppImage(
                 url = product.image,
                 contentDescription = product.title,
                 modifier = Modifier.size(80.dp)
@@ -147,21 +175,24 @@ private fun ProductHeader(product: JdApi.JdProduct, state: MainUiState) {
                 PriceRow(
                     current = product.price,
                     original = product.originalPrice,
-                    badge = state.judgment.label.takeIf { state.history != null },
-                    badgeTone = when (state.judgment) {
-                        is com.pricelens.util.PriceJudgment.LOW -> BadgeTone.POSITIVE
-                        is com.pricelens.util.PriceJudgment.SUSPICIOUS -> BadgeTone.NEGATIVE
+                    badge = judgment.label.takeIf { history != null },
+                    badgeTone = when (judgment) {
+                        is PriceJudgment.LOW -> BadgeTone.POSITIVE
+                        is PriceJudgment.SUSPICIOUS -> BadgeTone.NEGATIVE
                         else -> BadgeTone.NEUTRAL
                     }
                 )
             }
         }
         // 本机账号实时价（无障碍读取的价格，即用户登录账号看到的价格）
-        state.livePrice?.let { live ->
+        livePrice?.let { live ->
             Spacer(Modifier.height(Dims.SpacingS))
             PriceBadge(
-                "${state.realtimeSource ?: "本机账号"} · 实时价 ¥" +
-                    com.pricelens.util.PriceFormatter.formatRaw(live),
+                stringResource(
+                    R.string.overview_live_price,
+                    realtimeSource ?: stringResource(R.string.overview_live_default_source),
+                    PriceFormatter.formatRaw(live)
+                ),
                 BadgeTone.POSITIVE
             )
         }
@@ -170,24 +201,31 @@ private fun ProductHeader(product: JdApi.JdProduct, state: MainUiState) {
 
 /** §3.5 信息密度：历史最低 / 是否有券 / 建议购买 —— 一行三块 */
 @Composable
-private fun QuickFacts(state: MainUiState) {
+private fun QuickFacts(history: ManmanbuyApi.History?, coupons: List<GwdangApi.Coupon>, judgment: PriceJudgment) {
     Spacer(Modifier.height(Dims.SpacingXL))
     Row(
         horizontalArrangement = Arrangement.spacedBy(Dims.SpacingM),
         modifier = Modifier.fillMaxWidth()
     ) {
-        FactCard("历史最低", state.history?.let { PriceFormatter.format(it.lowest) } ?: "—", Modifier.weight(1f))
         FactCard(
-            "优惠券",
-            state.coupons.maxByOrNull { it.amount }?.let { "${it.amount.toInt()} 元" } ?: "无",
+            stringResource(R.string.overview_fact_lowest),
+            history?.let { PriceFormatter.format(it.lowest) }
+                ?: stringResource(R.string.overview_no_data),
             Modifier.weight(1f)
         )
         FactCard(
-            "建议",
-            when (state.judgment) {
-                is com.pricelens.util.PriceJudgment.LOW -> "可入"
-                is com.pricelens.util.PriceJudgment.SUSPICIOUS -> "观望"
-                else -> "常态"
+            stringResource(R.string.overview_fact_coupon),
+            coupons.maxByOrNull { it.amount }?.let {
+                stringResource(R.string.overview_coupon_yuan, it.amount.toInt())
+            } ?: stringResource(R.string.overview_no_coupon),
+            Modifier.weight(1f)
+        )
+        FactCard(
+            stringResource(R.string.overview_fact_advice),
+            when (judgment) {
+                is PriceJudgment.LOW -> stringResource(R.string.overview_advice_low)
+                is PriceJudgment.SUSPICIOUS -> stringResource(R.string.overview_advice_suspicious)
+                else -> stringResource(R.string.overview_advice_normal)
             },
             Modifier.weight(1f)
         )
@@ -197,10 +235,16 @@ private fun QuickFacts(state: MainUiState) {
 @Composable
 private fun FactCard(label: String, value: String, modifier: Modifier = Modifier) {
     PriceCard(modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(Dims.SpacingS))
-        Text(value, style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary)
+        Text(
+            value,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
