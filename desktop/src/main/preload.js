@@ -9,6 +9,21 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+/* ── IPC 事件订阅去重：同一 channel + callback 只注册一次，避免重复回调 ── */
+const subscribed = new Map(); // channel → Set<callback>
+
+function subscribeOnce(channel, cb) {
+  if (typeof cb !== 'function') return;
+  let listeners = subscribed.get(channel);
+  if (!listeners) {
+    listeners = new Set();
+    subscribed.set(channel, listeners);
+  }
+  if (listeners.has(cb)) return; // 重复注册直接忽略
+  listeners.add(cb);
+  ipcRenderer.on(channel, (_event, payload) => cb(payload));
+}
+
 contextBridge.exposeInMainWorld('priceLens', {
   /* ── 爬虫（均返回 { ok, error?, ...data } 结构） ── */
   search:        (q, opts)        => ipcRenderer.invoke('crawl:search', q, opts),
@@ -42,16 +57,21 @@ contextBridge.exposeInMainWorld('priceLens', {
 
   /* ── 盯价提醒 ── */
   watch: {
-    set:   (cfg)  => ipcRenderer.invoke('watch:set', cfg),
-    get:   ()     => ipcRenderer.invoke('watch:get'),
-    clear: ()     => ipcRenderer.invoke('watch:clear'),
+    set:       (cfg)  => ipcRenderer.invoke('watch:set', cfg),
+    get:       ()     => ipcRenderer.invoke('watch:get'),
+    clear:     ()     => ipcRenderer.invoke('watch:clear'),
+    checkNow:  ()     => ipcRenderer.invoke('watch:check-now'),
   },
-  onWatchTriggered: (cb) => {
-    ipcRenderer.on('watch:triggered', (_event, payload) => cb(payload));
+  onWatchTriggered: (cb) => subscribeOnce('watch:triggered', cb),
+
+  /* ── 自定义脚本（主进程 PowerShell 执行） ── */
+  scripts: {
+    list:   ()            => ipcRenderer.invoke('scripts:list'),
+    save:   (cfg)         => ipcRenderer.invoke('scripts:save', cfg),
+    remove: (id)          => ipcRenderer.invoke('scripts:remove', id),
+    run:    (id)          => ipcRenderer.invoke('scripts:run', id),
   },
 
   /* ── 主题变化推送（跟随系统模式） ── */
-  onThemeChanged: (cb) => {
-    ipcRenderer.on('theme:changed', (_event, payload) => cb(payload));
-  },
+  onThemeChanged: (cb) => subscribeOnce('theme:changed', cb),
 });

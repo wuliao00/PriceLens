@@ -9,15 +9,16 @@
 const MIN_INTERVAL_MS = 3000;   // 同域名 1 req / 3s
 const PAUSE_MS = 5 * 60 * 1000; // 反爬降级 5 分钟
 
-/** 数据源被限流时抛出的错误（ipc 层翻译为友好提示） */
+/** 数据源被限流/反爬拦截时抛出的错误（ipc 层翻译为友好提示） */
 class RateLimitedError extends Error {
   /**
    * @param {string} domain
    * @param {number} resumeAt 恢复时间戳
+   * @param {string} [reason] 拦截原因（如 HTTP 403 / WAF 人机验证），拼入提示文案
    */
-  constructor(domain, resumeAt) {
+  constructor(domain, resumeAt, reason = '暂时限流') {
     const waitMin = Math.max(1, Math.ceil((resumeAt - Date.now()) / 60000));
-    super(`数据源 ${domain} 暂时限流，约 ${waitMin} 分钟后自动恢复`);
+    super(`数据源 ${domain} 反爬拦截（${reason}），约 ${waitMin} 分钟后自动恢复`);
     this.name = 'RateLimitedError';
     this.code = 'ERATE_LIMIT';
     this.resumeAt = resumeAt;

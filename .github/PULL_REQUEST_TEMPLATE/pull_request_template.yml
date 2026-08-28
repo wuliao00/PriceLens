@@ -1,0 +1,92 @@
+name: Pull Request
+description: 提交代码变更
+title: "[PR] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢贡献！请填写以下信息帮助 Reviewer 快速理解变更。
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 已阅读并遵循 [贡献指南](README.md#-贡献指南)
+          required: true
+        - label: 已运行本地检查 (ktlint/detekt/lint)
+          required: true
+        - label: 提交信息符合 Conventional Commits 规范
+          required: true
+        - label: 新增功能包含单元测试
+          required: false
+        - label: 更新了相关文档 (README/API/DEVELOPMENT)
+          required: false
+  - type: dropdown
+    id: type
+    attributes:
+      label: 变更类型
+      options:
+        - feat: 新功能
+        - fix: Bug 修复
+        - docs: 文档更新
+        - refactor: 重构
+        - perf: 性能优化
+        - test: 测试
+        - chore: 维护/依赖更新
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 影响范围
+      options:
+        - Android
+        - Windows (Desktop)
+        - 双端
+        - 文档/工程化
+      multiple: true
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 变更描述
+      description: 简述做了什么、为什么做、怎么做的
+      placeholder: |
+        ## 变更内容
+        - 核心变更: ...
+        - 关键实现: ...
+        
+        ## 变更动机
+        解决 Issue #xxx / 优化 ...
+        
+        ## 测试情况
+        - 单元测试: ...
+        - 真机验证: ...
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图/GIF (UI 变更必填)
+      description: 变更前后对比、动画演示等
+      placeholder: 拖拽上传或粘贴图片
+    validations:
+      required: false
+  - type: textarea
+    id: breaking
+    attributes:
+      label: Breaking Changes
+      description: 是否包含不兼容变更？迁移指南？
+      placeholder: 无 / 详见 ...
+    validations:
+      required: false
+  - type: textarea
+    id: related
+    attributes:
+      label: 关联 Issue/PR
+      placeholder: Closes #123 / Relates to #456
+    validations:
+      required: false

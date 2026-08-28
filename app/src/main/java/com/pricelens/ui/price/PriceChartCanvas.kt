@@ -3,6 +3,7 @@ package com.pricelens.ui.price
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,7 +20,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import com.pricelens.data.remote.ManmanbuyApi
-import com.pricelens.ui.theme.SemanticColors
+import com.pricelens.ui.theme.LocalSemanticColors
 
 /**
  * §6.2 手写 Canvas 历史价格曲线（禁止第三方图表库）。
@@ -30,7 +31,7 @@ import com.pricelens.ui.theme.SemanticColors
 fun PriceChartCanvas(
     history: ManmanbuyApi.History,
     modifier: Modifier = Modifier,
-    lineColor: Color = SemanticColors.LowPrice
+    lineColor: Color = LocalSemanticColors.current.lowPrice
 ) {
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
@@ -41,7 +42,9 @@ fun PriceChartCanvas(
         label = "chartEnter"
     )
 
-    val gridColor = Color(0xFFE0E0E0)
+    // §3.5 语义色走 LocalSemanticColors（暗色感知）；网格灰走 colorScheme，暗色自动适配
+    val semantic = LocalSemanticColors.current
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
 
     Canvas(modifier = modifier) {
         val points = history.points
@@ -63,25 +66,25 @@ fun PriceChartCanvas(
         // 历史最低 / 最高 虚线
         val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
         drawLine(
-            color = SemanticColors.LowPrice.copy(alpha = 0.7f),
+            color = semantic.lowPrice.copy(alpha = 0.7f),
             start = Offset(left, yOf(history.lowest)),
             end = Offset(right, yOf(history.lowest)),
             pathEffect = dash,
             strokeWidth = 1.5.dp.toPx()
         )
         drawLine(
-            color = SemanticColors.Suspicious.copy(alpha = 0.7f),
+            color = semantic.suspicious.copy(alpha = 0.7f),
             start = Offset(left, yOf(history.highest)),
             end = Offset(right, yOf(history.highest)),
             pathEffect = dash,
             strokeWidth = 1.5.dp.toPx()
         )
 
-        // 大促节点（618/双11/双12 前后）：灰色竖线
+        // 大促节点（618/双11/双12 前后）：灰色竖线（网格色令牌，暗色自适应）
         points.forEachIndexed { i, p ->
             if (p.date.endsWith("06-18") || p.date.endsWith("11-11") || p.date.endsWith("12-12")) {
                 drawLine(
-                    color = Color.Gray.copy(alpha = 0.35f),
+                    color = gridColor.copy(alpha = 0.55f),
                     start = Offset(xOf(i), top),
                     end = Offset(xOf(i), bottom),
                     strokeWidth = 1.dp.toPx()

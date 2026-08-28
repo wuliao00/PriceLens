@@ -4,6 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.pricelens.data.local.entity.CacheEntryEntity
+import com.pricelens.data.local.entity.DomainPenaltyEntity
 import com.pricelens.data.local.entity.PriceHistoryEntity
 import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.data.local.entity.ProductEntity
@@ -80,4 +82,40 @@ interface SearchRecordDao {
 
     @Query("DELETE FROM search_records WHERE searchedAt < :threshold")
     suspend fun deleteOlderThan(threshold: Long)
+}
+
+/** §阶段3 通用 L2 缓存条目读写 */
+@Dao
+interface CacheEntryDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: CacheEntryEntity)
+
+    @Query("SELECT * FROM cache_entries WHERE entryKey = :key")
+    suspend fun get(key: String): CacheEntryEntity?
+
+    /** 清理已超出新鲜窗口的条目（允许保留陈旧快照供降级用，故另提供硬删） */
+    @Query("DELETE FROM cache_entries WHERE cachedAt + ttl < :now")
+    suspend fun deleteExpired(now: Long)
+
+    /** 硬删超过保留上限的条目（防止陈旧快照无限堆积） */
+    @Query("DELETE FROM cache_entries WHERE cachedAt < :cutoff")
+    suspend fun deleteOlderThan(cutoff: Long)
+
+    @Query("DELETE FROM cache_entries")
+    suspend fun deleteAll()
+}
+
+/** §阶段3 域名熔断持久化（域名 → 解封时间戳） */
+@Dao
+interface DomainPenaltyDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: DomainPenaltyEntity)
+
+    /** 启动时恢复：仅读仍在熔断期内的域名 */
+    @Query("SELECT * FROM domain_penalties WHERE untilMs > :now")
+    suspend fun loadActive(now: Long): List<DomainPenaltyEntity>
+
+    /** 访问时清过期条目，避免小表无界增长 */
+    @Query("DELETE FROM domain_penalties WHERE untilMs <= :now")
+    suspend fun deleteExpired(now: Long)
 }

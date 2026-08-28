@@ -6,7 +6,8 @@
  *   - cache:*  本地 JSON 缓存
  *   - win:*    窗口控制
  *   - sys:*    外部链接 / 通知 / 主题 / 图片导出
- *   - watch:*  盯价提醒（30 分钟轮询 → 系统通知 + 应用内红点）
+ *   - watch:*  盯价提醒（30 分钟轮询 → 系统通知 + 应用内红点；启动自动恢复）
+ *   - scripts:* 自定义脚本（PowerShell 执行，移植自 Android 端 Shizuku 脚本页）
  *
  * 所有 handle 均有输入校验与 try/catch，永不向渲染进程抛裸异常。
  */
@@ -18,6 +19,7 @@ const fs = require('node:fs/promises');
 const crawlers = require('./crawlers');
 const CacheManager = require('./cache/manager');
 const storage = require('./cache/storage');
+const scripts = require('./scripts/script-manager');
 
 /** 各类数据的缓存 TTL（毫秒） */
 const TTL = {
@@ -308,6 +310,12 @@ function registerIpcHandlers({ getMainWindow, logger }) {
 
   ipcMain.handle('watch:get', () => ({ ok: true, watch: storage.getSettings().watch || null }));
 
+  /** 立即执行一次盯价检查（托盘菜单 / 手动触发） */
+  ipcMain.handle('watch:check-now', async () => {
+    await checkWatch();
+    return { ok: true, watch: storage.getSettings().watch || null };
+  });
+
   ipcMain.handle('watch:clear', async () => {
     storage.updateSettings({ watch: null });
     if (watchTimer) {
@@ -316,6 +324,75 @@ function registerIpcHandlers({ getMainWindow, logger }) {
     }
     return { ok: true };
   });
+
+  // 启动恢复：上次退出前已设置盯价 → 自动续上 30 分钟轮询（后台任务持久化）
+  if (storage.getSettings().watch) {
+    ensureWatchTimer();
+    logger.info('检测到未完成的盯价任务，已恢复 30 分钟轮询');
+  }
+
+  /* ══════════ 自定义脚本 ══════════ */
+
+  ipcMain.handle('scripts:list', async () => {
+    try {
+      return { ok: true, scripts: await scripts.listAll() };
+    } catch (err) {
+      return { ok: false, error: friendlyError(err) };
+    }
+  });
+
+  ipcMain.handle('scripts:save', async (_e, cfg) => {
+    if (!cfg || typeof cfg !== 'object') return { ok: false, error: '无效的脚本数据' };
+    try {
+      return await scripts.saveScript(cfg);
+    } catch (err) {
+      return { ok: false, error: friendlyError(err) };
+    }
+  });
+
+  ipcMain.handle('scripts:remove', async (_e, id) => {
+    if (typeof id !== 'string' || !id) return { ok: false, error: '缺少脚本 ID' };
+    try {
+      return await scripts.removeScript(id);
+    } catch (err) {
+      return { ok: false, error: friendlyError(err) };
+    }
+  });
+
+  ipcMain.handle('scripts:run', async (_e, id) => {
+    if (typeof id !== 'string' || !id) return { ok: false, error: '缺少脚本 ID' };
+    try {
+      // 安全边界：渲染进程只能传脚本 id，且执行前须经主进程确认对话框，
+      // 防止渲染层被注入后静默触发任意 PowerShell 命令（RCE）。
+      const script = await scripts.findById(id);
+      if (!script) return { ok: false, error: '脚本不存在' };
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) {
+        const preview = script.content.length > 400
+          ? `${script.content.slice(0, 400)}\n…(共 ${script.content.length} 字符)`
+          : script.content;
+        const { response } = await dialog.showMessageBox(win, {
+          type: 'warning',
+          title: '确认执行脚本',
+          message: `以 PowerShell 执行脚本「${script.name}」？`,
+          detail: `脚本将以本机用户权限运行，请确认内容可信：\n\n${preview}`,
+          buttons: ['取消', '执行'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        });
+        if (response !== 1) return { ok: false, error: '已取消执行' };
+      }
+      const res = await scripts.runScript(id);
+      logger.info(`脚本执行 ${id}: ${res.ok ? '成功' : `失败(${res.exitCode ?? res.error})`}`);
+      return res;
+    } catch (err) {
+      return { ok: false, error: friendlyError(err) };
+    }
+  });
+
+  /* 返回主进程级句柄（托盘菜单复用） */
+  return { checkWatch };
 }
 
 module.exports = { registerIpcHandlers };
