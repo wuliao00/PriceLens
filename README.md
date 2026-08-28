@@ -67,9 +67,9 @@
 | 平台 | 蓝奏云（推荐，国内加速） | 夸克网盘（备选） | GitHub Release |
 |------|--------|----------|----------------|
 | **Android** | [PriceLens-Android-2.5.1.apk](https://www.ilanzou.com/s/hrqKVtJO?code=4455) | [PriceLens-Android-2.5.1.apk](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
-[PriceLens-Desktop-Setup-2.1.0.exe]（https://pan.quark.cn/s/33e192dc914d?pwd=WWnG）
+| **Windows** | [PriceLens-Desktop-Setup-2.1.0.exe](https://www.ilanzou.com/s/hrqKVtJO?code=4455)| [PriceLens-Desktop-Setup-2.1.0.exe](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
 
- ⚠️ **蓝奏云提取码：4455**（已含在链接参数中，打开即可下载）；夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
+  ⚠️ **蓝奏云提取码：4455**（已含在链接参数中，打开即可下载）；夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
 
 ---
 
@@ -78,7 +78,7 @@
 **下载**：Release](https://github.com/wuliao00/PriceLens/releases) → PriceLens比价助手_v2.3_免费开源_作者莫.apk`
 
 **源码构建**：
-```bash
+bash
 # 1. 克隆仓库
 git clone https://github.com/wuliao00/PriceLens.git
 cd PriceLens
@@ -95,15 +95,15 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 # PRICLENS_KEY_ALIAS=pricelens
 # PRICLENS_KEY_PASSWORD=****
 ./gradlew :app:assembleRelease
-```
 
-> 🔐 **安全**：`local.properties`、`*.keystore` 已在 `.gitignore`，仓库中**无任何密码**。
+
+ 🔐 **安全**：`local.properties`、`*.keystore` 已在 `.gitignore`，仓库中**无任何密码**。
 
 ---
 
 ### Windows 版（桌面端）
 
-**下载**：见上方 [国内加速下载](#国内加速下载推荐) 表格，或 [Releases](https://github.com/wuliao00/PriceLens/releases) 中的 NSIS 安装器 / ZIP 便携版
+**下载**：见上方 国内加速下载](#国内加速下载推荐) 表格，或 [Releases](https://github.com/wuliao00/PriceLens/releases) 中的 NSIS 安装器 / ZIP 便携版
 
 **源码构建**：
 ```bash
