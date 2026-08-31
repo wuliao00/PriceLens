@@ -110,7 +110,7 @@ dependencies {
     ksp("androidx.room:room-compiler:2.8.4")
 
     // 网络 / 解析（JSON 用系统 org.json，不引序列化库，控制 APK 体积）
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
     implementation("org.jsoup:jsoup:1.18.1")
 
     // 图片（§4.4：内存 10% + 磁盘 15MB + 降采样）
