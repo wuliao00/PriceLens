@@ -1,6 +1,6 @@
 # PriceLens — Minimal Price-Comparison Assistant
 
-[简体中文](README.md) | [English](README.en.md)
+[简体中文](README.md) | [English](README.en.md) | [Русский](README.ru.md)
 
 > **Dual platform** · **Forever free** · **Local-first** · **MIT License**
 > Android (accessibility-powered) + Windows (Electron) · Author: **Mo**

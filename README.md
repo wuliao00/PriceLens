@@ -1,6 +1,6 @@
 # PriceLens — 极简全网比价助手
 
-[简体中文](README.md) | [English](README.en.md)
+[简体中文](README.md) | [English](README.en.md) | [Русский](README.ru.md)
 
 > **双端开源** · **永久免费** · **本地优先** · **MIT License**  
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）  
