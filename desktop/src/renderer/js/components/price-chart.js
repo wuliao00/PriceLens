@@ -211,14 +211,10 @@ export function renderPriceChart(dataPoints) {
     'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
   }));
 
-  /* 当前价格点：脉冲动画 */
+  /* 当前价格点：脉冲动画（CSS transform+opacity，见 animations.css chartPulse） */
   const lastX = x(dataPoints.length - 1);
   const lastY = y(prices[prices.length - 1]);
-  const dot = svgEl('circle', { cx: lastX, cy: lastY, r: '4', fill: accent });
-  const animR = svgEl('animate', { attributeName: 'r', values: '4;7;4', dur: '2s', repeatCount: 'indefinite' });
-  const animO = svgEl('animate', { attributeName: 'opacity', values: '1;0.4;1', dur: '2s', repeatCount: 'indefinite' });
-  dot.appendChild(animR);
-  dot.appendChild(animO);
+  const dot = svgEl('circle', { cx: lastX, cy: lastY, r: '4', fill: accent, class: 'chart-dot-pulse' });
   svg.appendChild(dot);
 
   /* 历史最低虚线 + 标注 */
@@ -250,34 +246,46 @@ export function renderPriceChart(dataPoints) {
   svg.appendChild(hoverDot);
 
   const wrap = el('div', { class: 'chart-inner', style: { position: 'relative' } }, svg);
-  const tooltip = el('div', { class: 'chart-tooltip' });
+  const tipDate = el('div', { class: 't-date' });
+  const tipPrice = el('div', { class: 't-price' });
+  const tooltip = el('div', { class: 'chart-tooltip' }, tipDate, tipPrice);
   wrap.appendChild(tooltip);
 
+  /* rAF 合帧：高频 mousemove 每帧最多更新一次，复用节点不重建 DOM */
+  let pendingEvent = null;
+  let rafScheduled = false;
   svg.addEventListener('mousemove', (e) => {
-    const rect = svg.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
-    const svgX = ratio * W;
-    let nearest = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < dataPoints.length; i++) {
-      const d = Math.abs(x(i) - svgX);
-      if (d < bestDist) { bestDist = d; nearest = i; }
-    }
-    const px = (x(nearest) / W) * rect.width;
-    const py = (y(dataPoints[nearest].price) / H) * rect.height;
-    hoverLine.setAttribute('x1', x(nearest));
-    hoverLine.setAttribute('x2', x(nearest));
-    hoverLine.setAttribute('visibility', 'visible');
-    hoverDot.setAttribute('cx', x(nearest));
-    hoverDot.setAttribute('cy', y(dataPoints[nearest].price));
-    hoverDot.setAttribute('visibility', 'visible');
+    pendingEvent = e;
+    if (rafScheduled) return;
+    rafScheduled = true;
+    requestAnimationFrame(() => {
+      rafScheduled = false;
+      const ev = pendingEvent;
+      if (!ev || !svg.isConnected) return;
+      const rect = svg.getBoundingClientRect();
+      const ratio = (ev.clientX - rect.left) / rect.width;
+      const svgX = ratio * W;
+      let nearest = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < dataPoints.length; i++) {
+        const d = Math.abs(x(i) - svgX);
+        if (d < bestDist) { bestDist = d; nearest = i; }
+      }
+      const px = (x(nearest) / W) * rect.width;
+      const py = (y(dataPoints[nearest].price) / H) * rect.height;
+      hoverLine.setAttribute('x1', x(nearest));
+      hoverLine.setAttribute('x2', x(nearest));
+      hoverLine.setAttribute('visibility', 'visible');
+      hoverDot.setAttribute('cx', x(nearest));
+      hoverDot.setAttribute('cy', y(dataPoints[nearest].price));
+      hoverDot.setAttribute('visibility', 'visible');
 
-    tooltip.textContent = ''; // 重建：外部数据 → DOM API
-    tooltip.appendChild(el('div', { class: 't-date', text: dataPoints[nearest].date }));
-    tooltip.appendChild(el('div', { class: 't-price', text: formatPrice(dataPoints[nearest].price) }));
-    tooltip.classList.add('visible');
-    tooltip.style.left = `${Math.min(px + 10, rect.width - 90)}px`;
-    tooltip.style.top = `${Math.max(0, py - 44)}px`;
+      tipDate.textContent = dataPoints[nearest].date; // 外部数据 → textContent
+      tipPrice.textContent = formatPrice(dataPoints[nearest].price);
+      tooltip.classList.add('visible');
+      tooltip.style.left = `${Math.min(px + 10, rect.width - 90)}px`;
+      tooltip.style.top = `${Math.max(0, py - 44)}px`;
+    });
   });
   svg.addEventListener('mouseleave', () => {
     hoverLine.setAttribute('visibility', 'hidden');

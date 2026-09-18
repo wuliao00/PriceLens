@@ -84,24 +84,29 @@ a {
   background: rgba(255,255,255,0.12);
 }
 
-/* ── 骨架屏 Shimmer（规范 §9）── */
+/* ── 骨架屏 Shimmer（规范 §9）── 扫光走 ::after transform，不触发重绘 */
 .skeleton {
-  background: linear-gradient(90deg,
-    var(--bg-input) 25%,
-    rgba(255,255,255,0.4) 50%,
-    var(--bg-input) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite linear;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-input);
   border-radius: var(--radius-tag);
 }
-[data-theme="dark"] .skeleton {
+.skeleton::after {
+  content: '';
+  position: absolute; inset: 0;
   background: linear-gradient(90deg,
-    var(--bg-input) 25%,
-    rgba(255,255,255,0.06) 50%,
-    var(--bg-input) 75%
+    transparent 25%,
+    rgba(255,255,255,0.4) 50%,
+    transparent 75%
   );
-  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+}
+[data-theme="dark"] .skeleton::after {
+  background: linear-gradient(90deg,
+    transparent 25%,
+    rgba(255,255,255,0.06) 50%,
+    transparent 75%
+  );
 }
 
 /* ── 无障碍：减少动态 ── */
