@@ -29,4 +29,19 @@ class PriceWatchViewModel @Inject constructor(
     fun removeTarget(productId: String) {
         viewModelScope.launch { repository.deactivateTarget(productId) }
     }
+
+    /** 设定/更新盯价目标（当前仅京东 SKU 有后台查价通道） */
+    fun setTarget(skuId: String, title: String, targetPrice: Double) {
+        viewModelScope.launch {
+            repository.setTarget(
+                PriceTargetEntity(
+                    productId = "jd:$skuId",
+                    title = title,
+                    platform = "jd",
+                    targetPrice = targetPrice,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
 }

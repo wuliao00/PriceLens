@@ -82,6 +82,16 @@
     <string name="price_highest">最高 %1$s</string>
     <string name="price_copy_current">复制当前价 %1$s</string>
     <string name="price_export_hint">导出图片（长按曲线卡片）</string>
+    <string name="price_watch_button">盯价</string>
+    <string name="price_watch_dialog_title">设置目标价</string>
+    <string name="price_watch_dialog_desc">当前 %1$s · 低于目标价时通知你，每 30 分钟自动检查</string>
+    <string name="price_watch_hint">目标价 ¥</string>
+    <string name="price_watch_saved">已加入盯价，通知栏常驻运行</string>
+    <string name="price_watch_confirm">开始盯价</string>
+    <string name="price_watch_invalid">请输入大于 0 的目标价</string>
+    <string name="watch_status_channel">盯价常驻</string>
+    <string name="watch_notification_running">盯价运行中 · %1$d 个目标 · 上次检查 %2$s</string>
+    <string name="watch_notification_desc">每 30 分钟自动检查价格，达标即提醒</string>
 
     <!-- 找券页 -->
     <string name="coupon_empty_hint">搜索后聚合购物党 / 京东联盟优惠券</string>

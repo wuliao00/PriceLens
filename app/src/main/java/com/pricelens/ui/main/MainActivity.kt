@@ -111,6 +111,7 @@ private enum class Tab(@StringRes val labelRes: Int) {
 fun MainScreen(initialKeyword: String?, overlayPermissionAvailable: Boolean, settings: SettingsRepository) {
     // 阶段2：搜索编排集中在 SearchViewModel（Activity 作用域单例，跨标签共享）
     val searchViewModel: SearchViewModel = hiltViewModel()
+    val priceWatchViewModel: com.pricelens.ui.price.PriceWatchViewModel = hiltViewModel()
     val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
 
     // 顺从原则：顶栏随内容滚动自动隐去（enterAlways），向下滚动立即回归
@@ -213,7 +214,7 @@ fun MainScreen(initialKeyword: String?, overlayPermissionAvailable: Boolean, set
                         onGoBilibili = { tab = Tab.BILIBILI }
                     )
                     Tab.BILIBILI -> com.pricelens.ui.bilibili.BilibiliScreen(searchViewModel)
-                    Tab.PRICE -> com.pricelens.ui.price.PriceScreen(searchViewModel)
+                    Tab.PRICE -> com.pricelens.ui.price.PriceScreen(searchViewModel, priceWatchViewModel)
                     Tab.COUPON -> com.pricelens.ui.coupon.CouponScreen(searchViewModel)
                     Tab.COMMUNITY -> com.pricelens.ui.community.CommunityScreen(searchViewModel)
                     Tab.PROFILE -> com.pricelens.ui.profile.ProfileScreen(

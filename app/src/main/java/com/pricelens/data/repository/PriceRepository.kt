@@ -4,6 +4,7 @@ import com.pricelens.data.cache.TLRUCache
 import com.pricelens.data.local.AppDatabase
 import com.pricelens.data.local.CacheTTL
 import com.pricelens.data.local.entity.PriceHistoryEntity
+import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.data.local.entity.ProductEntity
 import com.pricelens.data.local.entity.SearchRecordEntity
 import com.pricelens.data.remote.BiliApi
@@ -154,6 +155,10 @@ class PriceRepository @Inject constructor(
     fun observePinned() = db.productDao().observePinned()
 
     fun observeTargets() = db.priceTargetDao().observeActive()
+
+    suspend fun setTarget(target: PriceTargetEntity) {
+        db.priceTargetDao().upsert(target)
+    }
 
     suspend fun deactivateTarget(productId: String) {
         db.priceTargetDao().deactivate(productId)

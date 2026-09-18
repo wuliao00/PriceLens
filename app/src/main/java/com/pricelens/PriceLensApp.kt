@@ -19,6 +19,12 @@ class PriceLensApp : Application(), Configuration.Provider {
 
     @Inject lateinit var imageLoader: ImageLoader
 
+    @Inject lateinit var watchServiceController: com.pricelens.service.WatchServiceController
+
+    private val appScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main
+    )
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
 
@@ -35,14 +41,24 @@ class PriceLensApp : Application(), Configuration.Provider {
         CacheCleanupWorker.scheduleDaily(this)
         // §8 后台盯价：每 30 分钟
         PriceCheckWorker.schedule(this)
+        // 有盯价目标时拉起前台服务（通知栏常驻 + 30 分钟循环检查）
+        watchServiceController.bind(appScope)
     }
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(
+        val alert = NotificationChannel(
             "price_alert",
             getString(R.string.price_alert_channel),
             NotificationManager.IMPORTANCE_HIGH
         )
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        // 盯价常驻：低优先级、不发声、不可滑动移除（FGS 通知）
+        val status = NotificationChannel(
+            "watch_status",
+            getString(R.string.watch_status_channel),
+            NotificationManager.IMPORTANCE_LOW
+        ).apply { setShowBadge(false) }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(alert)
+        manager.createNotificationChannel(status)
     }
 }

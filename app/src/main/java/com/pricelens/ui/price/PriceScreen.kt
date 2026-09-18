@@ -3,6 +3,7 @@ package com.pricelens.ui.price
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,12 +11,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
@@ -46,15 +52,23 @@ import com.pricelens.util.PriceJudgment
  * 当前价脉冲点、最低/最高虚线、大促节点灰竖线；
  * 长按 → BottomSheet「复制当前价 / 导出图片」（长按同时触发卡片浮起）。
  * 阶段4：AsyncValue 三态渲染（加载骨架 / 空态引导 / 失败提示+旧数据兜底）。
+ * 「盯价」按钮 → 设定目标价（仅京东 SKU 有后台查价通道），
+ * 保存后由 WatchForegroundService 常驻通知栏并每 30 分钟检查。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PriceScreen(searchViewModel: SearchViewModel) {
+fun PriceScreen(
+    searchViewModel: SearchViewModel,
+    watchViewModel: PriceWatchViewModel
+) {
     val loading by searchViewModel.loading.collectAsStateWithLifecycle()
     val historyAsync by searchViewModel.history.collectAsStateWithLifecycle()
     val judgment by searchViewModel.judgment.collectAsStateWithLifecycle()
+    val productAsync by searchViewModel.product.collectAsStateWithLifecycle()
     val history = historyAsync.valueOrNull()
+    val product = productAsync.valueOrNull()
     var showSheet by remember { mutableStateOf(false) }
+    var showWatchDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     when {
@@ -140,6 +154,67 @@ fun PriceScreen(searchViewModel: SearchViewModel) {
                 )
             }
         }
+        // 仅京东 SKU 有后台查价通道（p.3.cn），其他来源不显示入口避免死按钮
+        if (product?.skuId != null) {
+            Spacer(Modifier.height(Dims.SpacingM))
+            Button(
+                onClick = { showWatchDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.price_watch_button))
+            }
+        }
+    }
+
+    val watchSkuId = product?.skuId
+    if (showWatchDialog && watchSkuId != null) {
+        val productTitle = product?.title.orEmpty()
+        var targetText by remember { mutableStateOf(history.current.toInt().toString()) }
+        AlertDialog(
+            onDismissRequest = { showWatchDialog = false },
+            title = { Text(stringResource(R.string.price_watch_dialog_title)) },
+            text = {
+                Column {
+                    Text(
+                        stringResource(
+                            R.string.price_watch_dialog_desc,
+                            PriceFormatter.format(history.current)
+                        )
+                    )
+                    Spacer(Modifier.height(Dims.SpacingM))
+                    OutlinedTextField(
+                        value = targetText,
+                        onValueChange = { targetText = it },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        supportingText = { Text(stringResource(R.string.price_watch_hint)) }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val target = targetText.toDoubleOrNull()
+                        if (target != null && target > 0) {
+                            watchViewModel.setTarget(watchSkuId, productTitle, target)
+                            Toast.makeText(
+                                context, R.string.price_watch_saved, Toast.LENGTH_SHORT
+                            ).show()
+                            showWatchDialog = false
+                        } else {
+                            Toast.makeText(
+                                context, R.string.price_watch_invalid, Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                ) { Text(stringResource(R.string.price_watch_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWatchDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
     }
 
     if (showSheet) {

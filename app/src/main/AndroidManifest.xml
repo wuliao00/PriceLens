@@ -4,6 +4,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 盯价前台服务：通知栏常驻保活（targetSdk 34+ 必须声明类型） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 无障碍浮窗（§1.5）：检测到价格后在京东/淘宝/拼多多页面之上显示 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- 后台自启动：开机后恢复盯价与缓存清理任务 -->
@@ -50,6 +53,16 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- 盯价前台服务：通知栏常驻 + 30 分钟循环检查，开机/设目标后由控制器拉起 -->
+        <service
+            android:name=".service.WatchForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="price_watch_keepalive" />
         </service>
 
         <!-- 开机自启动：重新登记 WorkManager 周期任务（盯价 + 缓存清理） -->
