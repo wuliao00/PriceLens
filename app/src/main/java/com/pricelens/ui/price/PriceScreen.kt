@@ -57,10 +57,7 @@ import com.pricelens.util.PriceJudgment
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PriceScreen(
-    searchViewModel: SearchViewModel,
-    watchViewModel: PriceWatchViewModel
-) {
+fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchViewModel) {
     val loading by searchViewModel.loading.collectAsStateWithLifecycle()
     val historyAsync by searchViewModel.history.collectAsStateWithLifecycle()
     val judgment by searchViewModel.judgment.collectAsStateWithLifecycle()
@@ -197,14 +194,10 @@ fun PriceScreen(
                         val target = targetText.toDoubleOrNull()
                         if (target != null && target > 0) {
                             watchViewModel.setTarget(watchSkuId, productTitle, target)
-                            Toast.makeText(
-                                context, R.string.price_watch_saved, Toast.LENGTH_SHORT
-                            ).show()
+                            Toast.makeText(context, R.string.price_watch_saved, Toast.LENGTH_SHORT).show()
                             showWatchDialog = false
                         } else {
-                            Toast.makeText(
-                                context, R.string.price_watch_invalid, Toast.LENGTH_SHORT
-                            ).show()
+                            Toast.makeText(context, R.string.price_watch_invalid, Toast.LENGTH_SHORT).show()
                         }
                     }
                 ) { Text(stringResource(R.string.price_watch_confirm)) }

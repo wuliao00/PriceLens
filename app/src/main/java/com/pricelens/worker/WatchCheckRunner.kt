@@ -63,22 +63,19 @@ class WatchCheckRunner @Inject constructor(
     }
 
     /** 按 platform 分发查价；null = 该平台本轮失败（应重试），空 Map = 暂无查价能力 */
-    private suspend fun fetchPlatformPrices(
-        context: Context,
-        platform: String,
-        targets: List<PriceTargetEntity>
-    ): Map<String, Double?>? = when (platform) {
-        PLATFORM_JD -> runCatching {
-            jdApi.getPrices(targets.map { it.productId.removePrefix("jd:") })
-                .mapValues { (_, price) -> price.first }
-        }.onFailure { e ->
-            LogT.w("盯价：京东查价失败：${e.javaClass.simpleName}")
-        }.getOrNull()
-        else -> {
-            LogT.i("盯价：平台 $platform 暂无查价通道，跳过 ${targets.size} 个目标")
-            emptyMap()
+    private suspend fun fetchPlatformPrices(context: Context, platform: String, targets: List<PriceTargetEntity>): Map<String, Double?>? =
+        when (platform) {
+            PLATFORM_JD -> runCatching {
+                jdApi.getPrices(targets.map { it.productId.removePrefix("jd:") })
+                    .mapValues { (_, price) -> price.first }
+            }.onFailure { e ->
+                LogT.w("盯价：京东查价失败：${e.javaClass.simpleName}")
+            }.getOrNull()
+            else -> {
+                LogT.i("盯价：平台 $platform 暂无查价通道，跳过 ${targets.size} 个目标")
+                emptyMap()
+            }
         }
-    }
 
     private fun sendNotification(context: Context, target: PriceTargetEntity, current: Double) {
         if (ContextCompat.checkSelfPermission(

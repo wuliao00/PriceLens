@@ -13,6 +13,10 @@ import com.pricelens.R
 import com.pricelens.ui.main.MainActivity
 import com.pricelens.worker.WatchCheckRunner
 import dagger.hilt.android.AndroidEntryPoint
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,10 +24,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import javax.inject.Inject
 
 /**
  * 盯价前台服务：通知栏常驻一条低优先级状态通知（"盯价运行中 · N 个目标 ·
@@ -73,10 +73,7 @@ class WatchForegroundService : Service() {
     private fun startForegroundNotification(lastCheck: String, targets: Int) {
         val notification = buildNotification(lastCheck, targets)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID, notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -87,22 +84,22 @@ class WatchForegroundService : Service() {
             .notify(NOTIFICATION_ID, buildNotification(timeFormat.format(Date()), targets))
     }
 
-    private fun buildNotification(lastCheck: String, targets: Int) =
-        NotificationCompat.Builder(this, WatchCheckRunner.CHANNEL_WATCH_STATUS)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(getString(R.string.watch_notification_running, targets, lastCheck))
-            .setContentText(getString(R.string.watch_notification_desc))
-            .setOngoing(true)
-            .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    this, 0,
-                    Intent(this, MainActivity::class.java),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
+    private fun buildNotification(lastCheck: String, targets: Int) = NotificationCompat.Builder(this, WatchCheckRunner.CHANNEL_WATCH_STATUS)
+        .setSmallIcon(R.drawable.ic_notification)
+        .setContentTitle(getString(R.string.watch_notification_running, targets, lastCheck))
+        .setContentText(getString(R.string.watch_notification_desc))
+        .setOngoing(true)
+        .setSilent(true)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setContentIntent(
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            .build()
+        )
+        .build()
 
     companion object {
         private const val NOTIFICATION_ID = 1001
