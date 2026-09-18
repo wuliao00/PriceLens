@@ -40,11 +40,10 @@ jobs:
           gradle-version: ${{ env.GRADLE_VERSION }}
       
       - name: 配置 Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           api-level: 34
           ndk-version: r26c
-          cmdline-tools-version: latest
       
       - name: 验证 Gradle Wrapper
         run: ./gradlew --version
