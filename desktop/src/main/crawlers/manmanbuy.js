@@ -74,6 +74,11 @@ async function getHistory(url) {
     },
   );
 
+  if (res.status === 404 || !String(res.body).trim().startsWith('{')) {
+    // 2026-09 实测：apapia-history 公开接口已下线（返回 ASP.NET 404 页），
+    // 新接口需登录票据；在接入替代源（星罗好货开放平台等）前给出准确原因
+    throw new Error('慢慢买公开接口已下线，历史价格暂不可用（待接入新数据源）');
+  }
   if (res.status !== 200) throw new Error(`慢慢买接口返回 ${res.status}`);
   let data;
   try {

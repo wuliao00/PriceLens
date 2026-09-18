@@ -93,7 +93,8 @@ class ApiClient @Inject constructor(
     suspend fun getHtmlResult(
         url: String,
         referer: String? = null,
-        cookie: String? = null
+        cookie: String? = null,
+        userAgent: String? = null
     ): CrawlerResult<String> =
         withContext(Dispatchers.IO) {
             requestWithLimiterResult(url) { headers ->
@@ -101,6 +102,7 @@ class ApiClient @Inject constructor(
                     Request.Builder().url(url).headers(headers).apply {
                         referer?.let { header("Referer", it) }
                         cookie?.let { header("Cookie", it) }
+                        userAgent?.let { header("User-Agent", it) }
                     }.build()
                 ).execute()
             }
@@ -123,8 +125,9 @@ class ApiClient @Inject constructor(
     suspend fun getHtml(
         url: String,
         referer: String? = null,
-        cookie: String? = null
-    ): String? = getHtmlResult(url, referer, cookie).asNullable()
+        cookie: String? = null,
+        userAgent: String? = null
+    ): String? = getHtmlResult(url, referer, cookie, userAgent).asNullable()
 
     // ---------- 限速 / 熔断 / 重试核心（逻辑与改造前一致） ----------
 

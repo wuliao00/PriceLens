@@ -173,8 +173,10 @@ async function rawRequest(url, opts = {}) {
           limiter.pause(hostname);
           throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000, 'WAF 人机验证拦截');
         }
-        // 验证码页面嗅探（200 但内容是人机校验）
-        if (/<captcha|verify\.gd\.sogou|滑动验证|请输入验证码|geetest/i.test(text)) {
+        // 验证码页面嗅探（200 但内容是人机校验）。
+        // 仅对短页判定：真实内容页（如 smzdm 文章页 300KB+）内嵌 geetest 等
+        // 字符串会造成误伤，实测已因此把整域误熔断 5 分钟。
+        if (text.length < 8000 && /<captcha|verify\.gd\.sogou|滑动验证|请输入验证码|geetest/i.test(text)) {
           limiter.pause(hostname);
           throw new RateLimitedError(hostname, Date.now() + 5 * 60 * 1000, '触发人机验证');
         }

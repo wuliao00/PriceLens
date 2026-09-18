@@ -241,8 +241,7 @@ function makeFetcher(name, opts = {}) {
       };
     case 'coupons':
       return async () => {
-        if (!state.url) throw new Error('该商品没有可查询优惠券的链接');
-        const r = await window.priceLens.getCoupons(state.url, opts);
+        const r = await window.priceLens.getCoupons(state.url, state.keyword, opts);
         if (!r.ok) throw new Error(r.error);
         return r;
       };

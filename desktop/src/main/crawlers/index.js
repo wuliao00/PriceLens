@@ -122,7 +122,7 @@ module.exports = {
   searchProducts,
   getBiliVideos: (kw) => bilibili.searchVideos(kw),
   getHistory: (url) => manmanbuy.getHistory(url),
-  getCoupons: (url) => gwdang.getCoupons(url),
+  getCoupons: (url, keyword) => gwdang.getCoupons(url, keyword),
   getCommunity: (q) => smzdm.getCommunity(q),
   crawlers: { bilibili, smzdm, manmanbuy, gwdang, jd },
 };

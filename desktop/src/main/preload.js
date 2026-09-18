@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld('priceLens', {
   /* ── 爬虫（均返回 { ok, error?, ...data } 结构） ── */
   search:        (q, opts)        => ipcRenderer.invoke('crawl:search', q, opts),
   getHistory:    (url, opts)      => ipcRenderer.invoke('crawl:history', url, opts),
-  getCoupons:    (url, opts)      => ipcRenderer.invoke('crawl:coupons', url, opts),
+  getCoupons:    (url, keyword, opts) => ipcRenderer.invoke('crawl:coupons', url, keyword, opts),
   getComments:   (q, opts)        => ipcRenderer.invoke('crawl:comments', q, opts),
   getBiliVideos: (kw, opts)       => ipcRenderer.invoke('crawl:bilibili', kw, opts),
 

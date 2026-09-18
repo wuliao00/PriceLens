@@ -14,6 +14,12 @@ const cheerio = require('cheerio');
 const http = require('../utils/http-client');
 const { stripTags } = require('../utils/sanitizer');
 
+/**
+ * smzdm 前置瑞数(Ruishu)动态 WAF：浏览器 UA 拿到的是 202 + probe.js 挑战页；
+ * Googlebot UA 被 WAF 放行返回完整 SSR（2026-09 实测）。
+ */
+const SMZDM_BOT_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+
 /** 把列表页的相对时间/日期文本解析为时间戳（解析失败返回 0） */
 function parseTimeText(text) {
   const s = String(text || '').trim();
@@ -43,8 +49,8 @@ function extractPrice(text) {
  */
 async function searchDeals(q) {
   const html = await http.getText(
-    `https://search.smzdm.com/?c=home&s=${encodeURIComponent(q)}&v=b&order=time`,
-    { headers: { Referer: 'https://www.smzdm.com/' } },
+    `https://search.smzdm.com/?c=faxian&s=${encodeURIComponent(q)}&v=a&order=score`,
+    { headers: { Referer: 'https://www.smzdm.com/', 'User-Agent': SMZDM_BOT_UA } },
   );
   /* 异常短页：非真实搜索结果（如反爬挑战页），避免误报「页面结构变更」 */
   if (html.length < 1000) {
@@ -94,9 +100,18 @@ async function searchDeals(q) {
  */
 async function fetchArticleMeta(dealUrl) {
   try {
-    const html = await http.getText(dealUrl, { headers: { Referer: 'https://www.smzdm.com/' } });
+    const html = await http.getText(dealUrl, {
+      headers: { Referer: 'https://www.smzdm.com/', 'User-Agent': SMZDM_BOT_UA },
+    });
     const $ = cheerio.load(html);
     const comments = [];
+    $('.comment-main-list-item').slice(0, 10).each((_i, elem) => {
+      const node = $(elem);
+      const user = stripTags(node.find('.comment-main-list-item-content-header h3 a').first().text());
+      const content = stripTags(node.find('.comment-main-list-item-content-comment').first().text());
+      const time = parseTimeText(node.find('.comment-main-list-item-content-info .content-info span').first().text());
+      if (content) comments.push({ user: user || '匿名用户', content, time });
+    });
     $('.comment-panel .comment-item, .article-comments .comment-item, li.comment').slice(0, 10).each((_i, elem) => {
       const node = $(elem);
       const user = stripTags(node.find('.userinfo a, .comment-contentInfo a, .avatar-name').first().text());
@@ -104,12 +119,18 @@ async function fetchArticleMeta(dealUrl) {
       const time = parseTimeText(node.find('.time, .comment_time').first().text());
       if (content) comments.push({ user: user || '匿名用户', content, time });
     });
-    // 值 / 不值 投票
-    const upText = stripTags($('.score-btn-left .score, .vote-up .num, .unvoted-zhi').first().text());
-    const downText = stripTags($('.score-btn-right .score, .vote-down .num, .unvoted-buzhi').first().text());
-    const up = Number(upText.replace(/[^\d]/g, '')) || 0;
-    const down = Number(downText.replace(/[^\d]/g, '')) || 0;
-    return { comments, ratio: { up, down } };
+    // 值 / 不值 投票：新版评分条文本形如 "50%的值友认为值 4 2 : 2"
+    const rateText = stripTags($('.score_rateBox').first().text());
+    const vm = rateText.match(/(\d+)\s*:\s*(\d+)/);
+    let up = vm ? Number(vm[1]) : 0;
+    let down = vm ? Number(vm[2]) : 0;
+    if (!up && !down) {
+      const upText = stripTags($('.score-btn-left .score, .vote-up .num, .unvoted-zhi').first().text());
+      const downText = stripTags($('.score-btn-right .score, .vote-down .num, .unvoted-buzhi').first().text());
+      up = Number(upText.replace(/[^\d]/g, '')) || 0;
+      down = Number(downText.replace(/[^\d]/g, '')) || 0;
+    }
+    return { comments: comments.slice(0, 10), ratio: { up, down } };
   } catch {
     return { comments: [], ratio: { up: 0, down: 0 } }; // 文章页失败不影响爆料列表
   }

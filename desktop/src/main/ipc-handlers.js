@@ -130,12 +130,13 @@ function registerIpcHandlers({ getMainWindow, logger }) {
         () => crawlers.getHistory(target), opts || {}));
   });
 
-  ipcMain.handle('crawl:coupons', async (_e, url, opts) => {
-    const target = validUrl(url);
-    if (!target) return { ok: false, error: '无效的商品链接' };
+  ipcMain.handle('crawl:coupons', async (_e, url, keyword, opts) => {
+    const target = validUrl(url); // 可为空：券检索按关键词走
+    const q = validQuery(keyword);
+    if (!q) return { ok: false, error: '缺少商品关键词，无法检索优惠券' };
     return guard('crawl:coupons', () =>
-      cached(`coupons:${target}`, TTL.coupons,
-        () => crawlers.getCoupons(target), opts || {}));
+      cached(`coupons:${q.toLowerCase()}`, TTL.coupons,
+        () => crawlers.getCoupons(target, q), opts || {}));
   });
 
   ipcMain.handle('crawl:comments', async (_e, q, opts) => {

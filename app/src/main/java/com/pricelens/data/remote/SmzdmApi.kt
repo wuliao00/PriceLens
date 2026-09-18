@@ -10,6 +10,14 @@ import javax.inject.Singleton
 @Singleton
 class SmzdmApi @Inject constructor(private val client: ApiClient) {
 
+    /**
+     * smzdm 前置瑞数动态 WAF：浏览器 UA 拿到 202 + probe.js 挑战页；
+     * Googlebot UA 被放行返回完整 SSR（2026-09 实测，与桌面端一致）。
+     */
+    private companion object {
+        const val BOT_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+    }
+
     data class SmzdmPost(
         val title: String,
         val price: Double?,
@@ -21,9 +29,9 @@ class SmzdmApi @Inject constructor(private val client: ApiClient) {
     )
 
     suspend fun searchPosts(keyword: String): List<SmzdmPost> {
-        val url = "https://search.smzdm.com/?c=home&s=" +
-            java.net.URLEncoder.encode(keyword, "UTF-8") + "&v=b&order=time"
-        val html = client.getHtml(url, referer = "https://www.smzdm.com/")
+        val url = "https://search.smzdm.com/?c=faxian&s=" +
+            java.net.URLEncoder.encode(keyword, "UTF-8") + "&v=a&order=score"
+        val html = client.getHtml(url, referer = "https://www.smzdm.com/", userAgent = BOT_UA)
             ?: return emptyList()
         val doc = org.jsoup.Jsoup.parse(html)
 
