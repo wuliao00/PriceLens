@@ -102,7 +102,7 @@ class PriceRepository @Inject constructor(
         val points = mutableListOf<ManmanbuyApi.PricePoint>()
         mmb?.points?.let { points += it }
         if (points.isEmpty() && sku != null) {
-            points += db.priceHistoryDao.getByProduct("jd:$sku")
+            points += db.priceHistoryDao().getByProduct("jd:$sku")
                 .map { ManmanbuyApi.PricePoint(it.date, it.price) }
         }
         if (sku != null && settingsRepository.linkstarsApiKey.isNotBlank()) {
