@@ -40,8 +40,7 @@ class ManmanbuyLoginActivity : ComponentActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean =
-                    url == null || !isManmanbuy(url)
+                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean = url == null || !isManmanbuy(url)
             }
         }
         CookieManager.getInstance().setAcceptCookie(true)
@@ -78,11 +77,14 @@ class ManmanbuyLoginActivity : ComponentActivity() {
         }
         setContentView(root)
 
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (webView.canGoBack()) webView.goBack() else finish()
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (webView.canGoBack()) webView.goBack() else finish()
+                }
             }
-        })
+        )
 
         webView.loadUrl(LOGIN_URL)
     }
