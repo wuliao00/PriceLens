@@ -59,7 +59,10 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
     Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = apiKey,
-            onValueChange = { apiKey = it; saved = false },
+            onValueChange = {
+                apiKey = it
+                saved = false
+            },
             label = { Text(stringResource(R.string.settings_linkstars_key)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
@@ -67,7 +70,10 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
         Spacer(Modifier.height(Dims.SpacingS))
         OutlinedTextField(
             value = cookie,
-            onValueChange = { cookie = it; saved = false },
+            onValueChange = {
+                cookie = it
+                saved = false
+            },
             label = { Text(stringResource(R.string.settings_mmb_cookie)) },
             modifier = Modifier.fillMaxWidth().height(120.dp)
         )
