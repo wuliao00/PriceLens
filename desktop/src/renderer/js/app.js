@@ -344,6 +344,7 @@ async function openSettings() {
   const themeRes = await window.priceLens.getTheme();
   const cacheBytes = await window.priceLens.cache.size();
   const watchRes = await window.priceLens.watch.get();
+  const credsRes = await window.priceLens.sys.getCreds();
   state.watch = watchRes?.watch || null;
 
   const mask = el('div', {
@@ -402,6 +403,55 @@ async function openSettings() {
           : '在「盯价」页设置目标价，低于目标时系统通知',
       }),
       state.watch ? el('button', { class: 'btn', on: { click: clearWatch } }, '取消') : null)));
+  /* 数据源凭证（均可选，仅存本机） */
+  const apiKeyInput = el('input', {
+    class: 'field-input', type: 'text',
+    placeholder: '星罗好货开放平台 apikey（个人中心获取）',
+    value: credsRes?.apikey || '',
+    style: { marginBottom: '8px' },
+  });
+  const cookieInput = el('input', {
+    class: 'field-input', type: 'text',
+    placeholder: '慢慢买登录 Cookie（拉取完整历史曲线，可留空）',
+    value: credsRes?.cookie || '',
+  });
+  const mmbLoginBtn = el('button', {
+    class: 'btn',
+    on: {
+      click: async () => {
+        mmbLoginBtn.disabled = true;
+        mmbLoginBtn.textContent = '等待登录…';
+        const res = await window.priceLens.sys.mmbLogin();
+        mmbLoginBtn.disabled = false;
+        mmbLoginBtn.textContent = '登录慢慢买 · 自动抓取';
+        if (res?.ok) {
+          const fresh = await window.priceLens.sys.getCreds();
+          cookieInput.value = fresh?.cookie || '';
+          showToast(`已自动抓取 Cookie（${res.count} 项）· 仅存本机`);
+        } else if (res?.error && res.error !== '已取消登录') {
+          showToast(res.error);
+        }
+      },
+    },
+  }, '登录慢慢买 · 自动抓取');
+  modal.appendChild(el('div', { class: 'modal-section' },
+    el('h4', { text: '数据源凭证（可选）' }),
+    el('div', { class: 'modal-row', style: { flexDirection: 'column', alignItems: 'stretch', gap: '8px' } },
+      apiKeyInput,
+      cookieInput,
+      el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+        el('span', { class: 'fs-caption text-tertiary', text: 'Cookie 可点左侧按钮登录自动获取，7~30 天有效' }),
+        mmbLoginBtn),
+      el('div', { style: { display: 'flex', justifyContent: 'flex-end' } },
+        el('button', {
+          class: 'btn btn--primary',
+          on: {
+            click: async () => {
+              const res = await window.priceLens.sys.setCreds(apiKeyInput.value, cookieInput.value);
+              showToast(res?.ok ? '已保存 · 凭证仅存本机' : '保存失败');
+            },
+          },
+        }, '保存')))));
   modal.appendChild(el('div', { class: 'modal-section' },
     el('h4', { text: '关于' }),
     el('span', { class: 'fs-caption text-secondary', text: 'PriceLens v2.0 · 数据源：B站 / 什么值得买 / 慢慢买 / 购物党 / 京东' }),

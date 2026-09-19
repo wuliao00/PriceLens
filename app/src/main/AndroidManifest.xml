@@ -41,6 +41,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 慢慢买内置登录页：WebView 登录后自动抓取 Cookie（仅本机使用） -->
+        <activity
+            android:name=".ui.settings.ManmanbuyLoginActivity"
+            android:exported="false"
+            android:label="@string/settings_mmb_login_title"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <!-- 无障碍服务（§1.3）：仅监听电商 APP，BIND_ACCESSIBILITY_SERVICE 系统级保护 -->
         <service
             android:name=".accessibility.PriceMonitorService"

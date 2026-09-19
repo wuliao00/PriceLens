@@ -97,6 +97,12 @@
     <string name="settings_mmb_cookie">慢慢买 Cookie · 完整历史价格曲线</string>
     <string name="settings_credentials_save">保存</string>
     <string name="settings_credentials_saved">已保存 · 凭证仅存本机</string>
+    <string name="settings_mmb_login_title">登录慢慢买</string>
+    <string name="settings_mmb_login_btn">登录自动抓取</string>
+    <string name="settings_mmb_login_hint">Cookie 也可手动粘贴，7~30 天有效</string>
+    <string name="settings_mmb_login_save">保存 Cookie</string>
+    <string name="settings_mmb_login_saved">Cookie 已保存 · 仅存本机</string>
+    <string name="settings_mmb_login_empty">未抓到 Cookie，请先在页面内完成登录</string>
 
     <!-- 找券页 -->
     <string name="coupon_empty_hint">搜索后聚合购物党 / 京东联盟优惠券</string>

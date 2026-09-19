@@ -1,5 +1,6 @@
 package com.pricelens.ui.settings
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,13 +14,18 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.pricelens.R
 import com.pricelens.ui.components.SectionHeader
 import com.pricelens.ui.theme.Dims
@@ -56,6 +62,25 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
     var cookie by remember { mutableStateOf(settings.manmanbuyCookie) }
     var saved by remember { mutableStateOf(false) }
 
+    // 从内置登录页返回时自动回填抓取到的 Cookie（仅当存储值确实被外部更新）
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var lastStored by remember { mutableStateOf(settings.manmanbuyCookie) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val fetched = settings.manmanbuyCookie
+                if (fetched != lastStored && fetched.isNotBlank()) {
+                    cookie = fetched
+                    lastStored = fetched
+                    saved = true
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = apiKey,
@@ -77,6 +102,18 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
             label = { Text(stringResource(R.string.settings_mmb_cookie)) },
             modifier = Modifier.fillMaxWidth().height(120.dp)
         )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                stringResource(R.string.settings_mmb_login_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = {
+                context.startActivity(Intent(context, ManmanbuyLoginActivity::class.java))
+            }) {
+                Text(stringResource(R.string.settings_mmb_login_btn))
+            }
+        }
         Spacer(Modifier.height(Dims.SpacingS))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Button(

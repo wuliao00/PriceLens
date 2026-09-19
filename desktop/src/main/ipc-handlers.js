@@ -20,6 +20,7 @@ const crawlers = require('./crawlers');
 const CacheManager = require('./cache/manager');
 const storage = require('./cache/storage');
 const scripts = require('./scripts/script-manager');
+const { openLoginWindow } = require('./mmb-login');
 
 /** 各类数据的缓存 TTL（毫秒） */
 const TTL = {
@@ -242,6 +243,16 @@ function registerIpcHandlers({ getMainWindow, logger }) {
     });
     return { ok: true };
   });
+
+  /* 慢慢买内置登录窗：登录成功后自动抓取 Cookie 存入本机 */
+  ipcMain.handle('sys:mmb-login', () => openLoginWindow({
+    getMainWindow,
+    logger,
+    onSaved: (cookie) => storage.updateSettings({ mmb_cookie: cookie.trim().slice(0, 4096) }),
+  }).catch((err) => {
+    logger.warn(`慢慢买登录窗异常: ${err.message}`);
+    return { ok: false, error: '登录窗口异常，请重试' };
+  }));
 
   ipcMain.handle('sys:set-theme', async (_e, pref) => {
     const value = ['light', 'dark', 'system'].includes(pref) ? pref : 'system';

@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('priceLens', {
   sys: {
     getCreds:  ()                    => ipcRenderer.invoke('sys:get-creds'),
     setCreds:  (apikey, cookie)      => ipcRenderer.invoke('sys:set-creds', apikey, cookie),
+    mmbLogin:  ()                    => ipcRenderer.invoke('sys:mmb-login'),
   },
   cache: {
     get:   (k)    => ipcRenderer.invoke('cache:get', k),
