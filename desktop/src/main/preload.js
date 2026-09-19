@@ -32,7 +32,10 @@ contextBridge.exposeInMainWorld('priceLens', {
   getComments:   (q, opts)        => ipcRenderer.invoke('crawl:comments', q, opts),
   getBiliVideos: (kw, opts)       => ipcRenderer.invoke('crawl:bilibili', kw, opts),
 
-  /* ── 缓存 ── */
+  sys: {
+    getCreds:  ()                    => ipcRenderer.invoke('sys:get-creds'),
+    setCreds:  (apikey, cookie)      => ipcRenderer.invoke('sys:set-creds', apikey, cookie),
+  },
   cache: {
     get:   (k)    => ipcRenderer.invoke('cache:get', k),
     set:   (k, v) => ipcRenderer.invoke('cache:set', k, v),

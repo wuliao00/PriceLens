@@ -23,7 +23,9 @@ import javax.inject.Singleton
 @Singleton
 class WatchCheckRunner @Inject constructor(
     private val db: AppDatabase,
-    private val jdApi: JdApi
+    private val jdApi: JdApi,
+    private val linkstarsApi: com.pricelens.data.remote.LinkstarsApi,
+    private val settings: com.pricelens.data.repository.SettingsRepository
 ) {
 
     /**
@@ -63,11 +65,11 @@ class WatchCheckRunner @Inject constructor(
     }
 
     /** 按 platform 分发查价；null = 该平台本轮失败（应重试），空 Map = 暂无查价能力 */
-    private suspend fun fetchPlatformPrices(context: Context, platform: String, targets: List<PriceTargetEntity>): Map<String, Double?>? =
-        when (platform) {
+    private suspend fun fetchPlatformPrices(context: Context, platform: String, targets: List<PriceTargetEntity>): Map<String, Double?>? {
+        val skus = targets.map { it.productId.removePrefix("$platform:") }
+        val base = when (platform) {
             PLATFORM_JD -> runCatching {
-                jdApi.getPrices(targets.map { it.productId.removePrefix("jd:") })
-                    .mapValues { (_, price) -> price.first }
+                jdApi.getPrices(skus).mapValues { (_, price) -> price.first }
             }.onFailure { e ->
                 LogT.w("盯价：京东查价失败：${e.javaClass.simpleName}")
             }.getOrNull()
@@ -76,6 +78,22 @@ class WatchCheckRunner @Inject constructor(
                 emptyMap()
             }
         }
+        if (platform != PLATFORM_JD) return base
+        // 星罗兜底：p.3.cn 整轮失败或缺价 SKU 时，用历史低价榜券后价补
+        val missing = skus.filter { (base?.get(it) ?: 0.0) <= 0 }
+        val apikey = settings.linkstarsApiKey
+        if (missing.isEmpty() || apikey.isBlank()) return base
+        val extra = mutableMapOf<String, Double?>()
+        for (sku in missing) {
+            val deal = runCatching { linkstarsApi.lookupSku(sku, apikey) }.getOrNull()
+            if (deal != null && deal.couponPrice > 0) extra[sku] = deal.couponPrice
+        }
+        return when {
+            base == null && extra.isNotEmpty() -> extra
+            base != null -> base + extra
+            else -> null // p.3.cn 失败且星罗无补 → 整轮重试
+        }
+    }
 
     private fun sendNotification(context: Context, target: PriceTargetEntity, current: Double) {
         if (ContextCompat.checkSelfPermission(

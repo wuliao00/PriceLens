@@ -47,6 +47,8 @@ class PriceRepository @Inject constructor(
     private val smzdmApi: SmzdmApi,
     private val dangdangApi: DangdangApi,
     private val shihuoApi: ShihuoApi,
+    private val linkstarsApi: com.pricelens.data.remote.LinkstarsApi,
+    private val settingsRepository: SettingsRepository,
     private val health: SourceHealth,
     private val hub: RevalidateHub,
     private val applicationScope: CoroutineScope
@@ -82,8 +84,50 @@ class PriceRepository @Inject constructor(
         ttlMs = CacheTTL.PRICE_HISTORY,
         codec = HistoryCodec,
         source = SOURCE_MMB,
-        fetch = { manmanbuyApi.getHistory(productUrl) }
+        fetch = { buildHistory(productUrl) }
     ).get()
+
+    /**
+     * 三源合并（2026-09 慢慢买公开接口下线）：
+     *  1. 慢慢买：公开 JSON + 用户自填 Cookie 的 SSR 通道
+     *  2. 自建曲线：Room price_history 每日采样点
+     *  3. 星罗好货：按京东 SKU 在历史低价榜命中时补今日参考点
+     * 任一有数据即返回，并把结果写回自建曲线库。
+     */
+    private suspend fun buildHistory(productUrl: String): ManmanbuyApi.History? {
+        val sku = Regex("item(?:\\.m)?\\.jd\\.com/(?:product/)?(\\d{6,})").find(productUrl)?.groupValues?.get(1)
+        val cookie = settingsRepository.manmanbuyCookie.ifBlank { null }
+        val mmb = runCatching { manmanbuyApi.getHistory(productUrl, cookie) }.getOrNull()
+
+        val points = mutableListOf<ManmanbuyApi.PricePoint>()
+        mmb?.points?.let { points += it }
+        if (points.isEmpty() && sku != null) {
+            points += db.priceHistoryDao.getByProduct("jd:$sku")
+                .map { ManmanbuyApi.PricePoint(it.date, it.price) }
+        }
+        if (sku != null && settingsRepository.linkstarsApiKey.isNotBlank()) {
+            val deal = runCatching {
+                linkstarsApi.lookupSku(sku, settingsRepository.linkstarsApiKey)
+            }.getOrNull()
+            if (deal != null && deal.couponPrice > 0) {
+                val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                    .format(java.util.Date())
+                if (points.none { it.date == today }) points += ManmanbuyApi.PricePoint(today, deal.couponPrice)
+            }
+        }
+        if (points.isEmpty()) return null
+        val merged = points.sortedBy { it.date }
+        val prices = merged.map { it.price }
+        val history = ManmanbuyApi.History(
+            current = prices.last(),
+            lowest = minOf(mmb?.lowest ?: prices.min(), prices.min()),
+            highest = maxOf(mmb?.highest ?: prices.max(), prices.max()),
+            points = merged
+        )
+        // 自建曲线积累：每次成功取数都落库（每天 1 点，Room 侧按日 REPLACE）
+        if (sku != null) runCatching { persistHistory("jd:$sku", history) }
+        return history
+    }
 
     // ---------- B站 / 优惠券 / 值得买 / 当当 / 识货（L1 → L2 → L3） ----------
 

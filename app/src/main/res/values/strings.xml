@@ -92,6 +92,11 @@
     <string name="watch_status_channel">盯价常驻</string>
     <string name="watch_notification_running">盯价运行中 · %1$d 个目标 · 上次检查 %2$s</string>
     <string name="watch_notification_desc">每 30 分钟自动检查价格，达标即提醒</string>
+    <string name="settings_section_credentials">数据源凭证（可选）</string>
+    <string name="settings_linkstars_key">星罗好货 apikey · 历史低价参考与盯价兜底</string>
+    <string name="settings_mmb_cookie">慢慢买 Cookie · 完整历史价格曲线</string>
+    <string name="settings_credentials_save">保存</string>
+    <string name="settings_credentials_saved">已保存 · 凭证仅存本机</string>
 
     <!-- 找券页 -->
     <string name="coupon_empty_hint">搜索后聚合购物党 / 京东联盟优惠券</string>

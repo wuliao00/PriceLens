@@ -32,6 +32,9 @@ const TTL = {
 
 const WATCH_INTERVAL_MS = 30 * 60 * 1000; // 盯价轮询：30 分钟
 
+/** 自建历史曲线本地采样库的 TTL（400 天，覆盖一年周期） */
+const LOCAL_CURVE_TTL = 400 * 24 * 3600 * 1000;
+
 /**
  * @param {object} deps
  * @param {() => BrowserWindow|null} deps.getMainWindow
@@ -125,9 +128,16 @@ function registerIpcHandlers({ getMainWindow, logger }) {
   ipcMain.handle('crawl:history', async (_e, url, opts) => {
     const target = validUrl(url);
     if (!target) return { ok: false, error: '无效的商品链接' };
+    const creds = storage.getSettings();
+    const localKey = `history-local:${target}`;
     return guard('crawl:history', () =>
       cached(`history:${target}`, TTL.history,
-        () => crawlers.getHistory(target), opts || {}));
+        () => crawlers.getHistoryMerged(target, {
+          apikey: creds.linkstars_apikey,
+          cookie: creds.mmb_cookie,
+          readLocal: async () => ((await cache.get(localKey)) || {}).data?.points || [],
+          writeLocal: async (points) => { await cache.set(localKey, { points }, LOCAL_CURVE_TTL); },
+        }), opts || {}));
   });
 
   ipcMain.handle('crawl:coupons', async (_e, url, keyword, opts) => {
@@ -217,6 +227,21 @@ function registerIpcHandlers({ getMainWindow, logger }) {
     pref: storage.getSettings().theme,
     effective: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
   }));
+
+  /* 数据源凭证（均可选，仅存本机 settings.json） */
+  ipcMain.handle('sys:get-creds', () => {
+    const s = storage.getSettings();
+    return { ok: true, apikey: s.linkstars_apikey || '', cookie: s.mmb_cookie || '' };
+  });
+
+  ipcMain.handle('sys:set-creds', (_e, apikey, cookie) => {
+    const clean = (v) => (typeof v === 'string' ? v.trim().slice(0, 4096) : '');
+    storage.updateSettings({
+      linkstars_apikey: clean(apikey),
+      mmb_cookie: clean(cookie),
+    });
+    return { ok: true };
+  });
 
   ipcMain.handle('sys:set-theme', async (_e, pref) => {
     const value = ['light', 'dark', 'system'].includes(pref) ? pref : 'system';

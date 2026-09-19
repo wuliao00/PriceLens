@@ -40,4 +40,20 @@ class SettingsRepository @Inject constructor(
     fun setDisclaimerAgreed(agreed: Boolean) {
         prefs.edit().putBoolean("disclaimer_agreed", agreed).apply()
     }
+
+    /** 星罗好货开放平台 apikey（可选：历史低价参考 + 盯价兜底） */
+    val linkstarsApiKey: String
+        get() = prefs.getString("linkstars_apikey", "").orEmpty()
+
+    fun setLinkstarsApiKey(value: String) {
+        prefs.edit().putString("linkstars_apikey", value.trim()).apply()
+    }
+
+    /** 慢慢买登录 Cookie（可选：自填后尝试拉取完整历史价格曲线） */
+    val manmanbuyCookie: String
+        get() = prefs.getString("mmb_cookie", "").orEmpty()
+
+    fun setManmanbuyCookie(value: String) {
+        prefs.edit().putString("mmb_cookie", value.trim()).apply()
+    }
 }

@@ -20,6 +20,8 @@ const { app } = require('electron');
 const DEFAULT_SETTINGS = {
   theme: 'system',        // 'light' | 'dark' | 'system'
   watch: null,            // { keyword, url, target, notified, current, since }
+  linkstars_apikey: '',   // 星罗好货开放平台 apikey（历史低价参考）
+  mmb_cookie: '',         // 慢慢买登录 Cookie（完整历史曲线）
 };
 
 let settings = { ...DEFAULT_SETTINGS };

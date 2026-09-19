@@ -82,6 +82,7 @@ fun SettingsScreen(settings: SettingsRepository, onBack: () -> Unit) {
                 onRefresh = { profileViewModel.refreshCacheStats() },
                 onClear = { profileViewModel.clearCache() }
             )
+            CredentialsSection(settings)
             AboutSection(BuildConfig.VERSION_NAME)
 
             Spacer(Modifier.height(Dims.SpacingS))

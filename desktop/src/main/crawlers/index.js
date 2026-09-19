@@ -12,6 +12,7 @@ const smzdm = require('./smzdm');
 const manmanbuy = require('./manmanbuy');
 const gwdang = require('./gwdang');
 const jd = require('./jd');
+const linkstars = require('./linkstars');
 
 /**
  * 输入类型识别。
@@ -117,12 +118,65 @@ async function searchProducts(q) {
   };
 }
 
+/**
+ * 历史价格三源合并（与 Android PriceRepository.buildHistory 对齐）：
+ *  1. 慢慢买：公开 JSON + 用户自填 Cookie 的 SSR 通道
+ *  2. 自建曲线：本地累积的每日采样点（readLocal/writeLocal 由 ipc 注入）
+ *  3. 星罗好货：京东 SKU 命中历史低价榜时补今日参考点
+ * @param {string} url 商品链接
+ * @param {{apikey?:string, cookie?:string,
+ *   readLocal?: () => Promise<Array<{date:string,price:number}>>,
+ *   writeLocal?: (points:Array<{date:string,price:number}>) => Promise<void>}} creds
+ */
+async function getHistoryMerged(url, creds = {}) {
+  const skuMatch = String(url || '').match(/item(?:\.m)?\.jd\.com\/(?:product\/)?(\d{6,})/i);
+  const sku = skuMatch ? skuMatch[1] : null;
+
+  let base = null;
+  let baseErr = null;
+  try {
+    base = await manmanbuy.getHistory(url, creds.cookie);
+  } catch (err) { baseErr = err; }
+
+  let points = base ? base.points.slice() : [];
+  if (points.length === 0 && creds.readLocal) {
+    points = (await creds.readLocal().catch(() => [])) || [];
+  }
+  if (sku && creds.apikey) {
+    const deal = await linkstars.lookupSku(sku, creds.apikey).catch(() => null);
+    if (deal && deal.couponPrice > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (!points.some((p) => p.date === today)) {
+        points = points.concat([{ date: today, price: deal.couponPrice }]).sort((a, b) => a.date.localeCompare(b.date));
+      }
+    }
+  }
+  if (points.length === 0) {
+    throw baseErr || new Error('暂无该商品的历史价格数据');
+  }
+
+  const prices = points.map((p) => p.price);
+  const merged = {
+    current: base ? base.current : prices[prices.length - 1],
+    lowest: Math.min(base ? base.lowest : Infinity, ...prices),
+    highest: Math.max(base ? base.highest : 0, ...prices),
+    points,
+    dateFrom: points[0].date,
+    dateTo: points[points.length - 1].date,
+    source: base ? base.source : 'local',
+    fetchedAt: Date.now(),
+  };
+  if (creds.writeLocal) await creds.writeLocal(points).catch(() => {});
+  return merged;
+}
+
 module.exports = {
   parseInput,
   searchProducts,
   getBiliVideos: (kw) => bilibili.searchVideos(kw),
   getHistory: (url) => manmanbuy.getHistory(url),
+  getHistoryMerged,
   getCoupons: (url, keyword) => gwdang.getCoupons(url, keyword),
   getCommunity: (q) => smzdm.getCommunity(q),
-  crawlers: { bilibili, smzdm, manmanbuy, gwdang, jd },
+  crawlers: { bilibili, smzdm, manmanbuy, gwdang, jd, linkstars },
 };

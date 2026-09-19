@@ -60,52 +60,75 @@ function extractTimeline(data) {
  * @returns {Promise<{current:number, lowest:number, highest:number,
  *   points:Array<{date:string,price:number}>, dateFrom:string, dateTo:string, source:string}>}
  */
-async function getHistory(url) {
-  const res = await http.postJSON(
-    'https://apapia-history.manmanbuy.com/HistoryLowest.ashx',
-    { methodName: 'getHistoryTrend', p_url: url },
-    {
-      mobileUA: true,
-      headers: {
-        'Content-Type': 'application/json;charset=UTF-8',
-        Referer: 'https://tool.manmanbuy.com/',
-        Origin: 'https://tool.manmanbuy.com',
-      },
-    },
-  );
-
-  if (res.status === 404 || !String(res.body).trim().startsWith('{')) {
-    // 2026-09 实测：apapia-history 公开接口已下线（返回 ASP.NET 404 页），
-    // 新接口需登录票据；在接入替代源（星罗好货开放平台等）前给出准确原因
-    throw new Error('慢慢买公开接口已下线，历史价格暂不可用（待接入新数据源）');
-  }
-  if (res.status !== 200) throw new Error(`慢慢买接口返回 ${res.status}`);
-  let data;
+async function getHistory(url, cookie) {
+  let points = [];
+  let data = null;
   try {
-    data = JSON.parse(res.body);
-  } catch {
-    throw new Error('慢慢买接口响应解析失败');
+    const res = await http.postJSON(
+      'https://apapia-history.manmanbuy.com/HistoryLowest.ashx',
+      { methodName: 'getHistoryTrend', p_url: url },
+      {
+        mobileUA: true,
+        headers: {
+          'Content-Type': 'application/json;charset=UTF-8',
+          Referer: 'https://tool.manmanbuy.com/',
+          Origin: 'https://tool.manmanbuy.com',
+        },
+      },
+    );
+    if (res.status === 200 && String(res.body).trim().startsWith('{')) {
+      data = JSON.parse(res.body);
+      points = extractTimeline(data).points;
+    }
+  } catch { /* 公开 JSON 接口 2026-09 起下线：静默降级到 Cookie SSR */ }
+
+  // 用户自填登录 Cookie → 移动端 SSR 页内嵌 flot 曲线
+  if (points.length === 0 && cookie) {
+    points = await getHistoryViaCookie(url, cookie);
+  }
+  if (points.length === 0 && !data) {
+    throw new Error('慢慢买公开接口已下线，历史价格暂不可用（可在设置填入慢慢买 Cookie 或星罗 apikey）');
   }
 
-  const { points, lowest, highest } = extractTimeline(data);
-  const current = Number(data.currentPrice)
-    || Number(data.price)
-    || (points.length ? points[points.length - 1].price : 0);
-
-  if (!(current > 0) && points.length === 0) {
+  const prices = points.map((p) => p.price);
+  const current = Number(data && (data.currentPrice || data.price))
+    || (prices.length ? prices[prices.length - 1] : 0);
+  if (!(current > 0) && prices.length === 0) {
     throw new Error('慢慢买未收录该商品的历史价格');
   }
 
   return {
     current,
-    lowest: Number(data.lowerPrice) || lowest,
-    highest: Number(data.higherPrice) || highest,
+    lowest: Number(data && data.lowerPrice) || (prices.length ? Math.min(...prices) : 0),
+    highest: Number(data && data.higherPrice) || (prices.length ? Math.max(...prices) : 0),
     points,
     dateFrom: points.length ? points[0].date : '',
     dateTo: points.length ? points[points.length - 1].date : '',
     source: 'manmanbuy',
     fetchedAt: Date.now(),
   };
+}
+
+/** 移动端历史价页 SSR：解析内嵌 flot 序列 [Date.UTC(y,m,d),price] */
+async function getHistoryViaCookie(url, cookie) {
+  try {
+    const html = await http.getText(
+      `https://tool.manmanbuy.com/m/history.aspx?type=history_mobile_tool&url=${encodeURIComponent(url)}`,
+      { headers: { Referer: 'https://tool.manmanbuy.com/HistoryLowest.aspx', Cookie: cookie } },
+    );
+    const points = [];
+    const re = /\[Date\.UTC\((\d+),(\d+),(\d+)\),(\d+(?:\.\d+)?)\]/g;
+    let m;
+    while ((m = re.exec(html)) !== null) {
+      const price = Number(m[4]);
+      if (!(price > 0)) continue;
+      const date = `${m[1]}-${String(Number(m[2]) + 1).padStart(2, '0')}-${m[3]}`;
+      if (!points.length || points[points.length - 1].date !== date) points.push({ date, price });
+    }
+    return points;
+  } catch {
+    return [];
+  }
 }
 
 module.exports = { getHistory };
