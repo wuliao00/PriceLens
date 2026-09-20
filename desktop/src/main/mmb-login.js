@@ -56,6 +56,38 @@ const INJECT_JS = `(function () {
   document.documentElement.appendChild(b);
 })();`;
 
+// 站点输入框用 value 当占位符，粘贴/自动填充不会触发 onclick，导致「占位符+号码」混在一起、
+// 长度校验永远失败（注册页弹「手机号码输入有误」）。注入清洗脚本规避。
+const FORM_FIX_JS = `(function () {
+  var MOBILE_ID = 'ctl00_CPBODY_txtmobile';
+  function normalize(el) {
+    var v = el.value;
+    if (!v) return;
+    var dv = el.defaultValue || '';
+    if (dv && v !== dv && v.indexOf(dv) === 0) v = v.slice(dv.length);
+    if (el.id === MOBILE_ID) {
+      var d = v.replace(/\\D/g, '');
+      if (d.length > 11) d = d.slice(d.length - 11);
+      v = d;
+    }
+    if (v !== el.value) el.value = v;
+  }
+  function patch(el) {
+    if (el.__plFixed) return;
+    el.__plFixed = 1;
+    el.addEventListener('input', function () { normalize(el); }, true);
+  }
+  function scan() {
+    var list = document.getElementsByTagName('input');
+    for (var i = 0; i < list.length; i++) {
+      var t = (list[i].type || 'text').toLowerCase();
+      if (t === 'text' || t === 'tel' || t === 'number' || t === 'password') patch(list[i]);
+    }
+  }
+  scan();
+  document.addEventListener('focusin', scan, true);
+})();`;
+
 /**
  * @param {{ getMainWindow: () => BrowserWindow|null, logger: object, onSaved: (cookie: string) => void }} deps
  * @returns {Promise<{ok: boolean, count?: number, error?: string}>}
@@ -138,6 +170,7 @@ function openLoginWindow({ getMainWindow, logger, onSaved }) {
     win.webContents.on('did-finish-load', () => {
       if (win.isDestroyed()) return;
       if (isManmanbuy(win.webContents.getURL())) {
+        win.webContents.executeJavaScript(FORM_FIX_JS).catch(() => {});
         win.webContents.executeJavaScript(INJECT_JS).catch(() => {});
       }
     });

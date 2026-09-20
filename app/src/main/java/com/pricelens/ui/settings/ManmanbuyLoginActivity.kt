@@ -43,6 +43,10 @@ class ManmanbuyLoginActivity : ComponentActivity() {
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean = url == null || !isManmanbuy(url)
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    view?.evaluateJavascript(FORM_FIX_JS, null)
+                }
             }
         }
         CookieManager.getInstance().setAcceptCookie(true)
@@ -110,6 +114,44 @@ class ManmanbuyLoginActivity : ComponentActivity() {
 
     companion object {
         private const val LOGIN_URL = "https://m.manmanbuy.com/login.aspx"
+
+        /**
+         * 慢慢买登录/注册页用 value 当占位符（如「请输入手机号」），只有 onclick 才清空。
+         * 长按粘贴、输入法自动带出号码等场景不会触发 onclick，导致值变成「占位符+号码」，
+         * 站点校验 val().length != 11 永远失败 → 弹「手机号码输入有误」。
+         * 这里在 input 事件上剥离残留占位符，并把手机号规整为 11 位纯数字。
+         */
+        private const val FORM_FIX_JS = """
+(function () {
+  var MOBILE_ID = 'ctl00_CPBODY_txtmobile';
+  function normalize(el) {
+    var v = el.value;
+    if (!v) return;
+    var dv = el.defaultValue || '';
+    if (dv && v !== dv && v.indexOf(dv) === 0) v = v.slice(dv.length);
+    if (el.id === MOBILE_ID) {
+      var d = v.replace(/\D/g, '');
+      if (d.length > 11) d = d.slice(d.length - 11);
+      v = d;
+    }
+    if (v !== el.value) el.value = v;
+  }
+  function patch(el) {
+    if (el.__plFixed) return;
+    el.__plFixed = 1;
+    el.addEventListener('input', function () { normalize(el); }, true);
+  }
+  function scan() {
+    var list = document.getElementsByTagName('input');
+    for (var i = 0; i < list.length; i++) {
+      var t = (list[i].type || 'text').toLowerCase();
+      if (t === 'text' || t === 'tel' || t === 'number' || t === 'password') patch(list[i]);
+    }
+  }
+  scan();
+  document.addEventListener('focusin', scan, true);
+})();
+"""
 
         private fun isManmanbuy(rawUrl: String): Boolean = try {
             val host = URI(rawUrl).host?.lowercase() ?: return false
