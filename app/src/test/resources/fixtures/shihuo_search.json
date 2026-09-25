@@ -1,0 +1,60 @@
+{
+  "status": 0,
+  "msg": "ok",
+  "data": {
+    "num": 4,
+    "list": [
+      {
+        "goods_id": 7929848,
+        "title": "苹果 iPhone17 Pro 5G 手机 航空级铝合金材质 全新散热系统 7层抗指纹涂层 4800万像素融合式全焦段",
+        "price": "7499",
+        "img": "https://img.shihuo.cn/upload/goods/7929848.jpg",
+        "brand_name": "Apple/苹果",
+        "sales_info": "3.44w人付款",
+        "labels": [
+          {
+            "type": "PUBLIC_SUBSIDIES"
+          },
+          {
+            "type": "GOODS_HOT"
+          }
+        ]
+      },
+      {
+        "goods_id": 7712345,
+        "title": "苹果 iPhone 15 5G 手机 6.1英寸 双卡双待 128GB 蓝色",
+        "price": "4399",
+        "img": "https://img.shihuo.cn/upload/goods/7712345.jpg",
+        "brand_name": "Apple/苹果",
+        "sales_info": "5.2w人付款",
+        "labels": [
+          {
+            "type": "GOODS_HOT"
+          }
+        ]
+      },
+      {
+        "goods_id": 134,
+        "title": "Nike Air Force 1 空军一号 板鞋 轻便舒适百搭耐磨防滑复古 White 白",
+        "price": "482",
+        "img": "//img.shihuo.cn/upload/goods/134.jpg",
+        "brand_name": "Nike/耐克",
+        "sales_info": "70.01w人付款",
+        "labels": [
+          {
+            "type": "GOODS_HOT"
+          }
+        ]
+      },
+      {
+        "goods_id": 7850001,
+        "title": "适用 iPhone 15 手机壳 磁吸透明保护套 防摔",
+        "price": "29.9",
+        "img": "//img.shihuo.cn/upload/goods/7850001.jpg",
+        "brand_name": "第三方",
+        "sales_info": "1024人付款",
+        "labels": []
+      }
+    ]
+  }
+}

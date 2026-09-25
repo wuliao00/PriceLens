@@ -1,22 +1,21 @@
 package com.pricelens.data.remote
 
+import com.pricelens.util.LogT
+import com.pricelens.util.QueryRelevance
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * §6.4 什么值得买：search.smzdm.com SSR 页解析（与桌面版同选择器、同兜底策略）。
- * 关键词搜索时，第一条带价格的爆料会被用作商品候选（桌面版 searchProducts 同款流程）。
+ * 关键词搜索时，第一条带价格且与关键词相关的爆料会被用作商品候选
+ * （桌面版 searchProducts 同款流程 + 同款相关性过滤）。
+ *
+ * 2026-09 修复（接口内容不准确）：站点按"热度"排序时会混入配件（镜头膜/数据线）
+ * 与其它品牌爆料，旧实现取第一条带价条目会得到无关商品；现解析后统一过
+ * [QueryRelevance]，并在结果被全部过滤时记录日志。
  */
 @Singleton
 class SmzdmApi @Inject constructor(private val client: ApiClient) {
-
-    /**
-     * smzdm 前置瑞数动态 WAF：浏览器 UA 拿到 202 + probe.js 挑战页；
-     * Googlebot UA 被放行返回完整 SSR（2026-09 实测，与桌面端一致）。
-     */
-    private companion object {
-        const val BOT_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
-    }
 
     data class SmzdmPost(
         val title: String,
@@ -33,47 +32,64 @@ class SmzdmApi @Inject constructor(private val client: ApiClient) {
             java.net.URLEncoder.encode(keyword, "UTF-8") + "&v=a&order=score"
         val html = client.getHtml(url, referer = "https://www.smzdm.com/", userAgent = BOT_UA)
             ?: return emptyList()
-        val doc = org.jsoup.Jsoup.parse(html)
-
-        val posts = mutableListOf<SmzdmPost>()
-        // 列表结构随版本变动，多组选择器兜底（与桌面版一致）
-        val items = doc.select(
-            "#feed-main-list .feed-row-wide, #feed-main-list li, .list-man .feed-row-wide"
-        )
-        for (item in items) {
-            val linkEl = item.selectFirst("h5 a, .feed-block-title a") ?: continue
-            val rawUrl = linkEl.attr("href")
-            if (rawUrl.isEmpty()) continue
-            val title = linkEl.text().replace(Regex("\\s+"), " ").trim()
-            if (title.isEmpty()) continue
-
-            // 标题节点内常含价格高亮 span；有则用之，无则从标题文本提取（"5999元"）
-            val priceEl = item.selectFirst(".z-highlight, .feed-block-title .z-highlight")
-            val price = priceEl?.text()?.replace(Regex("[^\\d.]"), "")?.toDoubleOrNull()
-                ?: extractPrice(title)
-
-            val img = item.selectFirst("img")
-            val image = (img?.attr("data-src")?.ifEmpty { img.attr("src") } ?: "")
-                .replace(Regex("^//"), "https://")
-            val mall = (item.selectFirst(".feed-block-info a.z-highlight, .feed-block-extras span")
-                ?.text()?.trim() ?: "").ifEmpty { "未知渠道" }
-
-            posts += SmzdmPost(
-                title = title.take(60),
-                price = price,
-                url = if (rawUrl.startsWith("//")) "https:$rawUrl" else rawUrl,
-                image = image,
-                mall = mall ?: "未知渠道"
-            )
-            if (posts.size >= 10) break
+        val all = parseSearchPage(html)
+        val relevant = all.filter { QueryRelevance.isRelevant(keyword, it.title) }
+        if (all.isNotEmpty() && relevant.isEmpty()) {
+            LogT.w("值得买 ${all.size} 条全部判定为不相关: [$keyword]")
         }
-        return posts
+        return relevant
     }
 
-    /** "iPhone 16 128g 5999元" → 5999（与桌面版 extractPrice 同规则） */
-    private fun extractPrice(text: String): Double? {
-        val m = Regex("(?:¥|￥|\\s)(\\d{2,6}(?:\\.\\d{1,2})?)(?:元|\\b)").find(text)
-            ?: return null
-        return m.groupValues[1].toDoubleOrNull()
+    companion object {
+        /**
+         * smzdm 前置瑞数动态 WAF：浏览器 UA 拿到 202 + probe.js 挑战页；
+         * Googlebot UA 被放行返回完整 SSR（2026-09 实测，与桌面端一致）。
+         */
+        const val BOT_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+
+        /** 纯解析（无网络），供单测用固定页面快照验证选择器有效性 */
+        fun parseSearchPage(html: String): List<SmzdmPost> {
+            val doc = org.jsoup.Jsoup.parse(html)
+            val posts = mutableListOf<SmzdmPost>()
+            // 列表结构随版本变动，多组选择器兜底（与桌面版一致）
+            val items = doc.select(
+                "#feed-main-list .feed-row-wide, #feed-main-list li, .list-man .feed-row-wide"
+            )
+            for (item in items) {
+                val linkEl = item.selectFirst("h5 a, .feed-block-title a") ?: continue
+                val rawUrl = linkEl.attr("href")
+                if (rawUrl.isEmpty()) continue
+                val title = linkEl.text().replace(Regex("\\s+"), " ").trim()
+                if (title.isEmpty()) continue
+
+                // 标题节点内常含价格高亮 span；有则用之，无则从标题文本提取（"5999元"）
+                val priceEl = item.selectFirst(".z-highlight, .feed-block-title .z-highlight")
+                val price = priceEl?.text()?.replace(Regex("[^\\d.]"), "")?.toDoubleOrNull()
+                    ?: extractPrice(title)
+
+                val img = item.selectFirst("img")
+                val image = (img?.attr("data-src")?.ifEmpty { img.attr("src") } ?: "")
+                    .replace(Regex("^//"), "https://")
+                val mall = (item.selectFirst(".feed-block-info a.z-highlight, .feed-block-extras span")
+                    ?.text()?.trim() ?: "").ifEmpty { "未知渠道" }
+
+                posts += SmzdmPost(
+                    title = title.take(60),
+                    price = price,
+                    url = if (rawUrl.startsWith("//")) "https:$rawUrl" else rawUrl,
+                    image = image,
+                    mall = mall
+                )
+                if (posts.size >= 10) break
+            }
+            return posts
+        }
+
+        /** "iPhone 16 128g 5999元" → 5999（与桌面版 extractPrice 同规则） */
+        private fun extractPrice(text: String): Double? {
+            val m = Regex("(?:¥|￥|\\s)(\\d{2,6}(?:\\.\\d{1,2})?)(?:元|\\b)").find(text)
+                ?: return null
+            return m.groupValues[1].toDoubleOrNull()
+        }
     }
 }

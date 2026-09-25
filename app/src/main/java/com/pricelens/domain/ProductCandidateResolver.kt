@@ -106,8 +106,19 @@ class ProductCandidateResolver @Inject constructor(
         _candidate.value = AsyncValue.Success(ProductCandidate.fromShihuo(sh))
     }
 
-    /** 京东 SKU 直查命中：覆盖候选（真实商品优先于占位） */
+    /**
+     * 京东 SKU 直查命中：覆盖候选（真实商品优先于占位）。
+     *
+     * 2026-09：京东公开查价通道（p.3.cn）已不可达，直查结果可能只有标题/主图、
+     * price = 0。此时若已有带价格的候选（如无障碍实时价占位），保留原价格候选，
+     * 避免用"无价"覆盖"真实价"；无任何候选时才用京东结果占位。
+     */
     fun fillFromJd(product: JdApi.JdProduct) {
+        val existing = (_candidate.value as? AsyncValue.Success)?.data
+        if (product.price <= 0 && existing != null && existing.price > 0) {
+            LogT.i("京东直查无价格，保留现有候选价格 ${existing.price}（标题: ${product.title.take(20)}）")
+            return
+        }
         _candidate.value = AsyncValue.Success(ProductCandidate.fromJd(product))
     }
 

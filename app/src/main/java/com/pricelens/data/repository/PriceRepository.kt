@@ -69,7 +69,10 @@ class PriceRepository @Inject constructor(
         codec = JdProductCodec, source = SOURCE_JD,
         fetch = { singleflight("jd:product:$skuId") { jdApi.getProduct(skuId) } },
         l2Load = {
+            // 2026-09 数据源准确性修复：旧版本可能把风控页标题（"京东验证"）写进 Room。
+            // 早于修复时刻写入的 JD 商品行不再复用（收藏标记保留，重新拉取会覆盖旧内容）。
             db.productDao().getById("jd:$skuId")
+                ?.takeIf { e -> e.cachedAt >= JD_PRODUCT_CACHE_FLOOR }
                 ?.let { e -> JdProductCodec.fromEntity(e) to e.cachedAt }
         },
         l2Save = { p -> db.productDao().upsert(productEntity(skuId, p)) },
@@ -311,5 +314,11 @@ class PriceRepository @Inject constructor(
         const val SOURCE_SMZDM = "smz"
         const val SOURCE_DD = "dd"
         const val SOURCE_SH = "sh"
+
+        /**
+         * JD 商品 Room 行的最短可信写入时间（2026-09-26 00:00 +08:00）。
+         * 数据源准确性修复（m 站标题解析 / 查价如实降级）之前的行可能含风控页标题，不再复用。
+         */
+        const val JD_PRODUCT_CACHE_FLOOR = 1_790_352_000_000L
     }
 }

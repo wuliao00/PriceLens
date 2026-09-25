@@ -13,6 +13,7 @@
 const cheerio = require('cheerio');
 const http = require('../utils/http-client');
 const { stripTags } = require('../utils/sanitizer');
+const { isRelevant } = require('../utils/relevance');
 
 /**
  * smzdm 前置瑞数(Ruishu)动态 WAF：浏览器 UA 拿到的是 202 + probe.js 挑战页；
@@ -91,7 +92,13 @@ async function searchDeals(q) {
   if (deals.length === 0) {
     throw new Error('什么值得买搜索结果解析失败（页面结构可能已变更）');
   }
-  return { deals: deals.slice(0, 10) };
+  // 2026-09 修复（接口内容不准确）：站点按热度排序会混入配件/其它品牌/其它机型，
+  // 旧实现取第一条带价条目当商品候选会得到无关商品 → 统一过相关性过滤。
+  const relevant = deals.filter((d) => isRelevant(q, d.title));
+  if (relevant.length === 0 && deals.length > 0) {
+    console.warn(`[smzdm] ${deals.length} 条结果全部与关键词不相关: ${q}`);
+  }
+  return { deals: relevant.slice(0, 10) };
 }
 
 /**

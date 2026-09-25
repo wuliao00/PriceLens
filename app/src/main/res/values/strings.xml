@@ -67,6 +67,7 @@
     <string name="overview_advice_suspicious">观望</string>
     <string name="overview_advice_normal">常态</string>
     <string name="overview_no_data">—</string>
+    <string name="overview_price_unavailable">京东公开查价暂不可用，价格请在京东 App 查看</string>
 
     <!-- B站页 -->
     <string name="bili_empty_hint">搜索后聚合 B 站真实评测</string>
@@ -105,7 +106,8 @@
     <string name="settings_mmb_login_empty">未抓到 Cookie，请先在页面内完成登录</string>
 
     <!-- 找券页 -->
-    <string name="coupon_empty_hint">搜索后聚合购物党 / 京东联盟优惠券</string>
+    <string name="coupon_empty_title">未发现优惠券</string>
+    <string name="coupon_empty_hint">聚合什么值得买优惠券频道；仅展示爆料中明确写出的券（不做价差推算）</string>
     <string name="coupon_net_price">到手价</string>
     <string name="coupon_copied">已复制券码</string>
     <string name="coupon_threshold">满 %1$d 可用</string>

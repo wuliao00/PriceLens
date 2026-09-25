@@ -58,6 +58,11 @@ export function renderProductHeader(container, { product, history, onOpenUrl }) 
       style: { alignSelf: 'center' },
     }));
   }
+  // 2026-09：京东公开查价通道（p.3.cn）不可达时如实提示，避免只有"--"没有原因
+  const priceUnavailable = !(current > 0);
+  const priceNote = priceUnavailable
+    ? el('div', { class: 'product-price-note', text: '京东公开查价暂不可用，价格请在京东 App 查看' })
+    : null;
 
   const header = el('div', { class: 'card product-header' },
     el('img', {
@@ -69,6 +74,7 @@ export function renderProductHeader(container, { product, history, onOpenUrl }) 
     el('div', { class: 'product-info' },
       el('h2', { class: 'product-title clamp-2', text: product.title || '未识别到商品' }),
       priceRow,
+      priceNote,
       el('div', { class: 'product-meta' },
         product.mall ? el('span', { class: 'tag tag--accent', text: product.mall }) : null,
         updated ? el('span', { text: updated }) : null,

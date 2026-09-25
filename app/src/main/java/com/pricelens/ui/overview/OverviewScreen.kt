@@ -172,16 +172,25 @@ private fun ProductHeader(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(Dims.SpacingS))
-                PriceRow(
-                    current = product.price,
-                    original = product.originalPrice,
-                    badge = judgment.label.takeIf { history != null },
-                    badgeTone = when (judgment) {
-                        is PriceJudgment.LOW -> BadgeTone.POSITIVE
-                        is PriceJudgment.SUSPICIOUS -> BadgeTone.NEGATIVE
-                        else -> BadgeTone.NEUTRAL
-                    }
-                )
+                if (product.price > 0) {
+                    PriceRow(
+                        current = product.price,
+                        original = product.originalPrice,
+                        badge = judgment.label.takeIf { history != null },
+                        badgeTone = when (judgment) {
+                            is PriceJudgment.LOW -> BadgeTone.POSITIVE
+                            is PriceJudgment.SUSPICIOUS -> BadgeTone.NEGATIVE
+                            else -> BadgeTone.NEUTRAL
+                        }
+                    )
+                } else {
+                    // 2026-09：京东公开查价通道不可达时的如实提示，避免展示 ¥0 误导
+                    Text(
+                        stringResource(R.string.overview_price_unavailable),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
         // 本机账号实时价（无障碍读取的价格，即用户登录账号看到的价格）

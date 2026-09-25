@@ -82,9 +82,13 @@ fun CouponScreen(searchViewModel: SearchViewModel) {
             }
         }
         coupons.isEmpty() -> {
+            // 搜索后也可能"确实没有券"（券源只展示显式券文案，不做价差反推）
+            val searched = searchViewModel.keyword.collectAsStateWithLifecycle().value.isNotBlank()
             EmptyState(
                 icon = Icons.Filled.ConfirmationNumber,
-                title = stringResource(R.string.empty_search_first),
+                title = stringResource(
+                    if (searched) R.string.coupon_empty_title else R.string.empty_search_first
+                ),
                 desc = stringResource(R.string.coupon_empty_hint),
                 modifier = Modifier.padding(Dims.SpacingXL)
             )
