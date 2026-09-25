@@ -105,9 +105,23 @@ fun CouponScreen(searchViewModel: SearchViewModel) {
             contentPadding = PaddingValues(Dims.SpacingXL),
             modifier = Modifier.weight(1f)
         ) {
-            item(key = "net_price") {
-                NetPriceHeader(netPrice)
-                Spacer(Modifier.height(Dims.SpacingL))
+            // 委托属性无法智能转换，先取本地值（同时避免 !!）
+            val applicableNet = netPrice
+            if (applicableNet != null) {
+                item(key = "net_price") {
+                    NetPriceHeader(applicableNet)
+                    Spacer(Modifier.height(Dims.SpacingL))
+                }
+            } else if (coupons.isNotEmpty()) {
+                // 有券但都不适用于当前商品价（未达门槛）：如实说明，不再显示误导性的 ¥0
+                item(key = "net_price_hint") {
+                    Text(
+                        stringResource(R.string.coupon_not_applicable),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(Dims.SpacingL))
+                }
             }
             itemsIndexed(coupons, key = { index, coupon -> "cpn:${index}_${coupon.amount}-${coupon.title}" }) { _, coupon ->
                 CouponCard(coupon) {
@@ -125,7 +139,7 @@ fun CouponScreen(searchViewModel: SearchViewModel) {
 
 /** 到手价大字（PriceType.PriceHero 等宽数字）+ countUp */
 @Composable
-private fun NetPriceHeader(netPrice: Double?) {
+private fun NetPriceHeader(netPrice: Double) {
     var target by remember(netPrice) { mutableStateOf(0f) }
     LaunchedEffect(netPrice) { target = 1f }
     val progress by animateFloatAsState(
@@ -133,7 +147,7 @@ private fun NetPriceHeader(netPrice: Double?) {
         animationSpec = tween(500),
         label = "netPriceCountUp"
     )
-    val display = netPrice?.let { it * progress } ?: 0.0
+    val display = netPrice * progress
 
     Row(verticalAlignment = Alignment.Bottom) {
         Text(

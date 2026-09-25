@@ -108,6 +108,7 @@
     <!-- 找券页 -->
     <string name="coupon_empty_title">未发现优惠券</string>
     <string name="coupon_empty_hint">聚合什么值得买优惠券频道；仅展示爆料中明确写出的券（不做价差推算）</string>
+    <string name="coupon_not_applicable">当前商品价未达券使用门槛，暂无可算的到手价（条件见下）</string>
     <string name="coupon_net_price">到手价</string>
     <string name="coupon_copied">已复制券码</string>
     <string name="coupon_threshold">满 %1$d 可用</string>

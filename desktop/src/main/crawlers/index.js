@@ -114,7 +114,10 @@ async function searchProducts(q) {
     product,
     deals,
     url: product.url || '',
-    keyword: product.title || parsed.keyword,
+    // 2026-09：关键词搜索时返回**用户原始关键词**（而非商品全名），
+    // 与 Android 端一致——找券/B站/社区的检索词用原始关键词命中率更高；
+    // 链接类输入（jd/taobao/bilibili）没有关键词，退回商品标题。
+    keyword: parsed.keyword || product.title || '',
   };
 }
 
