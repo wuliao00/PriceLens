@@ -1,8 +1,8 @@
 # PriceLens API 文档
 
-**版本**：v1.1  
+**版本**：v1.2  
 **适用版本**：Android v2.5.0+ / Desktop v2.0.0+  
-**更新日期**：2026-08-26
+**更新日期**：2026-09-25
 
 ---
 
@@ -50,13 +50,13 @@
 
 ```kotlin
 // ① data/remote/*Api.kt —— 平台解析器（无状态，只解析、不抛错）
-JdApi         // 京东：p.3.cn 批量查价 + item SSR 页标题/主图
+JdApi         // 京东：item.m.jd.com 页内 _itemInfo → 标题/主图；p.3.cn 尽力查价（不可用时如实置空）
 ManmanbuyApi  // 慢慢买：价格历史曲线（最低/最高/大促）
 BiliApi       // 哔哩哔哩：视频搜索（WBI 签名）
-GwdangApi     // 购物党：优惠券搜索
+GwdangApi     // 找券：什么值得买「优惠券频道」搜索（只提取显式券文案）
 SmzdmApi      // 什么值得买：社区帖子搜索
 DangdangApi   // 当当：商品搜索（SSR 主数据源）
-ShihuoApi     // 识货：商品搜索（兜底源，含国补标记）
+ShihuoApi     // 识货：m 站搜索接口 `m.shihuo.cn/search?type=goods`（兜底源，含国补标记）
 
 // ② data/remote/ApiClient.kt —— 统一 HTTP 管线：
 //    CrawlerResult 四态结果 + 限流/熔断 + singleflight 去重 + 重试，
@@ -65,6 +65,10 @@ ShihuoApi     // 识货：商品搜索（兜底源，含国补标记）
 // ③ data/repository/PriceRepository.kt —— 声明式三级缓存编排：
 //    CachedSource(key/TTL/编解码器/源名/取数钩子) →
 //    L1 内存 TLRU → L2 Room → L3 网络 → 写回 + 失败降级旧快照（SourceHealth）
+
+// ④ util/QueryRelevance.kt —— 搜索类数据源统一相关性过滤（2026-09 新增）：
+//    拉丁 token 全覆盖 / 配件排除（含"适用 xxx"前缀）/ 图书说明书排除 /
+//    品牌一致性 / 纯中文关键词词面命中；桌面端同规则见 desktop/src/main/utils/relevance.js
 ```
 
 ```javascript
@@ -82,15 +86,33 @@ class Crawler {
 
 | 平台 | 解析器 | 查价 | 详情/标题 | 价格历史 | 优惠券 | 社区/搜索 |
 |------|--------|------|-----------|----------|--------|-----------|
-| 京东 | `JdApi` | ✅（p.3.cn 批量） | ✅ | ❌ | ❌ | ❌ |
+| 京东 | `JdApi` | ⚠️（p.3.cn 通道不可用时如实置空） | ✅（m 站 SSR） | ❌ | ❌ | ❌ |
 | 慢慢买 | `ManmanbuyApi` | ❌ | ❌ | ✅ | ❌ | ❌ |
 | 哔哩哔哩 | `BiliApi` | ❌ | ❌ | ❌ | ❌ | ✅ 视频搜索 |
-| 购物党 | `GwdangApi` | ❌ | ❌ | ❌ | ✅ | ❌ |
+| 找券（值得买券频道） | `GwdangApi` | ❌ | ❌ | ❌ | ✅（仅显式券文案） | ❌ |
 | 什么值得买 | `SmzdmApi` | ❌ | ❌ | ❌ | ❌ | ✅ 帖子搜索 |
 | 当当 | `DangdangApi` | ❌ | ✅（SSR 搜索） | ❌ | ❌ | ✅ |
-| 识货 | `ShihuoApi` | ❌ | ✅（SSR 搜索） | ❌ | ❌ | ✅ 兜底源 |
+| 识货 | `ShihuoApi` | ❌ | ✅（m 站接口） | ❌ | ❌ | ✅ 兜底源 |
 | 淘宝/拼多多/咕咚/Keep | 无障碍读价 | ✅（本机账号实时读价，无爬虫） | — | — | — | — |
 | 盯价（后台） | `worker/PriceCheckWorker` | ✅ 京东（其他平台接入中） | — | — | — | — |
+
+### 数据源实况与降级约定（2026-09-25 实测）
+
+上游站点近年频繁改版/收紧，解析器按"**宁可如实降级，不给不准确内容**"的原则实现：
+
+| 数据源 | 当前实况 | 本项目处理 |
+|--------|----------|------------|
+| 当当 搜索 | 列表价格节点已迁移到 `span.search_now_price` | 三级取价（新→旧→文本），解析条数记日志 |
+| 识货 搜索 | PC 搜索地址废弃（302 首页，数据是热榜） | 改走 m 站 `m.shihuo.cn/search?type=goods`；结构不符→空 |
+| 京东 商品页 | `item.jd.com` 对脚本请求返回风控页（标题"京东验证"） | 改走 `item.m.jd.com` 的 `_itemInfo`；风控页标题不使用 |
+| 京东 查价 | `p.3.cn` 公网 DNS 不再返回可达地址（DoH 双证） | 尽力尝试；失败时价格置空 + UI 明示"请在京东 App 查看" |
+| 慢慢买 公开接口 | 已下线（404） | 用自填 Cookie 的 SSR 通道 / 自建曲线 / 星罗 apikey 合并 |
+| 值得买/券频道 | 瑞数 WAF，浏览器 UA 拿 202 挑战页 | Googlebot UA 放行；挑战页识别为 Blocked |
+| 全部搜索源 | 结果常混入配件/图书/其它品牌/热榜 | `QueryRelevance` 统一过滤（两端同规则） |
+
+> 回归方式：Android 侧夹具化单测（`app/src/test/resources/fixtures/`，取自上述实况页面）；
+> 桌面侧运行 `node desktop/_crawler_check.js "<关键词>"` 做发布前巡检。
+
 
 ### 请求参数规范
 
@@ -481,6 +503,7 @@ class RateLimiter {
 |---------|------------------|------------------|----------|
 | v1 | 2.3.0 | 2.0.0 | 初始版本 |
 | v1.1 | 2.5.0 | 2.0.0 | 错误模型对齐 `CrawlerResult` 四态；爬虫接口章节修正为解析器 + ApiClient 管线 + PriceRepository 编排（删除不存在的统一 `Crawler` 接口描述） |
+| v1.2 | 2.5.1 | 2.1.0 | 数据源准确性专项：京东改 m 站 `_itemInfo` 解析、查价不可用时如实置空；识货改 m 站 `type=goods` 接口；找券只认显式券文案；新增 `QueryRelevance` 相关性过滤（两端同规则）与数据源实况表 |
 
 > 遵循语义化版本：Breaking Change 升主版本号，新增功能升次版本号，Bug 修复升修订号。
 
@@ -492,6 +515,7 @@ class RateLimiter {
 |------|------|----------|
 | v1.0 | 2026-08-24 | 初始版本发布 |
 | v1.1 | 2026-08-26 | 错误码对齐 `CrawlerResult`；修正爬虫接口架构描述 |
+| v1.2 | 2026-09-25 | 数据源准确性专项修复记录：新增「数据源实况与降级约定」表；京东/识货/找券接口与解析口径更新；新增 `QueryRelevance` 段落 |
 
 ---
 

@@ -7,6 +7,36 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **数据源内容准确性专项修复（Android + Desktop 同步）**：针对"搜索结果与关键词不符"的一批
+  上游变更与历史实现缺陷逐项修复，并新增夹具化解析测试锁定行为。
+  - **当当（Android 主候选源）**：列表页价格节点已改为 `span.search_now_price` /
+    `span.search_pre_price`，旧选择器（`.price_n` / `.price_r`）恒为空导致该源**静默返回 0 条**；
+    现改为"新选择器 → 旧选择器 → 价格文本"三级取价（`DangdangApi`）。
+  - **识货**：旧地址 `www.shihuo.cn/search?keywords=` 已 302 到首页，页面数据是**首页热榜**
+    （adidas 板鞋、洗发水……），被当成搜索结果展示；现改用 m 站真接口
+    `m.shihuo.cn/search?type=goods&keywords=`，结构不符时返回空并记录原因（`ShihuoApi`）。
+  - **京东**：`item.jd.com` 对脚本请求返回风控页（`<title>京东验证</title>`）被当成商品名；
+    现解析 `item.m.jd.com` 页内 `window._itemInfo.product`（标题/主图），并提供 `<title>` 兜底。
+    另：`p.3.cn` 公开查价接口目前在公网 DNS 不再返回可达地址（AliDNS / 腾讯 DoH 实测均为私网 IP），
+    查价失败不再整体丢弃商品——标题/主图照常展示、价格如实置空并提示"请在京东 App 查看"
+    （`JdApi` / `crawlers/jd.js`）。
+  - **找券**：删除"原价−到手价 ⇒ 券面额"的编造逻辑（会把国补/PLUS 价算成不存在的无门槛券）；
+    现在只认显式券文案（`满X减Y(元)优惠券` / `领取X元优惠券`），拿不到就不展示（`GwdangApi` / `gwdang.js`）。
+  - **相关性过滤**：新增 `QueryRelevance`（Android）/ `utils/relevance.js`（Desktop），
+    对搜索类数据源统一过滤配件（壳/膜/线/"适用 xxx"前缀）、图书说明书（guide/manual/指南…）、
+    其它品牌与其它机型条目；修复"搜 iPhone 15 得到手机壳或小米手机"的候选错配。
+  - **空态与提示如实化**：找券无显式券时展示"未发现优惠券（仅展示爆料中明确写出的券）"；
+    概览在京东价格不可得时提示"价格请在京东 App 查看"；桌面端商品头同理（`--` + 说明）。
+  - **京东直查**：价格不可得时不再覆盖已有的实时价候选（无症状覆盖真实价格）；
+    早于修复时刻写入的 JD 商品 Room 行不再复用（旧版本可能缓存过风控页标题）。
+- **新增测试**：`QueryRelevanceTest` 与 5 组夹具化解析测试
+  （夹具取自 2026-09-25 上游实况页面，见 `app/src/test/resources/fixtures/`）；
+  测试源集引入 `org.json:json` 参考实现（Android 单测下 org.json 为未实现桩）。
+- **新增工具**：`desktop/_crawler_check.js`（桌面端爬虫实况自检）、
+  `desktop/_unit_check.js`（用同一批夹具校验 JS 解析与相关性规则，防止两端规则漂移）。
+
 ## [2.5.1]
 
 ### Fixed
