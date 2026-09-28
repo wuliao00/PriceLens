@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T13:24:00Z",
+  "generatedAt": "2026-09-28T20:45:16Z",
   "channel": "stable",
   "latest": {
     "versionCode": 14,
@@ -32,7 +32,7 @@
       "url": "https://github.com/wuliao00/PriceLens/releases/latest"
     }
   ],
-  "sha256": "1239049ee26aeb0a1017154e6c64f6b3116c7a03dfb6e86ca7a0fa7f9ac559f0",
+  "sha256": "27229eae35db5cb80d7408c2249d69f204cc426518aeab96ce72034d221fab20",
   "sizeBytes": 2220224,
   "notes": [
     "新增新手引导：首启四步（价值说明 → 无障碍 → 悬浮窗 → 可选凭据），设置页可重看",
