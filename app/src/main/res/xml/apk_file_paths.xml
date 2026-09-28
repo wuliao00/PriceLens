@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FileProvider 路径白名单：只暴露 APK 下载目录（context.cacheDir/apk）。
+    ApkInstaller 用 content:// + FLAG_GRANT_READ_URI_PERMISSION 把安装包临时授权给系统安装器，
+    不开放整个 cacheDir / filesDir / 外部存储。
+-->
+<paths>
+    <cache-path
+        name="apk_updates"
+        path="apk/" />
+</paths>

@@ -3,6 +3,7 @@ package com.pricelens.ui.overview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pricelens.accessibility.PriceEvents
+import com.pricelens.accessibility.ShopPlatform
 import com.pricelens.data.remote.ApiClient
 import com.pricelens.data.remote.BiliApi
 import com.pricelens.data.remote.CrawlerResult
@@ -16,13 +17,18 @@ import com.pricelens.domain.ProductCandidateResolver
 import com.pricelens.ui.common.AsyncValue
 import com.pricelens.util.LogT
 import com.pricelens.util.PriceJudgment
+import com.pricelens.util.QueryRelevance
+import com.pricelens.util.SearchQueryCleaner
 import com.pricelens.util.judgePrice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -35,6 +41,10 @@ import kotlinx.coroutines.launch
  *    某数据源抛异常或被反爬时真实写入 Error（为阶段4 SourceStatusRow 做准备）
  *  - 保留"1.5s 内并行上屏"的并行 launch 语义与现有日志语义
  *  - 商品候选由 [ProductCandidateResolver] 单例持有（概览/盯价/找券共用）
+ *  - A2（读取准确性与口径大改造）：search() 开头统一复位实时价/来源/到手价；
+ *    关键词经 [SearchQueryCleaner] 清洗（不再 take(30) 盲截断）；候选非同款时展示层门控 +
+ *    [staleNotice] 消费 [PriceRepository.staleKeys]（"上一次商品数据/缓存降级"提示）；
+ *    历史价 URL 只认本轮候选自己的 SKU（爆料链接须过相关性过滤）
  */
 @HiltViewModel
 class SearchViewModel @Inject constructor(
@@ -52,10 +62,42 @@ class SearchViewModel @Inject constructor(
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
 
+    /** 本轮搜索用到的缓存 key（供 [staleNotice] 消费 staleKeys；搜索开始时整表替换） */
+    private val _searchedCacheKeys = MutableStateFlow<List<String>>(emptyList())
+
     // ---------- per-source 独立状态 ----------
 
-    /** 商品候选：由 Resolver 单例持有，概览/盯价/找券共用 */
-    val product: StateFlow<AsyncValue<ProductCandidate>> = resolver.candidate
+    /**
+     * 商品候选：由 Resolver 单例持有，概览/盯价/找券共用。
+     *
+     * A2 生命周期门控：[ProductCandidateResolver] 是 @Singleton 且没有把候选置回 Idle 的路径
+     * （grep 确认），手动搜 B 商品而候选仍是 A 时会"A 的价标在 B 上"。这里在展示层做门控：
+     * 候选标题与当前关键词明显不同款（QueryRelevance 不过且重叠分 <0.6）→ 输出 Idle，
+     * 概览页据此回落到"未找到"而非旧商品；边界情况保留展示、由 [staleNotice] 提示。
+     */
+    val product: StateFlow<AsyncValue<ProductCandidate>> = combine(resolver.candidate, _keyword) { candidate, keyword ->
+        if (candidateIsStale(candidate, keyword)) AsyncValue.Idle else candidate
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, AsyncValue.Idle)
+
+    /**
+     * "上一次商品数据"提示（A2 新增，浮窗/概览共用口径）：
+     *  - 候选与当前关键词非同款（含边界保留展示的情况）；或
+     *  - 本轮搜索用到的缓存 key 命中 [PriceRepository.staleKeys]（站点降级回吐旧数据，此前 UI 从未消费）。
+     * OverviewScreen 侧绑定一行 collectAsStateWithLifecycle + [com.pricelens.R.string.ovl_overview_stale]
+     * 即可显示（该文件不归 A2，见交付报告）。
+     */
+    val staleNotice: StateFlow<Boolean> = combine(
+        resolver.candidate,
+        _keyword,
+        repository.staleKeys,
+        _searchedCacheKeys
+    ) { candidate, keyword, staleKeys, usedKeys ->
+        val mismatch = (candidate as? AsyncValue.Success)?.data?.let { c ->
+            keyword.isNotBlank() && extractJdSkuLocal(keyword) == null &&
+                !QueryRelevance.isRelevant(keyword, c.title)
+        } == true
+        mismatch || usedKeys.any { it in staleKeys }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _history = MutableStateFlow<AsyncValue<ManmanbuyApi.History>>(AsyncValue.Idle)
     val history: StateFlow<AsyncValue<ManmanbuyApi.History>> = _history
@@ -120,10 +162,24 @@ class SearchViewModel @Inject constructor(
         searchJob?.cancel() // 新搜索取消旧 Job
         _keyword.value = keyword
         _loading.value = true
+        // A2 生命周期复位：换商品时清掉"上一个商品的实时价/来源/到手价"。
+        // 旧版三者从无复位 → 手动搜 B 后概览仍显示"本机京东账号 · 实时价 ¥A"（A 的价标在 B 上）。
+        _livePrice.value = null
+        _realtimeSource.value = null
+        _netPrice.value = null
+        _searchedCacheKeys.value = listOf(
+            "gwd:coupon:$keyword",
+            "dd:search:$keyword",
+            "smz:search:$keyword",
+            "sh:search:$keyword",
+            "bili:search:$keyword"
+        )
 
         searchJob = viewModelScope.launch {
             repository.recordSearch(keyword)
-            val jdSku = resolver.extractJdSku(keyword)
+            // 本地超集提取（m 站链接/纯数字/sku= 参数均可识别；resolver 版只认 item.jd.com/(\d+)，
+            // App 分享出的 m 站链接此前会被当关键词搜——resolver 的同步补齐已写入交付报告，不归本文件改）
+            val jdSku = extractJdSkuLocal(keyword)
             LogT.i("搜索开始: [$keyword] jdSku=$jdSku")
 
             // 纯关键词且非京东链接：商品候选优先当当搜索（SSR 稳定），值得买爆料兜底。
@@ -150,7 +206,10 @@ class SearchViewModel @Inject constructor(
 
             val jobs = listOf(
                 launch {
-                    // 京东 SKU 直查（无障碍/链接场景）；失败时保留账号实时价占位
+                    // 京东 SKU 直查（无障碍/链接场景）。
+                    // A2：不再在这里清 _realtimeSource —— search() 开头已统一复位，
+                    // 检测链路又会在 search() 返回后重新赋值；此处二次清空会把
+                    // "本轮检测的账号实时价来源"误杀（时序竞态，旧版唯一复位点反而不完整）。
                     if (jdSku != null) {
                         val product = try {
                             repository.getJdProduct(jdSku)
@@ -162,26 +221,24 @@ class SearchViewModel @Inject constructor(
                         }
                         if (product != null) {
                             resolver.fillFromJd(product)
-                            _realtimeSource.value = null
                         }
                     }
                 },
                 launch {
-                    // 历史价：优先京东商品页 URL；其次取值得买候选里的京东链接；否则放弃
-                    val candidateUrl = postsForHistory
-                        .firstOrNull { Regex("item\\.jd\\.com/\\d+").containsMatchIn(it.url) }
-                        ?.url
-                    val url = when {
-                        jdSku != null -> "https://item.jd.com/$jdSku.html"
-                        candidateUrl != null -> Regex("https?://item\\.jd\\.com/\\d+\\.html")
-                            .find(candidateUrl)?.value
-                        else -> null
-                    }
+                    // 历史价 URL 归属（A2 P1-6）：只认"本轮搜索候选自己的 SKU"——
+                    //  1) 关键词自带京东 SKU/链接（含 m 站）→ 直接用；
+                    //  2) 否则仅当值得买爆料**标题过关键词相关性过滤**且含京东链接时才采用。
+                    // 旧版从"任意一条爆料"抓链接，可能是别的 SKU，历史曲线张冠李戴。
+                    val ownSku = jdSku ?: postsForHistory.firstOrNull { post ->
+                        QueryRelevance.isRelevant(keyword, post.title) && extractJdSkuLocal(post.url) != null
+                    }?.let { extractJdSkuLocal(it.url) }
+                    val url = ownSku?.let { "https://item.jd.com/$it.html" }
                     if (url == null) {
                         _history.value = AsyncValue.Idle
                         _judgment.value = PriceJudgment.NORMAL()
                         return@launch
                     }
+                    _searchedCacheKeys.value = _searchedCacheKeys.value + "mmb:history:$url"
                     _history.value = AsyncValue.Loading(
                         _history.value.let {
                             (it as? AsyncValue.Success)?.data
@@ -214,8 +271,13 @@ class SearchViewModel @Inject constructor(
                 },
                 launch {
                     val coupons = loadList(_coupons, { repository.searchCoupons(keyword) })
-                    val product = resolver.candidate.value.let {
+                    val candidate = resolver.candidate.value.let {
                         (it as? AsyncValue.Success)?.data
+                    }
+                    // A2：到手价只算"本轮关键词自己的候选"；候选明显是上一个商品时不产净价
+                    val product = candidate?.takeIf {
+                        jdSku != null || QueryRelevance.isRelevant(keyword, it.title) ||
+                            SearchQueryCleaner.titleOverlap(keyword, it.title) >= STALE_OVERLAP_FLOOR
                     }
                     val net = product?.let { p ->
                         val best = coupons.maxByOrNull { it.amount }
@@ -260,38 +322,64 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             PriceEvents.detections.collect { detected ->
                 val now = System.currentTimeMillis()
-                val signature = "${detected.packageName}|${detected.title}|${detected.price}"
+                val signature = detected.signature
                 if (signature == lastDetectionSignature && now - lastDetectionAt < 3_000) {
                     return@collect
                 }
                 lastDetectionSignature = signature
                 lastDetectionAt = now
 
-                val source = when {
+                val source = detected.sourceText ?: when {
                     detected.packageName.startsWith("com.jingdong") -> "本机京东 App 登录账号"
                     detected.packageName.startsWith("com.taobao") -> "本机淘宝 App 登录账号"
                     detected.packageName.startsWith("com.xunmeng") -> "本机拼多多 App 登录账号"
                     else -> "本机电商 App 登录账号"
                 }
-                // 网络搜索还没出结果时，先用账号实时价占位展示，概览页立即有内容
+                // 网络搜索还没出结果时，先用账号实时价占位展示（@Singleton 候选已有则不覆盖，
+                // 展示层由 [product] 门控 + [staleNotice] 提示防"A 价标 B"）
                 resolver.fillFromDetection(detected.price, detected.title)
-                _keyword.value = detected.title?.take(30) ?: _keyword.value
+
+                // A2 P0-3：关键词清洗取代 take(30) 盲截断（截半型号会搜到旧款价）；
+                // 拿到确定性京东 SKU 时直接按 SKU 精查，不再用标题碰运气。
+                val cleaned = SearchQueryCleaner.clean(detected.title)
+                val query = if (detected.platform == ShopPlatform.JD && detected.itemId != null) {
+                    detected.itemId
+                } else {
+                    cleaned ?: detected.title?.take(30)
+                }
+                if (query != null && (query != lastSearchedTitle || now - lastSearchedTitleAt >= 3_000)) {
+                    lastSearchedTitle = query
+                    lastSearchedTitleAt = now
+                    // search() 会同步复位 livePrice/来源/到手价，所以下面的赋值必须发生在其后
+                    search(query)
+                }
+                if (cleaned != null) _keyword.value = cleaned
                 _livePrice.value = detected.price
                 _realtimeSource.value = source
-
-                detected.title?.let { title ->
-                    val t = title.take(30)
-                    if (t != lastSearchedTitle || now - lastSearchedTitleAt >= 3_000) {
-                        lastSearchedTitle = t
-                        lastSearchedTitleAt = now
-                        search(t)
-                    }
-                }
             }
         }
     }
 
     // ---------- 内部工具 ----------
+
+    /**
+     * 京东 SKU 提取（本地超集）：item.jd.com / item.m.jd.com/product/ / sku= 参数 / 纯数字。
+     * 与 PriceRepository.buildHistory 的 `item(?:\.m)?\.jd\.com/(?:product/)?(\d{6,})` 口径一致。
+     */
+    private fun extractJdSkuLocal(text: String): String? {
+        JD_URL_SKU.find(text)?.let { return it.groupValues[1] }
+        ID_PARAM.find(text)?.let { return it.groupValues[1] }
+        return text.trim().takeIf { it.matches(PURE_SKU) }
+    }
+
+    /** 候选与当前关键词"明显不同款"（展示层门控，见 [product] 注释） */
+    private fun candidateIsStale(candidate: AsyncValue<ProductCandidate>, keyword: String): Boolean {
+        val data = (candidate as? AsyncValue.Success)?.data ?: return false
+        if (keyword.isBlank()) return false
+        if (extractJdSkuLocal(keyword) != null) return false // SKU/链接搜索：无稳定标题可比，不门控
+        if (QueryRelevance.isRelevant(keyword, data.title)) return false
+        return SearchQueryCleaner.titleOverlap(keyword, data.title) < STALE_OVERLAP_FLOOR
+    }
 
     /** 列表型数据源统一加载：异常真实写入 Error，成功写 Success；取消异常透传 */
     private suspend fun <T> loadList(state: MutableStateFlow<AsyncValue<List<T>>>, block: suspend () -> List<T>): List<T> {
@@ -310,4 +398,14 @@ class SearchViewModel @Inject constructor(
     }
 
     private fun listSize(state: StateFlow<AsyncValue<List<*>>>): Int = ((state.value) as? AsyncValue.Success)?.data?.size ?: 0
+
+    private companion object {
+        /** 候选标题与关键词的重叠分下限：低于此值按"上一次商品数据"处理（门控/提示共用） */
+        const val STALE_OVERLAP_FLOOR = 0.6
+
+        /** 京东商详链接（含 m 站）与 sku=/goods_id= 参数（预编译，搜索高频调用） */
+        val JD_URL_SKU = Regex("item(?:\\.m)?\\.jd\\.com/(?:product/)?(\\d{6,})")
+        val ID_PARAM = Regex("[?&](?:sku|goods_id|product_id)=(\\d{6,})")
+        val PURE_SKU = Regex("\\d{6,}")
+    }
 }

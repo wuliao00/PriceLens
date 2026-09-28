@@ -8,10 +8,17 @@
 #    2. 或在终端：powershell -ExecutionPolicy Bypass -File build-apk.ps1
 #
 #  环境要求：
-#    - JDK 17 或 21（默认查找 C:\Program Files\Java\jdk-21*）
-#    - Android SDK（默认查找 %LOCALAPPDATA%\Android\Sdk）
-#    - 直装 Gradle（默认查找 C:\gradle-9.7.0\gradle-9.7.0\bin\gradle.bat）
+#    - JDK 17 或 21（优先用已导出的 JAVA_HOME；否则查 C:\Program Files\Java\jdk-21*）
+#    - Android SDK（本机：E:\dev\android-sdk，含 build-tools 34/35）
+#    - 直装 Gradle（本机：E:\dev\gradle-home\wrapper\dists\gradle-8.11-bin\*\gradle-8.11\bin\gradle.bat，
+#      不要用 ./gradlew——本机走代理下载 wrapper 会 PKIX 失败）
 #    - Debug keystore（默认查找 %USERPROFILE%\.android\debug.keystore）
+#
+#  国内网络注意：仓库里的 settings.gradle.kts 只写 google()/mavenCentral()（正式仓库，
+#  CI 也用它），而 maven.google.com 在墙内经常连不通。本脚本从 GitHub 克隆后会在
+#  $WORK_DIR 里构建，若依赖解析报 "Could not resolve" / 连接超时，请按
+#  docs/DEVELOPMENT.md「本机构建环境」用 Aliyun 镜像的副本，或临时导出
+#  GRADLE_OPTS 指向你自己的镜像 init script——不要把镜像写进仓库配置。
 #
 #  退出码：
 #    0 = 成功；非 0 = 失败（请查看最后 30 行日志）
@@ -23,21 +30,26 @@ $ErrorActionPreference = 'Stop'
 $GH_REPO         = 'https://github.com/wuliao00/PriceLens.git'
 $WORK_DIR        = 'C:\PriceLens-Android-build'   # 纯英文路径（中文路径会让 AGP 报错）
 $OUTPUT_DIR      = 'C:\Users\Administrator\Desktop'
-$GRADLE_BIN      = 'C:\gradle-9.7.0\gradle-9.7.0\bin\gradle.bat'
-$SDK_BASE        = $env:LOCALAPPDATA + '\Android\Sdk'
+$GRADLE_BIN      = 'E:\dev\gradle-home\wrapper\dists\gradle-8.11-bin\2eu93z43d2ii82czw0cxl9we6\gradle-8.11\bin\gradle.bat'
+$SDK_BASE        = 'E:\dev\android-sdk'
 $DEBUG_KEYSTORE  = $env:USERPROFILE + '\.android\debug.keystore'
 $DEBUG_KEY_ALIAS = 'androiddebugkey'
 $DEBUG_KEY_PASS  = 'android'
 
-# ----- 升级版本号 -----
-$NEW_VERSION_NAME = '2.4.4'
-$NEW_VERSION_CODE = 12
+# ----- 升级版本号（每次发布前改这两行；必须与 app/build.gradle.kts 的目标一致）-----
+$NEW_VERSION_NAME = '2.6.0'
+$NEW_VERSION_CODE = 14
 
 # ============================================================
 #  以下逻辑通常无需改动
 # ============================================================
 
 function Find-Jdk {
+    # 1) 已导出的 JAVA_HOME 且确实是 JDK 17/21 → 直接采用
+    if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\javac.exe'))) {
+        return (Get-Item $env:JAVA_HOME)
+    }
+    # 2) 常见安装位置
     Get-ChildItem 'C:\Program Files\Java' -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match '^jdk-(17|21)' } |
         Sort-Object Name -Descending |

@@ -33,15 +33,19 @@ import com.pricelens.R
 import com.pricelens.data.repository.SettingsRepository
 import com.pricelens.ui.profile.ProfileViewModel
 import com.pricelens.ui.theme.Dims
+import com.pricelens.update.UpdateRepository
 
 /**
  * 设置页（阶段4 拆分）：主壳只负责 Scaffold / 顶栏 / 滚动容器与页脚，
  * 内容按 外观/权限/数据/关于 拆到同包 4 个子文件：
  * [AppearanceSection] / [PermissionSection] / [DataSection] / [AboutSection]。
+ *
+ * v2.6.0：关于区新增"检查更新"与"重新查看新手引导"，故把 [UpdateRepository]
+ * 与重开引导的回调透传进来（沿用 MainActivity 注入的单例，不另建 ViewModel）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(settings: SettingsRepository, onBack: () -> Unit) {
+fun SettingsScreen(settings: SettingsRepository, updateRepository: UpdateRepository, onBack: () -> Unit, onReplayOnboarding: () -> Unit) {
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val cacheStats by profileViewModel.cacheStats.collectAsStateWithLifecycle()
 
@@ -83,7 +87,12 @@ fun SettingsScreen(settings: SettingsRepository, onBack: () -> Unit) {
                 onClear = { profileViewModel.clearCache() }
             )
             CredentialsSection(settings)
-            AboutSection(BuildConfig.VERSION_NAME)
+            AboutSection(
+                versionName = BuildConfig.VERSION_NAME,
+                versionCode = BuildConfig.VERSION_CODE,
+                updateRepository = updateRepository,
+                onReplayOnboarding = onReplayOnboarding
+            )
 
             Spacer(Modifier.height(Dims.SpacingS))
             Text(

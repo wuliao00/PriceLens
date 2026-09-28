@@ -26,7 +26,9 @@ data class ProductCandidate(
     val image: String,
     val url: String,
     /** 京东 SKU；非京东来源为 null（对应旧的 skuId="" 占位） */
-    val skuId: String? = null
+    val skuId: String? = null,
+    /** 结构化国补标记（识货 labels=PUBLIC_SUBSIDIES）；其余源由标题文本判断，置 false */
+    val hasSubsidy: Boolean = false
 ) {
     /** 适配下游：转成旧的 JdProduct 结构，渲染层零改动 */
     fun toJdProduct(): JdApi.JdProduct = JdApi.JdProduct(
@@ -45,7 +47,7 @@ data class ProductCandidate(
  * 商品候选解析器（阶段2：从上帝 MainViewModel 拆出的领域层单例）。
  *
  * 收编原 `search()` 中的商品候选兜底链与京东 SKU 提取逻辑：
- *  - 纯关键词：当当（SSR 稳定）→ 值得买爆料 → 识货并行兜底
+ *  - 纯关键词：当当 + 值得买**跨源打分**选主候选（[CandidateRanking]），识货并行兜底
  *  - 京东链接 / 纯数字 SKU：直查京东
  *  - 无障碍实时价：占位展示
  *
@@ -59,6 +61,9 @@ class ProductCandidateResolver @Inject constructor(
 
     private val _candidate = MutableStateFlow<AsyncValue<ProductCandidate>>(AsyncValue.Idle)
 
+    /** 最近一次关键词搜索的关键词（识货并行兜底时复用，避免改 ViewModel 调用签名） */
+    private var lastKeyword: String = ""
+
     /** 当前商品候选（概览 / 盯价 / 找券共用） */
     val candidate: StateFlow<AsyncValue<ProductCandidate>> = _candidate
 
@@ -69,41 +74,59 @@ class ProductCandidateResolver @Inject constructor(
     }
 
     /**
-     * 主候选兜底链（串行，先于并行任务执行）：当当 → 值得买。
+     * 主候选兜底链（串行，先于并行任务执行）：当当 + 值得买。
      * 返回值得买爆料列表（社区页与历史价 URL 推导复用）。
+     *
+     * 2026-09-28：候选从"各源过滤后取第一条带价的（当当优先）"改为**跨源打分 argmax**
+     * （规则与权重见 [CandidateRanking]）。旧口径的实况错例：
+     * `mate 80` 拿到 ¥8840.95 渠道价、`x8s` 拿到 ¥108.8 纸品、`iPhone 15` 拿到二手混卖链接。
+     * 两源都已过 [com.pricelens.util.QueryRelevance]，这里只在"带价"的条目里选。
      */
     suspend fun resolvePrimary(keyword: String): List<SmzdmApi.SmzdmPost> {
-        var filled = false
-
+        lastKeyword = keyword
         val ddItems = repository.searchDangdang(keyword)
         LogT.i("当当结果: ${ddItems.size} 条")
-        val ddCandidate = ddItems.firstOrNull { it.price > 0 }
-        if (ddCandidate != null) {
-            _candidate.value = AsyncValue.Success(ProductCandidate.fromDangdang(ddCandidate))
-            filled = true
-        }
 
         val posts = repository.searchSmzdm(keyword)
         LogT.i("值得买结果: ${posts.size} 条")
-        if (!filled) {
-            val candidate = posts.firstOrNull { it.price != null && it.url.startsWith("http") }
-            if (candidate != null) {
-                _candidate.value = AsyncValue.Success(ProductCandidate.fromSmzdm(candidate))
-                filled = true
-            }
+
+        // 入池顺序 = 当当 → 值得买：打分同分时稳定排序保留先入池者（沿用旧的"当当优先"）
+        val pool = buildList<ProductCandidate> {
+            ddItems.filter { it.price > 0 }.forEach { add(ProductCandidate.fromDangdang(it)) }
+            posts.filter { (it.price ?: 0.0) > 0.0 && it.url.startsWith("http") }
+                .forEach { add(ProductCandidate.fromSmzdm(it)) }
         }
-        if (!filled) {
-            LogT.w("关键词 [$keyword] 当当/值得买无候选，识货并行兜底")
+        val ranked = CandidateRanking.rankBy(keyword, pool, { it.title }, { it.price }, { it.hasSubsidy })
+        val best = ranked.firstOrNull()
+        if (best != null) {
+            _candidate.value = AsyncValue.Success(best.item)
+            LogT.i(
+                "候选打分选中（${pool.size} 条参选，分 ${(best.score * 100).toLong() / 100.0}）: " +
+                    "${best.item.title.take(30)} ¥${best.item.price}"
+            )
+        } else {
+            LogT.w("关键词 [$keyword] 当当/值得买无带价候选，识货并行兜底")
         }
         return posts
     }
 
-    /** 识货兜底：仅当允许（无京东 SKU 且尚无任何候选）且当前无候选时填充 */
+    /**
+     * 识货兜底：仅当允许（无京东 SKU 且尚无任何候选）且当前无候选时填充。
+     * 2026-09-28：同样改为打分 argmax（识货的结构化国补标记 [ShihuoApi.ShihuoItem.hasSubsidy] 参与打分）。
+     */
     fun maybeFillFromShihuo(items: List<ShihuoApi.ShihuoItem>, allow: Boolean) {
         if (!allow) return
         if (_candidate.value is AsyncValue.Success) return
-        val sh = items.firstOrNull { it.price > 0 } ?: return
-        _candidate.value = AsyncValue.Success(ProductCandidate.fromShihuo(sh))
+        val priced = items.filter { it.price > 0 }
+        if (priced.isEmpty()) return
+        val best = CandidateRanking.rankBy(
+            keyword = lastKeyword,
+            items = priced,
+            titleOf = { it.title },
+            priceOf = { it.price },
+            subsidyOf = { it.hasSubsidy }
+        ).firstOrNull()?.item?.let { ProductCandidate.fromShihuo(it) } ?: return
+        _candidate.value = AsyncValue.Success(best)
     }
 
     /**
@@ -168,7 +191,8 @@ private fun ProductCandidate.Companion.fromShihuo(s: ShihuoApi.ShihuoItem) = Pro
     originalPrice = null,
     image = s.image,
     url = s.url,
-    skuId = null
+    skuId = null,
+    hasSubsidy = s.hasSubsidy
 )
 
 private fun ProductCandidate.Companion.fromJd(p: JdApi.JdProduct) = ProductCandidate(

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  搜索/相关性过滤文案（2026-09-28 新增）。
+  单独成文件而不是并进 strings.xml：本轮改动只碰搜索结果文案，避免与并行分支冲突。
+-->
+<resources>
+    <!-- 过滤后为空时的如实提示：不是"没这个商品"，而是"没匹配上关键词" -->
+    <string name="search_no_relevant_result">未匹配到与「%1$s」直接相关的商品，试试更完整的型号名（如 OPPO Find X8s / 华为 Mate 80）</string>
+</resources>

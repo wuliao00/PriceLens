@@ -1,14 +1,11 @@
 package com.pricelens.accessibility
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
 import android.provider.Settings
 import android.view.Gravity
-import android.view.MotionEvent
-import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,32 +19,54 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.pricelens.data.repository.OverlayBundle
+import com.pricelens.data.repository.PriceRepository
 import com.pricelens.ui.components.PriceOverlay
+import com.pricelens.util.SearchQueryCleaner
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * §1.5 浮窗管理：无障碍服务检测到价格后，在其他 APP 之上弹出极简比价浮窗。
+ * §1.5 浮窗管理（A2 重写）：无障碍检测到商详价格后，在其他 APP 之上显示比价浮窗。
  *
- * - TYPE_APPLICATION_OVERLAY，不抢焦点（不遮挡用户操作）
- * - 可拖动、可关闭，15s 无操作自动消失
- * - 需要 SYSTEM_ALERT_WINDOW 授权（引导用户去系统设置开启）
- * - "查看历史价 & 优惠券" → 拉起 MainActivity 并带上商品信息
+ * 与旧版的差异：
+ *  - 取消 15s 自动消失 → **折叠胶囊常驻 + 手动关闭**；离开商详页时由服务调用
+ *    [onLeftProductPage] 收窗并清空内容（旧版离开商详不收窗、残留内容串台）；
+ *  - 拖动从挂在根 ComposeView 的 setOnTouchListener 改为子项 Compose pointerInput
+ *    回调 [moveBy]（旧监听器与内部 AndroidComposeView 抢 ACTION_DOWN，拖动与点击不可兼得）；
+ *  - 展开面板数据（历史价/券/多平台）通过 Hilt EntryPoint 取 [PriceRepository.overlayBundle]
+ *    聚合，仅在确定性商品 ID（[PriceEvents.Detected.itemId]）时拉取历史与多平台，
+ *    防错配硬规则；浮窗 UI 态（展开/收起）不放全局 object，留在 Composable 内部；
+ *  - 窗口保持可触摸（不加 FLAG_NOT_TOUCHABLE）、WindowManager.LayoutParams.alpha 保持默认 1.0
+ *    （Android 12+ Untrusted touch：半透明遮挡会丢弃穿越到下层的触摸；本浮窗不依赖触摸穿透，
+ *    窗口尺寸紧贴内容，剩余区域由 FLAG_NOT_TOUCH_MODAL 直接放行给下层）。
  */
 object OverlayManager {
-
-    private const val AUTO_DISMISS_MS = 15_000L
 
     private var windowManager: WindowManager? = null
     private var overlayView: ComposeView? = null
     private var host: OverlayHost? = null
     private var collectJob: Job? = null
-    private var dismissJob: Job? = null
+    private var enrichJob: Job? = null
+    private var params: WindowManager.LayoutParams? = null
+    private var appContext: Context? = null
+    private var serviceScope: CoroutineScope? = null
+    private var screenMaxX = 0
+    private var screenMaxY = 0
 
+    /** 当前展示内容（无障碍折叠胶囊/展开面板的唯一数据入口） */
     var content by mutableStateOf<PriceEvents.Detected?>(null)
+        private set
+
+    /** 展开面板聚合数据（null=未加载/无确定性 ID） */
+    var bundle by mutableStateOf<OverlayBundle?>(null)
         private set
 
     /** 悬浮窗权限是否已授予 */
@@ -69,25 +88,40 @@ object OverlayManager {
     /** 服务启动后调用：订阅价格事件流并展示浮窗 */
     fun start(context: Context, scope: CoroutineScope) {
         if (collectJob?.isActive == true) return
+        appContext = context.applicationContext
+        serviceScope = scope
         collectJob = scope.launch(Dispatchers.Main) {
             PriceEvents.detections.collect { detected ->
                 if (!canDrawOverlays(context)) return@collect
                 content = detected
+                bundle = null
                 show(context)
-                scheduleAutoDismiss(scope)
+                // 确定性 ID 命中：立即预取聚合数据（展开时第②③④行才有内容）
+                if (detected.itemId != null) enrich(detected)
             }
         }
+    }
+
+    /** 离开商详页（首页/列表/购物车/其他 App/读不到价）：收窗 + 清内容 */
+    fun onLeftProductPage() {
+        enrichJob?.cancel()
+        content = null
+        bundle = null
+        hide()
     }
 
     fun stop() {
         collectJob?.cancel()
         collectJob = null
-        hide()
+        enrichJob?.cancel()
+        enrichJob = null
+        serviceScope = null
+        appContext = null
+        onLeftProductPage()
     }
 
+    /** 手动关闭/跳转收起：只收窗；下一次 emit 会重新弹出 */
     fun hide() {
-        dismissJob?.cancel()
-        dismissJob = null
         overlayView?.let { view ->
             try {
                 windowManager?.removeView(view)
@@ -99,27 +133,66 @@ object OverlayManager {
         host?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         host = null
         windowManager = null
+        params = null
     }
 
-    private fun scheduleAutoDismiss(scope: CoroutineScope) {
-        dismissJob?.cancel()
-        dismissJob = scope.launch(Dispatchers.Main) {
-            delay(AUTO_DISMISS_MS)
-            hide()
+    /** Composable 展开时回调：无确定性 ID 的延迟预取（TITLE_ONLY 只允许出券行，且标仅供参考） */
+    fun onExpanded(detected: PriceEvents.Detected) {
+        if (bundle != null) return
+        enrich(detected)
+    }
+
+    /** pointerInput 拖动回调：窗口 offset 更新（gravity TOP|END：向右拖 x 减小、向下拖 y 增大） */
+    fun moveBy(dx: Float, dy: Float) {
+        val p = params ?: return
+        val wm = windowManager ?: return
+        val view = overlayView ?: return
+        p.x = (p.x - dx.toInt()).coerceIn(0, screenMaxX)
+        p.y = (p.y + dy.toInt()).coerceIn(0, screenMaxY)
+        try {
+            wm.updateViewLayout(view, p)
+        } catch (_: IllegalArgumentException) {
+            // 视图已分离
         }
     }
 
-    @SuppressLint("ClickableViewAccessibility")
+    // ---------- 内部 ----------
+
+    private fun enrich(detected: PriceEvents.Detected) {
+        val ctx = appContext ?: return
+        val scope = serviceScope ?: return
+        val keyword = SearchQueryCleaner.clean(detected.title) ?: return
+        enrichJob?.cancel()
+        enrichJob = scope.launch(Dispatchers.Default) {
+            val repository = runCatching {
+                EntryPointAccessors.fromApplication(
+                    ctx.applicationContext,
+                    OverlayEntryPoint::class.java
+                ).repository()
+            }.getOrNull() ?: return@launch
+            val result = runCatching { repository.overlayBundle(keyword, detected.itemId) }.getOrNull()
+            // 回填前校验仍是同一商品，防止慢响应把旧商品数据盖到新商品上
+            if (result != null && content?.signature == detected.signature) {
+                withContext(Dispatchers.Main) { bundle = result }
+            }
+        }
+    }
+
     private fun show(context: Context) {
+        if (overlayView != null) return // 已显示，仅更新 content/bundle 状态
+
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         windowManager = wm
-
-        if (overlayView != null) return // 已显示，仅更新 content 状态
+        if (screenMaxX == 0) {
+            val metrics = context.resources.displayMetrics
+            screenMaxX = (metrics.widthPixels * 0.5f).toInt() // 胶囊最远拖到屏幕中线
+            screenMaxY = (metrics.heightPixels * 0.85f).toInt()
+        }
 
         val overlayHost = OverlayHost()
         host = overlayHost
 
-        val params = WindowManager.LayoutParams(
+        val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -131,6 +204,7 @@ object OverlayManager {
             x = 32
             y = 200
         }
+        params = lp
 
         val view = ComposeView(context).apply {
             setViewTreeLifecycleOwner(overlayHost)
@@ -139,47 +213,43 @@ object OverlayManager {
                 val detected = content
                 if (detected != null) {
                     PriceOverlay(
-                        price = detected.rawPriceText,
-                        title = detected.title ?: "当前商品",
+                        detected = detected,
+                        bundle = bundle,
+                        onDrag = { dx, dy -> moveBy(dx, dy) },
+                        onToggleExpanded = { expanded ->
+                            if (expanded) onExpanded(detected)
+                        },
                         onCompare = {
+                            val cleaned = SearchQueryCleaner.clean(detected.title) ?: detected.title
                             hide()
                             context.startActivity(
                                 Intent(context, com.pricelens.ui.main.MainActivity::class.java)
                                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    .putExtra("focus_title", detected.title)
+                                    .putExtra("focus_title", cleaned)
                                     .putExtra("focus_price", detected.price)
                             )
                         },
-                        onDismiss = { hide() }
+                        onDismiss = {
+                            content = null
+                            bundle = null
+                            hide()
+                        }
                     )
-                }
-            }
-            // 拖动：标题区域按下移动即移动浮窗，不拦截子控件点击
-            setOnTouchListener { v: View, e: MotionEvent ->
-                when (e.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        downX = e.rawX; downY = e.rawY
-                        true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        params.x = (params.x - (e.rawX - downX).toInt()).coerceAtLeast(0)
-                        params.y = (params.y - (e.rawY - downY).toInt()).coerceAtLeast(0)
-                        downX = e.rawX; downY = e.rawY
-                        wm.updateViewLayout(v, params)
-                        true
-                    }
-                    else -> false
                 }
             }
         }
         overlayHost.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-        wm.addView(view, params)
+        wm.addView(view, lp)
         overlayHost.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         overlayView = view
     }
 
-    private var downX = 0f
-    private var downY = 0f
+    /** 无障碍服务无构造注入，展开面板数据经 Hilt EntryPoint 从 Application 取仓储单例 */
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface OverlayEntryPoint {
+        fun repository(): PriceRepository
+    }
 
     /**
      * WindowManager 里的 ComposeView 需要手动提供 Lifecycle / SavedState 宿主。

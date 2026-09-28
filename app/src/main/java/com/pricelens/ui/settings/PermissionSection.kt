@@ -1,7 +1,6 @@
 package com.pricelens.ui.settings
 
 import android.Manifest
-import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,23 +13,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
 import com.pricelens.accessibility.OverlayManager
 import com.pricelens.ui.components.PriceBadge
 import com.pricelens.ui.components.SectionHeader
+import com.pricelens.ui.onboarding.isPriceLensAccessibilityEnabled
+import com.pricelens.ui.onboarding.rememberPermissionStates
 import com.pricelens.ui.theme.BadgeTone
 import com.pricelens.ui.theme.Dims
 import com.pricelens.util.ShizukuHelper
@@ -38,46 +30,25 @@ import com.pricelens.util.UrlOpener
 
 /**
  * 设置页 · 权限区块：无障碍 / 悬浮窗 / 通知 / Shizuku 四态。
- * 逻辑与阶段2完全一致，仅迁移文案与留白令牌。
+ * 逻辑与阶段2完全一致，仅迁移文案与留白令牌；
+ * v2.6.0 起权限读取与刷新时机改由 [rememberPermissionStates] 统一承载
+ * （原 `isAccessibilityEnabled` 也上移为 [isPriceLensAccessibilityEnabled] 供引导共用，行为等价）。
  */
-
-/** 无障碍服务是否已在系统设置中开启 */
-internal fun isAccessibilityEnabled(context: Context): Boolean {
-    val enabled = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-    ) ?: return false
-    return enabled.contains("com.pricelens") &&
-        enabled.contains("PriceMonitorService", ignoreCase = true)
-}
 
 @Composable
 fun PermissionSection() {
     SectionHeader(stringResource(R.string.settings_section_permission))
 
     val context = LocalContext.current
-    // 从系统设置返回时刷新各项状态
-    var refreshKey by remember { mutableStateOf(0) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(refreshKey) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                refreshKey++
-                ShizukuHelper.refresh() // 兜底：从系统设置/其他应用返回时重算
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    val accEnabled = remember(refreshKey) { isAccessibilityEnabled(context) }
-    val overlayEnabled = remember(refreshKey) { OverlayManager.canDrawOverlays(context) }
-    val notifEnabled = remember(refreshKey) {
-        androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
-    }
+    // 从系统设置返回时刷新各项状态：ON_RESUME + refreshKey 算法已抽到
+    // [com.pricelens.ui.onboarding.rememberPermissionStates]，与新手引导共用同一份判定，行为不变
+    val permissions = rememberPermissionStates()
+    val accEnabled = permissions.accessibilityGranted
+    val overlayEnabled = permissions.overlayGranted
+    val notifEnabled = permissions.notificationsGranted
     val notifLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { refreshKey++ }
+    ) { permissions.refresh() }
 
     val enabledText = stringResource(R.string.perm_enabled)
     val goEnableText = stringResource(R.string.perm_go_enable)
@@ -117,11 +88,9 @@ fun PermissionSection() {
     }
 
     // Shizuku 四态（响应式）：Binder 回调驱动状态流，服务后台启动/授权后自动刷新
-    val shizukuState by ShizukuHelper.status.collectAsStateWithLifecycle()
-    val shizukuInstalled = shizukuState != ShizukuHelper.ShizukuState.NOT_INSTALLED
-    val shizukuAlive = shizukuState == ShizukuHelper.ShizukuState.RUNNING_NOT_GRANTED ||
-        shizukuState == ShizukuHelper.ShizukuState.READY
-    val shizukuGranted = shizukuState == ShizukuHelper.ShizukuState.READY
+    val shizukuInstalled = permissions.shizukuInstalled
+    val shizukuAlive = permissions.shizukuAlive
+    val shizukuGranted = permissions.shizukuReady
     val bothReady = shizukuGranted && accEnabled && overlayEnabled
 
     PermissionRow(
@@ -146,7 +115,7 @@ fun PermissionSection() {
             !shizukuInstalled -> UrlOpener.open(context, "https://github.com/RikkaApps/Shizuku/releases/latest")
             !shizukuAlive -> ShizukuHelper.openShizukuApp(context)
             !shizukuGranted -> ShizukuHelper.requestPermission()
-            else -> ShizukuHelper.oneClickSetup(context) { refreshKey++ }
+            else -> ShizukuHelper.oneClickSetup(context) { permissions.refresh() }
         }
     }
 }

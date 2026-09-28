@@ -13,6 +13,7 @@ const manmanbuy = require('./manmanbuy');
 const gwdang = require('./gwdang');
 const jd = require('./jd');
 const linkstars = require('./linkstars');
+const { best: bestCandidate } = require('../utils/ranking');
 
 /**
  * 输入类型识别。
@@ -95,9 +96,13 @@ async function searchProducts(q) {
     return { type: parsed.type, product, deals: [], url: '', keyword: view.title };
   }
 
-  // 关键词：以什么值得买爆料为商品候选
+  // 关键词：以什么值得买爆料为商品候选。
+  // 2026-09-28：候选从"取第一条带价的"改为跨源打分 argmax（与 Android
+  // domain/ProductCandidateResolver.resolvePrimary + CandidateRanking 同规则）；
+  // 爆料列表本身维持站点热度顺序不变，只是不再让第一条当商品头。
   const { deals } = await smzdm.searchDeals(parsed.keyword);
-  const candidate = deals.find((d) => d.price && /^https?:\/\//.test(d.url)) || null;
+  const pool = deals.filter((d) => d.price && /^https?:\/\//.test(d.url));
+  const candidate = bestCandidate(parsed.keyword, pool);
   const product = candidate
     ? {
         title: candidate.title,

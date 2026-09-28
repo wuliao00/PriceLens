@@ -14,6 +14,7 @@ import com.pricelens.data.remote.JdApi
 import com.pricelens.data.remote.ManmanbuyApi
 import com.pricelens.data.remote.ShihuoApi
 import com.pricelens.data.remote.SmzdmApi
+import com.pricelens.util.QueryRelevance
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -197,6 +198,54 @@ class PriceRepository @Inject constructor(
     /** L1 内存缓存占用（个人页/设置页统计用） */
     fun memoryCacheSizeBytes(): Long = memoryCache.sizeBytes()
 
+    // ---------- 浮窗聚合（A2 新增：仅供无障碍比价浮窗，不影响既有方法与上游 ViewModel） ----------
+
+    /**
+     * 浮窗展开面板的聚合数据：历史价位置 / 优惠券 / 多平台同款报价。
+     *
+     * 防错配约定（与浮窗硬规则一致）：
+     *  - [jdSku] 仅在浮窗拿到**确定性商品 ID**（DetectionBasis.ITEM_ID）时传入；
+     *    为 null 时历史价与多平台报价返回空——绝不把别的 SKU 的历史价当当前商品价；
+     *  - 券/当当/识货是关键词通道，返回前逐条过 [QueryRelevance.isRelevant] 过滤，
+     *    UI 侧仍需标注"不同店铺/规格，仅供参考"；
+     *  - [OverlayBundle.stale]=true 表示本次用到的缓存 key 命中 [staleKeys]（降级回吐旧数据）。
+     *
+     * 全部经既有 [CachedSource] 通道取数：与 SearchViewModel 的同 key 搜索共享 singleflight，
+     * 不新增额外网络放大。
+     */
+    suspend fun overlayBundle(keyword: String, jdSku: String?): OverlayBundle {
+        val historyUrl = jdSku?.let { "https://item.jd.com/$it.html" }
+        val history = historyUrl?.let { url -> runCatching { getPriceHistory(url) }.getOrNull() }
+        val coupons = runCatching { searchCoupons(keyword) }.getOrNull()
+            ?.sortedByDescending { it.amount }
+            ?.take(3)
+            ?: emptyList()
+        val platforms = ArrayList<PlatformQuote>(2)
+        if (jdSku != null) {
+            runCatching { searchDangdang(keyword) }.getOrNull()
+                ?.firstOrNull { it.price > 0 && QueryRelevance.isRelevant(keyword, it.title) }
+                ?.let { platforms.add(PlatformQuote(platform = "当当", price = it.price)) }
+            runCatching { searchShihuo(keyword) }.getOrNull()
+                ?.firstOrNull { it.price > 0 && QueryRelevance.isRelevant(keyword, it.title) }
+                ?.let { platforms.add(PlatformQuote(platform = "识货", price = it.price)) }
+        }
+        val usedKeys = listOfNotNull(
+            historyUrl?.let { "mmb:history:$it" },
+            "gwd:coupon:$keyword",
+            if (jdSku != null) "dd:search:$keyword" else null,
+            if (jdSku != null) "sh:search:$keyword" else null
+        )
+        val stale = usedKeys.any { it in staleKeys.value }
+        return OverlayBundle(
+            history = history,
+            coupons = coupons,
+            platforms = platforms,
+            sourceLabel = if (history != null) "慢慢买" else "什么值得买",
+            fetchedAtMs = System.currentTimeMillis(),
+            stale = stale
+        )
+    }
+
     // ---------- 个人页 / 设置页 ----------
 
     fun observePinned() = db.productDao().observePinned()
@@ -322,3 +371,25 @@ class PriceRepository @Inject constructor(
         const val JD_PRODUCT_CACHE_FLOOR = 1_790_352_000_000L
     }
 }
+
+/**
+ * [PriceRepository.overlayBundle] 的返回结构（A2 新增，仅浮窗消费）。
+ * 空字段=缺数据，浮窗"缺什么隐什么"，不做占位。
+ */
+data class OverlayBundle(
+    /** 确定性 ID 命中时的历史价曲线；TITLE_ONLY 恒为 null */
+    val history: ManmanbuyApi.History?,
+    /** 关键词券（已过相关性/门槛约束，UI 标注"仅供参考"），面额降序 ≤3 条 */
+    val coupons: List<GwdangApi.Coupon>,
+    /** 多平台同款报价；TITLE_ONLY 恒为空表 */
+    val platforms: List<PlatformQuote>,
+    /** 人读来源（"慢慢买"/"什么值得买"），浮窗灰脚注必须项 */
+    val sourceLabel: String?,
+    /** 数据聚合时间戳（浮窗显示"3 小时前"用） */
+    val fetchedAtMs: Long,
+    /** 本次用到的缓存 key 是否有任一处于 staleKeys 降级态 */
+    val stale: Boolean
+)
+
+/** 多平台比价胶囊的一枚：平台名 + 报价 */
+data class PlatformQuote(val platform: String, val price: Double)

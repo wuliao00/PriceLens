@@ -84,7 +84,9 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
             item(key = "empty_title") {
                 Spacer(Modifier.height(Dims.SpacingL))
                 Text(
-                    stringResource(R.string.overview_not_found, keyword),
+                    // 空态多为"上游有条目但全被相关性过滤掉"（关键词过短/写法不匹配），
+                    // 如实说明并给出可执行的关键词写法（文案见 res/values/strings_search.xml）
+                    stringResource(R.string.search_no_relevant_result, keyword),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

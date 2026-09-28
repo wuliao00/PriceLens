@@ -26,9 +26,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
 import com.pricelens.ui.components.SectionHeader
 import com.pricelens.ui.theme.Dims
+import com.pricelens.update.UpdateRepository
+import com.pricelens.update.UpdateState
 
 /**
  * 设置页 · 数据区块：缓存占用查看 / 刷新 / 清理。
@@ -138,13 +141,14 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
 }
 
 /**
- * 设置页 · 关于区块：版本 / 隐私声明 / 免费声明弹窗。
+ * 设置页 · 关于区块：版本 / 隐私声明 / 免费声明弹窗 / 检查更新 / 重看新手引导。
  */
 @Composable
-fun AboutSection(versionName: String) {
+fun AboutSection(versionName: String, versionCode: Int, updateRepository: UpdateRepository, onReplayOnboarding: () -> Unit) {
     SectionHeader(stringResource(R.string.settings_section_about))
 
     var showDisclaimer by remember { mutableStateOf(false) }
+    val updateState by updateRepository.state.collectAsStateWithLifecycle()
 
     SettingsRow(
         title = stringResource(R.string.settings_about_version, versionName),
@@ -152,6 +156,36 @@ fun AboutSection(versionName: String) {
     ) {
         TextButton(onClick = { showDisclaimer = true }) {
             Text(stringResource(R.string.settings_about_disclaimer))
+        }
+    }
+
+    // 检查更新 / 当前 v…：复用 SettingsRow 风格；判定与下载都交给 UpdateRepository
+    SettingsRow(
+        title = stringResource(R.string.update_check_action),
+        desc = updateRowDesc(updateState, versionName)
+    ) {
+        TextButton(
+            enabled = updateState !is UpdateState.Checking,
+            onClick = { updateRepository.checkManually(versionCode) }
+        ) {
+            Text(
+                stringResource(
+                    if (updateState is UpdateState.Checking) {
+                        R.string.update_checking
+                    } else {
+                        R.string.update_check_action
+                    }
+                )
+            )
+        }
+    }
+
+    SettingsRow(
+        title = stringResource(R.string.settings_replay_onboarding),
+        desc = stringResource(R.string.settings_replay_onboarding_desc)
+    ) {
+        TextButton(onClick = onReplayOnboarding) {
+            Text(stringResource(R.string.settings_replay_action))
         }
     }
 
@@ -167,4 +201,15 @@ fun AboutSection(versionName: String) {
             }
         )
     }
+}
+
+/** "检查更新"行的副标题：把闸门状态如实翻成人话（拿不到清单也不谎报"已最新"） */
+@Composable
+private fun updateRowDesc(state: UpdateState, versionName: String): String = when (state) {
+    is UpdateState.UpToDate -> stringResource(R.string.update_up_to_date, state.offer.versionName)
+    is UpdateState.Forced -> stringResource(R.string.update_available_hint, state.offer.versionName)
+    is UpdateState.StrongHint -> stringResource(R.string.update_available_hint, state.offer.versionName)
+    is UpdateState.Optional -> stringResource(R.string.update_available_hint, state.offer.versionName)
+    is UpdateState.Unavailable -> stringResource(R.string.update_check_unavailable)
+    else -> stringResource(R.string.update_current_version, versionName)
 }

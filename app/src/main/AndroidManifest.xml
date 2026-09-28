@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- 后台自启动：开机后恢复盯价与缓存清理任务 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 应用内更新（v2.6.0）：拉起系统安装器需要"安装未知应用"资格
+         （运行时由用户授予，未授予时跳 ACTION_MANAGE_UNKNOWN_APP_SOURCES） -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Android 11+ 包可见性：仅能看到电商 APP（§1.6 最小权限） -->
     <queries>
@@ -93,6 +96,18 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
+        </provider>
+
+        <!-- 应用内更新（v2.6.0）：把下载好的 APK 以 content:// 交给系统安装器。
+             只暴露 cacheDir/apk 一个目录，exported=false，读授权靠 FLAG_GRANT_READ_URI_PERMISSION 单次授予 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/apk_file_paths" />
         </provider>
 
         <!-- Shizuku：免 root 授权执行开启无障碍的 shell 命令。

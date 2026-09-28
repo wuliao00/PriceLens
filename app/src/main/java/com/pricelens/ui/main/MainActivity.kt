@@ -42,6 +42,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,14 +56,22 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pricelens.BuildConfig
 import com.pricelens.R
 import com.pricelens.accessibility.OverlayManager
 import com.pricelens.data.repository.SettingsRepository
 import com.pricelens.ui.components.AppTopBar
+import com.pricelens.ui.onboarding.OnboardingFlow
+import com.pricelens.ui.onboarding.SetupHintBar
+import com.pricelens.ui.onboarding.rememberPermissionStates
 import com.pricelens.ui.overview.SearchViewModel
 import com.pricelens.ui.theme.MotionDurations
 import com.pricelens.ui.theme.PriceLensEasing
 import com.pricelens.ui.theme.PriceLensTheme
+import com.pricelens.ui.update.ForcedUpdateDialog
+import com.pricelens.ui.update.SkippableUpdateDialog
+import com.pricelens.update.UpdateRepository
+import com.pricelens.update.UpdateState
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.delay
@@ -73,6 +82,10 @@ class MainActivity : ComponentActivity() {
     /** 阶段2：设置单点收口（动态取色 / 免责声明），不再裸取 prefs */
     @Inject
     lateinit var settings: SettingsRepository
+
+    /** v2.6.0：更新闸门（清单拉取 + 判定 + 下载安装状态都收口在这里） */
+    @Inject
+    lateinit var updateRepository: UpdateRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -89,7 +102,8 @@ class MainActivity : ComponentActivity() {
                     MainScreen(
                         initialKeyword = focusTitle,
                         overlayPermissionAvailable = !OverlayManager.canDrawOverlays(this),
-                        settings = settings
+                        settings = settings,
+                        updateRepository = updateRepository
                     )
                 }
             }
@@ -108,7 +122,12 @@ private enum class Tab(@StringRes val labelRes: Int) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(initialKeyword: String?, overlayPermissionAvailable: Boolean, settings: SettingsRepository) {
+fun MainScreen(
+    initialKeyword: String?,
+    overlayPermissionAvailable: Boolean,
+    settings: SettingsRepository,
+    updateRepository: UpdateRepository
+) {
     // 阶段2：搜索编排集中在 SearchViewModel（Activity 作用域单例，跨标签共享）
     val searchViewModel: SearchViewModel = hiltViewModel()
     val priceWatchViewModel: com.pricelens.ui.price.PriceWatchViewModel = hiltViewModel()
@@ -124,6 +143,13 @@ fun MainScreen(initialKeyword: String?, overlayPermissionAvailable: Boolean, set
     var showDisclaimer by remember { mutableStateOf(!settings.disclaimerAgreed) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showScripts by rememberSaveable { mutableStateOf(false) }
+    // 首启引导：完成/跳过后持久化 onboardingDone，之后只从设置页"重新查看新手引导"进入
+    var showOnboarding by rememberSaveable { mutableStateOf(!settings.onboardingDone) }
+    var setupHintDismissed by rememberSaveable { mutableStateOf(false) }
+
+    val updateState by updateRepository.state.collectAsStateWithLifecycle()
+    val downloadState by updateRepository.downloadState.collectAsStateWithLifecycle()
+    val permissionStates = rememberPermissionStates()
 
     // 通知权限（Android 13+ 需运行时申请，盯价提醒依赖它）
     var notificationAsked by remember { mutableStateOf(false) }
@@ -135,9 +161,9 @@ fun MainScreen(initialKeyword: String?, overlayPermissionAvailable: Boolean, set
         context, Manifest.permission.POST_NOTIFICATIONS
     ) == PackageManager.PERMISSION_GRANTED
 
-    // 声明确认后顺手请求通知权限
-    androidx.compose.runtime.LaunchedEffect(showDisclaimer, notifGranted) {
-        if (!showDisclaimer && !notificationAsked && !notifGranted) {
+    // 声明确认后顺手请求通知权限（引导进行中不打断，引导结束再问）
+    LaunchedEffect(showDisclaimer, notifGranted) {
+        if (!showDisclaimer && !showOnboarding && !notificationAsked && !notifGranted) {
             notificationAsked = true
             if (android.os.Build.VERSION.SDK_INT >= 33) {
                 notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -145,7 +171,17 @@ fun MainScreen(initialKeyword: String?, overlayPermissionAvailable: Boolean, set
         }
     }
 
-    // 作者 / 免费声明：未同意前启动弹出；阅读 30 秒后方可同意，同意即持久化不再展示
+    // 更新闸门只在冷启动判定一次（versionCode 由外部传入，判定逻辑不读 BuildConfig）
+    LaunchedEffect(Unit) {
+        updateRepository.checkOnColdStart(BuildConfig.VERSION_CODE)
+    }
+
+    LaunchedEffect(initialKeyword) {
+        if (!initialKeyword.isNullOrBlank()) searchViewModel.search(initialKeyword)
+    }
+
+    // 阻断层严格互斥、顺序固定：免责声明 → 强制更新 → 新手引导。
+    // 同一时刻只存在一个阻断面，绝不叠两层（强制更新排在声明之后，避免用户还没看完声明就被锁）。
     if (showDisclaimer) {
         DisclaimerDialog(
             onDismissRequest = { showDisclaimer = false },
@@ -154,10 +190,28 @@ fun MainScreen(initialKeyword: String?, overlayPermissionAvailable: Boolean, set
                 showDisclaimer = false
             }
         )
+        return
     }
 
-    androidx.compose.runtime.LaunchedEffect(initialKeyword) {
-        if (!initialKeyword.isNullOrBlank()) searchViewModel.search(initialKeyword)
+    val forced = updateState as? UpdateState.Forced
+    if (forced != null) {
+        ForcedUpdateDialog(
+            offer = forced.offer,
+            download = downloadState,
+            repository = updateRepository
+        )
+        return
+    }
+
+    if (showOnboarding) {
+        OnboardingFlow(
+            settings = settings,
+            onFinish = {
+                showOnboarding = false
+                setupHintDismissed = false
+            }
+        )
+        return
     }
 
     Scaffold(
@@ -197,6 +251,17 @@ fun MainScreen(initialKeyword: String?, overlayPermissionAvailable: Boolean, set
         }
     ) { inner ->
         Column(Modifier.padding(inner).fillMaxSize()) {
+            // 引导跳过/完成后仍缺必要权限：首页顶部给一条可关闭的提示条（含"重开引导"入口）
+            if (tab == Tab.OVERVIEW && !permissionStates.essentialsReady && !setupHintDismissed) {
+                SetupHintBar(
+                    missing = permissionStates.missingEssentials,
+                    onReopenOnboarding = {
+                        setupHintDismissed = false
+                        showOnboarding = true
+                    },
+                    onDismiss = { setupHintDismissed = true }
+                )
+            }
             // 深度原则：Tab 切换转场——交叉淡入 + 微位移（克制，250ms 标准时长）
             AnimatedContent(
                 targetState = tab,
@@ -226,9 +291,34 @@ fun MainScreen(initialKeyword: String?, overlayPermissionAvailable: Boolean, set
         }
     }
 
+    // 两级可跳过的更新提示：主界面之上，随时能走（与阻断层互斥，此处必然已在主界面）
+    when (val state = updateState) {
+        is UpdateState.StrongHint -> SkippableUpdateDialog(
+            offer = state.offer,
+            strong = true,
+            download = downloadState,
+            repository = updateRepository
+        )
+        is UpdateState.Optional -> SkippableUpdateDialog(
+            offer = state.offer,
+            strong = false,
+            download = downloadState,
+            repository = updateRepository
+        )
+        else -> {}
+    }
+
     // 设置页：全屏覆盖，权限 / 外观 / 数据 / 关于
     if (showSettings) {
-        com.pricelens.ui.settings.SettingsScreen(settings = settings, onBack = { showSettings = false })
+        com.pricelens.ui.settings.SettingsScreen(
+            settings = settings,
+            updateRepository = updateRepository,
+            onBack = { showSettings = false },
+            onReplayOnboarding = {
+                showSettings = false
+                showOnboarding = true
+            }
+        )
     }
 
     // 自定义脚本页：Shizuku ADB 级 shell 执行

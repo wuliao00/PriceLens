@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    盯价（价格跟踪）链路专用文案（A3）。
+    单独成文件是为了不动 strings.xml（其它代理在改），命名一律 watch_* 前缀。
+    %1$s / %1$d 等占位符顺序与调用处严格对应。
+-->
+<resources>
+    <!-- 入口判定：不可盯的具体原因（不再静默隐藏入口） -->
+    <string name="watch_reason_missing_id">该商品没有可跟踪的平台 ID，无法后台盯价。京东商品请粘贴 item.jd.com 链接或 6 位以上 SKU 后再盯。</string>
+    <string name="watch_reason_malformed_id">平台 ID「%1$s」形态不合法（京东 SKU 需为 6 位以上纯数字），已拒绝入库，以免跟踪到别的商品。</string>
+    <string name="watch_reason_platform_conflict">候选自带京东 SKU「%2$s」，但链接指向「%1$s」，平台不一致，已拒绝入库以免盯错商品。</string>
+    <string name="watch_reason_no_channel">「%1$s」暂无服务端查价通道（商品号 %2$s 已识别但没有价格接口），无法后台盯价。可开启无障碍实时价，盯本机 App 账号看到的价格。</string>
+    <string name="watch_reason_no_channel_no_id">「%1$s」暂无服务端查价通道，无法后台盯价。可开启无障碍实时价，盯本机 App 账号看到的价格。</string>
+    <string name="watch_reason_empty_id_blocked">旧版本把空 SKU 写成了同一个主键「jd:」，这类目标无法定位商品，已停止入库；请在「我的」页删除历史遗留的坏目标。</string>
+
+    <!-- 通道可用性如实提示 -->
+    <string name="watch_channel_jd_degraded">注意：京东公开查价（p.3.cn）已下线，未配置星罗好货 API Key 时后台很可能取不到现价——届时不会误报「降价」，只会在上面提示无进展；要盯本机账号看到的价格，请改用无障碍实时价。</string>
+    <string name="watch_channel_credential_ready">已检测到星罗好货 API Key，京东现价可经该通道获取。</string>
+
+    <!-- 目标价预填依据 -->
+    <string name="watch_target_prefill_current">目标价默认取【同一 SKU】的历史当前价 %1$s</string>
+    <string name="watch_target_prefill_lowest">历史当前价缺失，改取同一 SKU 的历史最低价 %1$s</string>
+    <string name="watch_target_cross_source">无法确认这条历史曲线属于当前 SKU（本轮关键词没有自带商品 ID，曲线可能来自另一条爆料链接），因此不预填目标价，请手动填写。</string>
+    <string name="watch_target_no_history">没有可用的同 SKU 历史价，请手动填写目标价。</string>
+    <string name="watch_target_same_sku_low">同 SKU 历史最低 %1$s</string>
+
+    <!-- 主键防撞 -->
+    <string name="watch_conflict_title">该平台 ID 已有盯价目标</string>
+    <string name="watch_conflict_desc">ID %1$s 已被目标「%2$s」占用，继续将把它改名为「%3$s」并覆盖目标价。若这不是同一个商品，请取消并先删除旧目标。</string>
+    <string name="watch_conflict_confirm">仍要覆盖</string>
+
+    <!-- 保存结果 -->
+    <string name="watch_saved_new">已加入盯价：%1$s（每 30 分钟自动检查）</string>
+    <string name="watch_saved_update">已更新该 SKU 的目标价为 %1$s</string>
+    <string name="watch_save_rejected_reason">未加入盯价：%1$s</string>
+    <string name="watch_save_invalid_price">请输入大于 0 的目标价</string>
+
+    <!-- 已在盯提示 -->
+    <string name="watch_already_tracked">该商品已在盯价 · 目标价 %1$s</string>
+    <string name="watch_button_update">更新该商品的目标价</string>
+
+    <!-- 设置目标价弹窗：说明盯的是哪个平台的哪个 ID -->
+    <string name="watch_dialog_target_id">盯价对象：%1$s · 商品 ID %2$s</string>
+    <string name="watch_dialog_candidate_price">候选页所见价 %1$s（来自当前候选，不是后台查价结果）</string>
+
+    <!-- 平台显示名（候选模型不带平台字段，由链接域名推导后用于文案） -->
+    <string name="watch_platform_jd">京东</string>
+    <string name="watch_platform_taobao">淘宝/天猫</string>
+    <string name="watch_platform_pdd">拼多多</string>
+    <string name="watch_platform_dangdang">当当</string>
+    <string name="watch_platform_shihuo">识货</string>
+    <string name="watch_platform_smzdm">什么值得买</string>
+    <string name="watch_platform_unknown">未知平台</string>
+
+    <!-- 检查轮次的如实反馈 -->
+    <string name="watch_status_title">盯价检查状态</string>
+    <string name="watch_status_round">上次检查 %1$s · %2$d 个目标 · 查到价格 %3$d · 达标提醒 %4$d</string>
+    <string name="watch_status_never">尚未跑过检查（后台每 30 分钟一次，也可手动检查）</string>
+    <string name="watch_skip_no_channel">%1$d 个目标因平台无查价通道被跳过</string>
+    <string name="watch_skip_bad_id">%1$d 个目标缺少合法平台 ID（旧版本遗留），无法跟踪</string>
+    <string name="watch_skip_no_price">%1$d 个目标本轮取不到现价（京东公开查价已下线，需星罗 API Key 或无障碍实时价）</string>
+    <string name="watch_status_stalled">本轮没有任何目标查到价格，不会有任何降价提醒。</string>
+    <string name="watch_check_now">立即检查一次</string>
+    <string name="watch_check_running">检查中…</string>
+    <string name="watch_broken_targets_hint">「我的」页里有 %1$d 个无法跟踪的历史目标，建议删除后按有效 SKU 重新添加。</string>
+
+    <!-- 连续多轮全部无进展时的可点开说明 -->
+    <string name="watch_stale_notify_title">盯价没有进展：%1$d 个目标都查不到价格</string>
+    <string name="watch_stale_notify_no_channel">这些目标所属平台没有查价通道（京东公开查价 p.3.cn 已下线）。点开查看替代方案</string>
+    <string name="watch_stale_notify_no_price">连续多轮取不到现价：请在设置里配置星罗好货 API Key，或改用无障碍实时价。点开查看</string>
+    <string name="watch_stale_notify_bad_id">有目标的主键不合法（空 SKU 遗留行），请在「我的」页删除后重新添加。点开查看</string>
+</resources>

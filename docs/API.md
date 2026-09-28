@@ -66,8 +66,10 @@ ShihuoApi     // 识货：m 站搜索接口 `m.shihuo.cn/search?type=goods`（�
 //    CachedSource(key/TTL/编解码器/源名/取数钩子) →
 //    L1 内存 TLRU → L2 Room → L3 网络 → 写回 + 失败降级旧快照（SourceHealth）
 
-// ④ util/QueryRelevance.kt —— 搜索类数据源统一相关性过滤（2026-09 新增）：
-//    拉丁 token 全覆盖 / 配件排除（含"适用 xxx"前缀）/ 图书说明书排除 /
+// ④ util/QueryRelevance.kt —— 搜索类数据源统一相关性过滤（2026-09 新增，v2.6.0 修正分词）：
+//    关键词按非字母数字汉字**切段**后要求逐段命中 + **保持段序** + 相邻段间隔 ≤12 字符
+//    （`oppo x8s` 因此能命中 `OPPO Find X8s`；逆序巧合串仍被挡）/
+//    配件排除（含"适用 xxx"前缀）/ 图书说明书排除 /
 //    品牌一致性 / 纯中文关键词词面命中；桌面端同规则见 desktop/src/main/utils/relevance.js
 ```
 
@@ -112,6 +114,23 @@ class Crawler {
 
 > 回归方式：Android 侧夹具化单测（`app/src/test/resources/fixtures/`，取自上述实况页面）；
 > 桌面侧运行 `node desktop/_crawler_check.js "<关键词>"` 做发布前巡检。
+
+### 更新通道（v2.6.0 起，更新源 Gitee）
+
+| 项 | 约定 |
+|----|------|
+| 清单地址 | `https://gitee.com/wuliao11541/PriceLens/raw/main/update.json?v=<versionCode>&t=<epoch/600s>`（`?v/?t` 用于破 Gitee CDN 的 60s 服务端缓存） |
+| 安装包位置 | 孤儿分支 `dist` 上的 `PriceLens-<version>.apk`，raw 直链 `https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-X.Y.Z.apk`。选它而不是发行版附件：Gitee 附件上传要登录态（SSH/CI 都推不上去），而 2.2 MB 的 release 包在 raw 免登录上限（10 MB）以内；二进制只进 `dist`，`main` 历史保持干净。次选 `github.com/.../releases/download/...` |
+| 请求方式 | 复用 `ApiClient.getJsonResult`（内部 `FORCE_NETWORK`），**禁止**走允许缓存的重载 |
+| 判定入口 | `update/UpdateEvaluator`（纯函数，`currentVersionCode` 由外部传入便于单测） |
+| 阈值语义 | 仅 `current < minSupportedVersionCode` 阻断；`< forceBelow` 强提示可跳过；`< latest.versionCode` 可选提示（受 `rolloutPercent` 灰度） |
+| fail-open | 清单拉取失败 / JSON 解析失败 / `schemaVersion` 未知 / `sha256` 非 64 位十六进制（含发布前占位符）/ `generatedAt` 超 30 天或超前 24h 以上 → **一律静默**，绝不把人锁在门外 |
+| 安装链路 | Range 断点续传 → `.part` → sha256 校验 → rename → FileProvider `content://` → 系统安装器；缺"未知来源"授权时跳系统设置页；连续 3 次失败降级为普通提示 |
+| 本地静音 | 同一 `generatedAt` 只提示一次；逃生口 24h；"以后再说" = `cooldownHours`。设置页「检查更新」可立即穿透 |
+| 回滚 | revert `update.json` 并推 Gitee 镜像即可，不改代码、不重打包 |
+
+> 字段完整语义与发布步骤见 [DEVELOPMENT.md](DEVELOPMENT.md) 的「强制更新开关」。
+> 注意：清单只被 **2.6.0 及以后**的客户端读取，更早版本没有这套代码。
 
 
 ### 请求参数规范

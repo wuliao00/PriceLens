@@ -11,8 +11,9 @@ captures/
 *.keystore
 !debug.keystore
 
-# 本地验证截图与临时文件（保留本机，不入库）
+# 本地验证截图、工具缓存与临时文件（保留本机，不入库）
 s*.png
+.qoder-credits/
 _del*.tmp
 _release_notes_*.md
 _cleanup.ps1

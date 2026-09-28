@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A2 比价浮窗 / 状态口径新增文案（独立文件，避免与 strings.xml 合并冲突）。
+  命名统一 ovl_ 前缀；overlay_cta / overview_live_price 等旧 key 仍在 strings.xml。
+-->
+<resources>
+
+    <!-- 价格口径标签（浮窗第①行，裸数字绝不冒充到手价） -->
+    <string name="ovl_basis_page">页面价</string>
+    <string name="ovl_basis_coupon">券后价</string>
+    <string name="ovl_basis_net">到手价</string>
+
+    <!-- 内容描述 -->
+    <string name="ovl_cd_close">关闭浮窗</string>
+
+    <!-- 浮窗行文案 -->
+    <string name="ovl_title_fallback">当前商品</string>
+    <string name="ovl_history_high">90 天最低 %1$s · 当前高 %2$d%%</string>
+    <string name="ovl_history_near_low">90 天最低 %1$s · 当前接近历史低价</string>
+    <string name="ovl_platforms_note">不同店铺/规格，仅供参考</string>
+    <string name="ovl_coupon_chip">%1$d 元券 · %2$s</string>
+    <string name="ovl_coupon_threshold">满 %1$d</string>
+    <string name="ovl_coupon_no_threshold">无门槛</string>
+    <string name="ovl_footer_bundle">来源 %1$s · %2$s · 非实时</string>
+    <string name="ovl_footer_live">来源 %1$s · 实时读取</string>
+    <string name="ovl_bundle_stale">缓存降级 · 可能不是最新</string>
+    <string name="ovl_title_only_cta">识别到标题 · 点击在 App 内搜索</string>
+    <string name="ovl_title_only_hint">仅识别到标题 · 不显示历史价/多平台比价</string>
+
+    <!-- 概览页"上一次商品数据"提示（待 OverviewScreen 绑定时消费） -->
+    <string name="ovl_overview_stale">当前结果为上一次商品数据（本次关键词未命中同款候选）</string>
+
+    <!-- 识别来源（无障碍读取） -->
+    <string name="ovl_source_jd">本机京东账号</string>
+    <string name="ovl_source_taobao">本机淘宝账号</string>
+    <string name="ovl_source_pdd">本机拼多多账号</string>
+    <string name="ovl_source_unknown">本机电商账号</string>
+
+    <!-- 平台胶囊名 -->
+    <string name="ovl_platform_jd">京东</string>
+    <string name="ovl_platform_taobao">淘宝</string>
+    <string name="ovl_platform_pdd">拼多多</string>
+
+</resources>

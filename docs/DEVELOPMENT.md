@@ -318,13 +318,19 @@ npm test                          # Jest 单元测试
 # app/build.gradle.kts: versionCode, versionName
 # RELEASE_NOTES_vX.Y.Z.md
 
-# 2. 配置签名 (local.properties)
+# 2. 签名（两条路，任选其一）
+#   2a. CI/正式签名：仓库根 local.properties（已被 .gitignore 排除）写四行
 PRICLENS_STORE_FILE=app/pricelens.keystore
 PRICLENS_STORE_PASSWORD=****
 PRICLENS_KEY_ALIAS=pricelens
 PRICLENS_KEY_PASSWORD=****
+#   2b. 本机出包（build-apk.ps1 一直在用的方式）：先 assembleRelease 出未签名包，
+#       再用 Android SDK 的 apksigner 签 %USERPROFILE%\.android\debug.keystore
+#       （alias=androiddebugkey / password=android）。本机没有 PRICLENS 密钥库，
+#       GitHub 也没配 PRICLENS_* secrets，所以 2a 目前只对配置过密钥的人可用。
+#       ⚠ 签名身份必须长期固定：换 key 后老设备无法覆盖安装，只能先卸载（丢本地数据）。
 
-# 3. 构建 Release
+# 3. 构建 Release（本机实测约束，见下方"本机构建环境"）
 ./gradlew :app:assembleRelease
 
 # 4. 产物
@@ -332,7 +338,92 @@ PRICLENS_KEY_PASSWORD=****
 
 # 5. 上传 GitHub Release
 gh release create vX.Y.Z app/build/outputs/apk/release/app-release.apk ...
+
+# 5.1 【v2.6.0 起必做】把签名后的 release 包放到两个远端的**孤儿分支 dist** 上，
+#     用 raw 直链对外提供（Gitee 附件上传要登录态，SSH 与 CI 都推不上去；2.2 MB 在
+#     Gitee raw 免登录的 10 MB 上限内，所以走 dist 分支而不是发行版附件）：
+git checkout --orphan dist
+git rm -rf --quiet .        # 只在**首次**建分支时需要：orphan 会把整棵树带进 index
+cp /path/to/PriceLens-X.Y.Z.apk ./PriceLens-X.Y.Z.apk
+git add PriceLens-X.Y.Z.apk && git commit -m "dist: PriceLens X.Y.Z 安装包"
+git push origin dist && git push gitee dist
+git checkout main
+#     dist 上只放 apk 且**累加**——以后发新版用 `git checkout dist` + 拷新包 + add/commit/push，
+#     不要再 git rm，这样老版本的直链一直有效（回滚旧清单时旧包仍可下载）。
+#     然后核对下载侧：curl 下来的 sha256 必须与 update.json 一致（不一致就是 CDN 还在吃旧缓存）。
+#     计算 sha256：sha256sum xxx.apk 或 PowerShell Get-FileHash -Algorithm SHA256。
+
+# 5.2 回填仓库根 update.json：latest.versionCode/versionName/releaseDate、sha256（64 位小写十六进制）、
+#     sizeBytes、apkUrls（顺序即优先级：Gitee dist raw → GitHub Release → 下载页）、notes。
+#     需要真正拦住旧版本时才提高 minSupportedVersionCode（见下方"强制更新开关"）。
+
+# 5.3 同步 Gitee 镜像（客户端只认 Gitee 为主源，国内实测 github/raw.githubusercontent 直连不通）
+#     ⚠ 不要 `git push --force gitee main:main`：Gitee 的 main 与 GitHub 的 main 是
+#     **两条互不相干的历史**（2026-09-28 实测：GitHub main 只有 16 个提交且最早的是
+#     `docs: add English & Russian README`，Gitee main 有 43 个提交、含 v2.3→v2.5 全过程与
+#     dependabot 合并；`git merge-base` 无输出）。GitHub 侧靠 tag v2.3.0/v2.4.3/v2.4.4 还指着
+#     Gitee 那条线上的提交，但**分支历史上没有**。强推会让 Gitee 上这条公开历史从 main 消失。
+#     内容侧不用担心：`git diff --name-status gitee/main main` 里 0 个 D（Gitee 没有独有文件），
+#     main 的树是更新的那一份。所以用"合并但保留自己内容"的做法，两个远端都是快进、无需 --force：
+git remote add gitee git@gitee.com:wuliao11541/PriceLens.git   # 一次性；SSH 已授权（Hi wuliao00(@wuliao11541)）
+git fetch gitee main:refs/remotes/gitee/main
+git merge --no-ff -s ours gitee/main -m "chore(mirror): 合并 Gitee 镜像历史（内容取 GitHub main，不引入冲突）"
+git push origin main     # 快进：合并提交以 origin/main 为第一父
+git push gitee main      # 快进：gitee/main 是第二父
+# 验证清单可达（404=还没同步；200 且 Content-Length 对得上=OK）
+curl -sI "https://gitee.com/wuliao11541/PriceLens/raw/main/update.json?v=13&t=1" | head -5
+# Gitee CDN 有 60s 服务端缓存，客户端已用 ?v=&t=（t=nowMs/60000，即分钟桶）破缓存，清单发布后约 1 分钟客户端可见。
 ```
+
+#### 本机构建环境（2026-09-28 实测，绕开这三点才能出包）
+
+- **`./gradlew` 在这台机器上不可用**：wrapper 要下载 gradle-8.11-bin.zip，走代理时证书校验失败
+  （`PKIX path building failed`）。改用本机已缓存的发行版：
+  `E:\dev\gradle-home\wrapper\dists\gradle-8.11-bin\*\gradle-8.11\bin\gradle`
+  （`GRADLE_USER_HOME=E:\dev\gradle-home`，`JAVA_HOME=E:\dev\jdk`，`ANDROID_HOME=E:\dev\android-sdk`，
+  apksigner 在 `E:\dev\android-sdk\build-tools\35.0.0\`）。
+- **仓库路径含中文（`Desktop\项目`）**：`test` 任务必报 `ClassNotFoundException`（编译和 :run 都正常）。
+  解法是把树复制到纯 ASCII 目录再跑，例如 `robocopy PriceLens %TEMP%\pl-verify /MIR /XD .git build
+  node_modules .gradle /XF settings.gradle.kts local.properties`。
+  **必须带 `/MIR`**——增量复制会静默留下目标侧旧文件，于是"测过的那棵树"不等于"要提交的这棵树"；
+  复制后逐个文件 `md5sum` 双向比对再启动门禁。
+- **`maven.google.com` 不可达**：ASCII 副本里的 `settings.gradle.kts` 换成
+  `maven.aliyun.com/repository/{google,central,gradle-plugin}`（该文件用 `/XF` 排除在同步之外，
+  所以本地 patch 不会污染仓库）。
+
+签名与产物实测尺寸（v2.6.0）：`assembleDebug` ≈ 19.7 MB；`assembleRelease`（R8 混淆 + 资源收缩）
+未签名 ≈ 2.2 MB，用 debug.keystore 签完即最终交付包。**发布用 release 包，不要用 debug 包**——
+debug 包带 `android:debuggable`，而且 CI 每轮 runner 的 debug keystore 是随机生成的，
+彼此签名不同，用户侧永远只能卸载重装，应用内更新也装不上。
+
+#### 强制更新开关（update.json 语义）
+
+| 字段 | 作用 | 客户端行为 |
+|------|------|------------|
+| `schemaVersion` | 清单结构版本 | 不等于 `1` → 按"无更新"静默（绝不误伤） |
+| `generatedAt` | 清单生成时刻 | 距今 > 30 天 → 视为陈旧 → 静默（防弃更仓库永久锁死安装量） |
+| `latest.{versionCode,versionName,releaseDate}` | 最新版本 | 版本比较**只用整数 versionCode**，不比较 versionName 字符串 |
+| `minSupportedVersionCode` | **唯一**的阻断阈值 | `current < 它` 且清单可信 → 阻断弹窗（只有"立即更新/复制下载链接/我已升级仍提示我"） |
+| `forceBelow` | 次级强提示阈值 | `current < 它` → 可跳过的强提示，受 `rolloutPercent` 灰度 |
+| `rolloutPercent` | 灰度百分比 0..100 | 只作用于强提示/可选提示；**不作用于阻断层**（安全底线不该被桶号绕过） |
+| `apkUrls[]` | `{label,url,kind}`，`kind=apk\|page` | 数组顺序即优先级；`page` 只开浏览器，不进自动下载链路 |
+| `sha256` | 安装包 64 位小写十六进制 | 空 → 不允许阻断；非十六进制（占位符）→ 下载按钮自动退化为"打开下载页" |
+| `sizeBytes` | 包体积 | 进度显示与超限保护 |
+| `notes[]` | 更新说明 | 弹窗逐条展示 |
+| `cooldownHours` | "以后再说"静默时长 | 本地 `skip_until_ms` 记住，最长 720 小时 |
+
+不可绕过的本地静音只有两个（都可在设置页手动"检查更新"立即穿透）：
+`last_checked_generated_at`（同一 `generatedAt` 只提示一次，避免每次冷启强弹）
+和 `skip_until_ms`（"我已升级仍提示我"逃生口 = 24 小时；"以后再说" = `cooldownHours`）。
+
+**回滚 = revert `update.json` 这一个文件并推 Gitee 镜像**——不改代码、不重新打包。
+把 `minSupportedVersionCode` 调回旧值即可立刻解除阻断；极端情况下（镜像也来不及推）
+客户端仍受"清单 30 天新鲜度 + fail-open + 连续 3 次安装失败降级"三层兜底保护。
+
+> ⚠ 注意：清单只会被 **2.6.0 及以后**的客户端读取（更早版本没有这套代码）。
+> 因此首版写 `minSupportedVersionCode: 14` 实际阻断不到任何人，是"占好形、随时可用"的初值；
+> 真要强推时把它抬到当时的最新版 versionCode 即可。
+
 
 ### Desktop 发布
 
@@ -357,6 +448,8 @@ gh release create vX.Y.Z dist/PriceLens-X.Y.Z-win.zip ...
 - [ ] Android `versionCode` 递增，`versionName` 语义化
 - [ ] Desktop `package.json` version 同步
 - [ ] `RELEASE_NOTES_vX.Y.Z.md` 完整
+- [ ] `update.json` 已回填 latest/sha256/sizeBytes/apkUrls，并推 Gitee 镜像（需要强推时才抬 `minSupportedVersionCode`）
+- [ ] CI secrets `GITEE_MIRROR_TOKEN`（必需）/ `GITEE_MIRROR_USERNAME`（默认 `wuliao11541`）——未配置时镜像步骤自动跳过，不影响流水线
 - [ ] 两端爬虫同步更新（如有平台改版）
 - [ ] 截图/GIF 更新到 `assets/`
 - [ ] GitHub Release 描述引用 Release Notes

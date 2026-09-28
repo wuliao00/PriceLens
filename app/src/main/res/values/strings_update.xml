@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    v2.6.0 应用内更新（强制更新闸门）文案。
+    独立成文件，避免与 strings.xml 既有键（含免责声明 30 秒倒计时文案）产生命名/内容冲突。
+-->
+<resources>
+    <!-- 阻断层：唯一不可跳过的弹窗 -->
+    <string name="update_forced_title">需要更新后才能继续使用</string>
+    <string name="update_forced_body">当前版本已不再受支持，其中的比价结果可能已失真。请更新到 v%1$s 后继续使用。</string>
+    <string name="update_notes_title">本次更新</string>
+
+    <!-- 通用动作 -->
+    <string name="update_action_now">立即更新</string>
+    <string name="update_action_open_page">用浏览器打开下载页</string>
+    <string name="update_action_copy_link">复制下载链接</string>
+    <string name="update_action_later">以后再说</string>
+    <string name="update_action_retry">重试</string>
+    <string name="update_action_resume_install">继续安装</string>
+    <string name="update_copied">下载链接已复制，可在浏览器中粘贴打开</string>
+
+    <!-- 逃生口：本地静默 24 小时后再提示 -->
+    <string name="update_escape_still_prompting">我已升级，仍提示我</string>
+    <string name="update_escape_hint">点它会先安静 24 小时；若你确实已升级到最新版，之后就不会再看到这条提示。</string>
+
+    <!-- 下载与安装 -->
+    <string name="update_downloading">正在下载 v%1$s：%2$s / %3$s</string>
+    <string name="update_download_queued">正在准备下载…</string>
+    <string name="update_download_failed">下载失败：%1$s</string>
+    <string name="update_download_failed_hint">可重试，或用浏览器打开下载页手动安装。</string>
+    <string name="update_unverifiable">本次发布暂无可校验的安装包直链，请用浏览器打开下载页手动更新。</string>
+    <string name="update_installer_launched">已交给系统安装器，请在系统弹窗中确认安装。</string>
+    <string name="update_need_unknown_source_title">需要允许安装未知应用</string>
+    <string name="update_need_unknown_source_body">已打开系统设置。请允许 PriceLens「安装未知应用」，再回到这里点「继续安装」。</string>
+
+    <!-- 厂商 ROM 拦截预告知（非 AOSP 行为，避免用户以为是中病毒/应用异常） -->
+    <string name="update_rom_risk_hint">提示：部分厂商 ROM（小米/华为/OPPO/vivo 等）会拦截第三方安装包并提示「风险应用」「纯净模式」，这是系统行为、不是应用异常，选择「仍要安装」即可。</string>
+
+    <!-- 可跳过的两级提示 -->
+    <string name="update_strong_title">建议尽快更新到 v%1$s</string>
+    <string name="update_strong_body">当前版本存在已知问题，仍可使用，但建议更新以获得准确的比价结果。</string>
+    <string name="update_optional_title">发现新版本 v%1$s</string>
+    <string name="update_cooldown_hint">选「以后再说」后 %1$d 小时内不再提醒。</string>
+
+    <!-- 设置页 · 关于 -->
+    <string name="update_check_action">检查更新</string>
+    <string name="update_current_version">当前 v%1$s · 比价数据仅存本机</string>
+    <string name="update_checking">检查中…</string>
+    <string name="update_up_to_date">已是最新版本 v%1$s</string>
+    <string name="update_check_unavailable">暂时检查不了更新，已按「无更新」处理（不阻断使用）</string>
+    <string name="update_available_hint">v%1$s 可更新</string>
+    <string name="update_degraded_hint">已连续 %1$d 次安装失败，更新提示已降级；建议用浏览器打开下载页手动更新。</string>
+</resources>

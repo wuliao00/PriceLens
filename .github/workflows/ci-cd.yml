@@ -89,6 +89,100 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 30
 
+  # ========== 更新清单校验 + Gitee 镜像（v2.6.0 应用内更新闸门的数据源） ==========
+  # 独立 job：不被 android-build/desktop-build 依赖，缺密钥时整步优雅跳过。
+  # 校验部分只做"清单是不是自洽的 JSON"，不改动任何构建产物。
+  update-manifest:
+    name: Update Manifest & Gitee Mirror
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # 只在 main 分支 push 时跑（PR 拿不到 secrets，也不需要镜像同步）
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 校验 update.json 自洽性
+        run: |
+          python3 - <<'PY'
+          import json, re, sys, datetime
+
+          with open("update.json", encoding="utf-8") as f:
+              m = json.load(f)
+
+          errors = []
+          warns = []
+
+          if m.get("schemaVersion") != 1:
+              errors.append("schemaVersion 必须是 1（客户端只认 1）")
+          latest = m.get("latest", {})
+          code, min_supported, force_below = (
+              latest.get("versionCode"), m.get("minSupportedVersionCode"), m.get("forceBelow")
+          )
+          if not all(isinstance(x, int) for x in (code, min_supported, force_below)):
+              errors.append("latest.versionCode / minSupportedVersionCode / forceBelow 必须是整数")
+          else:
+              if code < min_supported:
+                  errors.append("latest.versionCode 不能低于 minSupportedVersionCode（否则无人能升级）")
+              if force_below > min_supported:
+                  errors.append("forceBelow 应 <= minSupportedVersionCode，否则强提示层永远被阻断层吃掉")
+          urls = m.get("apkUrls") or []
+          if not urls:
+              errors.append("apkUrls 不能为空（客户端要求至少一个下载目标）")
+          for u in urls:
+              if not str(u.get("url", "")).startswith("https://"):
+                  errors.append(f"apkUrls 必须走 https: {u.get('url')}")
+              if u.get("kind") not in ("apk", "page"):
+                  errors.append(f"apkUrls.kind 只能是 apk 或 page: {u.get('kind')}")
+          if not any(u.get("kind") == "apk" for u in urls):
+              warns.append("没有 kind=apk 的直链，应用内下载会退化为打开下载页")
+          percent = m.get("rolloutPercent", 100)
+          if not (0 <= percent <= 100):
+              errors.append("rolloutPercent 必须在 0..100")
+          generated = m.get("generatedAt", "")
+          try:
+              ts = datetime.datetime.fromisoformat(str(generated).replace("Z", "+00:00"))
+              if ts.tzinfo is None:
+                  ts = ts.replace(tzinfo=datetime.timezone.utc)
+              age_days = (datetime.datetime.now(datetime.timezone.utc) - ts).days
+              if age_days > 30:
+                  warns.append(f"generatedAt 已 {age_days} 天旧，客户端会按陈旧清单静默不阻断")
+          except Exception:
+              errors.append(f"generatedAt 无法解析: {generated}")
+          sha = m.get("sha256", "")
+          if not re.fullmatch(r"[0-9a-f]{64}", sha or ""):
+              warns.append("sha256 不是 64 位十六进制，应用内下载将降级为打开下载页（发布时请回填真实值）")
+
+          for e in errors:
+              print("::error::" + e)
+          for w in warns:
+              print("::warning::" + w)
+          if errors:
+              sys.exit(1)
+          print("update.json OK: latest=%s min=%s rollout=%s%%" % (code, min_supported, percent))
+          PY
+
+      # 缺 GITEE_MIRROR_TOKEN 时不执行、不报错；Gitee 抖动也只告警不阻断流水线
+      - name: 推送 Gitee 公开镜像（更新源）
+        if: ${{ secrets.GITEE_MIRROR_TOKEN != '' }}
+        continue-on-error: true
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_MIRROR_TOKEN }}
+          GITEE_USER: ${{ secrets.GITEE_MIRROR_USERNAME }}
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git remote add gitee "https://oauth2:${GITEE_TOKEN}@gitee.com/${GITEE_USER:-wuliao11541}/PriceLens.git"
+          git push --force gitee HEAD:refs/heads/main
+          echo "已推送 Gitee 镜像，客户端清单地址：https://gitee.com/${GITEE_USER:-wuliao11541}/PriceLens/raw/main/update.json"
+
+      - name: 缺少镜像密钥时跳过
+        if: ${{ secrets.GITEE_MIRROR_TOKEN == '' }}
+        run: echo "::notice::未配置 GITEE_MIRROR_TOKEN，跳过 Gitee 镜像推送（清单校验已完成）"
+
   # ========== Desktop 构建与测试 ==========
   desktop-build:
     name: Desktop Build & Test

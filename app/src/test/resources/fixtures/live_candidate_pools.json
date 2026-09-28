@@ -1,0 +1,807 @@
+{
+ "note": "2026-09-28 live search pools (dangdang + smzdm faxian), pre-relevance-filter. Captured by PriceLens-probe/probe_kw.py; used by CandidateRankingTest.",
+ "groups": [
+  {
+   "keyword": "oppo x8s",
+   "page": "oppo_x8s",
+   "items": [
+    {
+     "title": "OPPO手机摄影与短视频拍摄一本通 OPPO手机摄影教程书籍OPPO手机摄影入门，拍摄附件+摄影技法+视频拍摄+视频剪辑+音频编辑+字幕添加，轻松玩转OPPO手",
+     "price": 34.5,
+     "source": "dangdang"
+    },
+    {
+     "title": "OPPO手机摄影与短视频拍摄一本通 千知影像 著 9787115687340 人民邮电出版社 正版全新书籍 多仓发货 正规发票",
+     "price": 58.2,
+     "source": "dangdang"
+    },
+    {
+     "title": "OPPO手机摄影与短视频拍摄一本通 千知影像编 人民邮电出版社 手机拍照技巧 短视频制作教程 安卓手机摄影 手机拍视频技 全新正版 团购优惠 正规发票 七天无理",
+     "price": 40.7,
+     "source": "dangdang"
+    },
+    {
+     "title": "OPPO手机摄影与短视频拍摄一本通 人民邮电出版社 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 43.1,
+     "source": "dangdang"
+    },
+    {
+     "title": "OPPO手机摄影与短视频拍摄一本通 千知影像 编著 编 人民邮电出版社 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 43.5,
+     "source": "dangdang"
+    },
+    {
+     "title": "OPPO手机摄影与短视频拍摄一本通 千知影像 编著 编 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 43.5,
+     "source": "dangdang"
+    },
+    {
+     "title": "OPPO手机摄影与短视频拍摄一本通 千知影像编 人民邮电出版社 手机拍照技巧 短视频制作教程 安卓手机摄影 手机拍视频技",
+     "price": 43.1,
+     "source": "dangdang"
+    },
+    {
+     "title": "OPPO手机摄影与短视频拍摄一本通 人民邮电出版社 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 43.5,
+     "source": "dangdang"
+    },
+    {
+     "title": "OPPO手机摄影与短视频拍摄一本通 人民邮电出版社 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 47.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "OPPO手机摄影与短拍摄一本通书千知影像 图书书籍【可开发票】",
+     "price": 45.32,
+     "source": "dangdang"
+    },
+    {
+     "title": "国家补贴：OPPO Find X8s+ 5G手机",
+     "price": 2899.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s 5G手机 16GB+512GB 星野黑",
+     "price": 3300.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "国家补贴：OPPO Find X8s+ 5G手机 12GB+512GB",
+     "price": 2860.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "今日必买：OPPO Find X8s 5G手机 16GB+512GB 月光白",
+     "price": 3399.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 5G手机 16GB+512GB 星野黑",
+     "price": 3599.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 12+512",
+     "price": 2728.5,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s 5G手机 16GB+512GB 月光白",
+     "price": 3300.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s 5G手机 16GB+512GB 月光白",
+     "price": 3300.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 5G手机 12GB+256GB 星野黑",
+     "price": 2979.1,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s 16GB+512GB 落樱粉 5G手机",
+     "price": 3398.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s 5G手机 16GB+512GB 月光白",
+     "price": 3300.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 5G手机",
+     "price": 2813.5,
+     "source": "smzdm"
+    }
+   ]
+  },
+  {
+   "keyword": "OPPO Find X8s",
+   "page": "OPPO_Find_X8s",
+   "items": [
+    {
+     "title": "LET'S FIND OUT BOX2 学乐集团 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 129.1,
+     "source": "dangdang"
+    },
+    {
+     "title": "LET'S FIND OUT BOX1 学乐出版公司 出版 学乐出版公司 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 129.1,
+     "source": "dangdang"
+    },
+    {
+     "title": "LET'S FIND OUT BOX1 学乐出版公司 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 129.1,
+     "source": "dangdang"
+    },
+    {
+     "title": "LET'S FIND OUT BOX2 学乐集团 出版 学乐集团 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 129.1,
+     "source": "dangdang"
+    },
+    {
+     "title": "LET'S FIND OUT BOX2 学乐集团 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 129.1,
+     "source": "dangdang"
+    },
+    {
+     "title": "LET'S FIND OUT BOX1 学乐出版公司 新华书店正版，多仓就近发货，85%城市次日达，团购优惠咨询在线客服！",
+     "price": 129.1,
+     "source": "dangdang"
+    },
+    {
+     "title": "【Let's Find Out Box1 】 【高频词好搭档 英语启蒙**】LFO 雷布斯Let’s Find Out Let's Find Out Box1",
+     "price": 281.52,
+     "source": "dangdang"
+    },
+    {
+     "title": "【Let's Find Out Box2 】 【高频词好搭档 英语启蒙**】LFO 雷布斯Let’s Find Out Let's Find Out Box2",
+     "price": 281.52,
+     "source": "dangdang"
+    },
+    {
+     "title": "【正版】LET'S FIND OUT BOX1 Barbara Reid 正版书籍 全新 FOREIGN?PUBLISH 全新正版，可开发票",
+     "price": 193.2,
+     "source": "dangdang"
+    },
+    {
+     "title": "预订 Let's Find out About Firemen [ISBN:9781013362620] 【全球购】进口原版图书，约3-6周到达国内后发出",
+     "price": 198.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "今日必买：OPPO Find X8s 5G手机 16GB+512GB 月光白",
+     "price": 3399.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "国家补贴：OPPO Find X8s+ 5G手机",
+     "price": 2899.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 5G手机 12+256GB",
+     "price": 2719.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 5G手机",
+     "price": 3167.04,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 12+512",
+     "price": 2728.5,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 12+512",
+     "price": 2728.5,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s 5G手机 16GB+512GB 星野黑",
+     "price": 3300.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "今日必买：OPPO Find X8s 5G手机 12GB+256GB 海岛蓝",
+     "price": 2762.5,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 5G手机 16GB+512GB 星野黑",
+     "price": 3599.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "国家补贴：OPPO Find X8s+ 5G手机 12GB+512GB",
+     "price": 2860.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 12+512",
+     "price": 2729.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "国家补贴：OPPO Find X8s+ 5G手机 12+512GB",
+     "price": 3029.0,
+     "source": "smzdm"
+    }
+   ]
+  },
+  {
+   "keyword": "x8s",
+   "page": "x8s",
+   "items": [
+    {
+     "title": "【预售 按需印刷】Vintage Plaid 1 Scrapbook Paper Pad 8x8 S",
+     "price": 108.8,
+     "source": "dangdang"
+    },
+    {
+     "title": "【预售 按需印刷】Wood Background Scrapbook Paper Pad 8x8 S",
+     "price": 126.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "预售 按需印刷 Plaid O Pattern Scrapbook Paper Pad 8x8 S 北京发货，付款后10天内发货",
+     "price": 126.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "按需印刷St. Patrick's Day Plaid Scrapbook Paper Pad 8x8 Scrapboo 预订，预计下单后2-3周左右发货！",
+     "price": 128.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "【关注有礼】2册 S语言程序设计 基于S 5.8和X 15+SUI 完全开发 SUI框架多平台开发苹果系统X 12框架开",
+     "price": 204.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "【关注有礼】2册 S语言程序设计 基于S 5.8和X 15 张勇+S开发技术标准教程 S语言程方法 S语言程序设计技术教",
+     "price": 128.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "Isard's Revenge Star Wars, X-Wing 8 伊萨德的复仇 星球大战传奇 X-翼战机8 英文版",
+     "price": 48.8,
+     "source": "dangdang"
+    },
+    {
+     "title": "Isard's Revenge Star Wars, X-Wing 8 英文原版小说 伊萨德的复仇 星球大战传奇 X-翼",
+     "price": 48.8,
+     "source": "dangdang"
+    },
+    {
+     "title": "【预售 按需印刷】Loretta s Caterpillar (8 x 10 paperback)",
+     "price": 100.3,
+     "source": "dangdang"
+    },
+    {
+     "title": "【预售 按需印刷】Alina s Travel Journal (8 X 11 Edition)",
+     "price": 339.15,
+     "source": "dangdang"
+    },
+    {
+     "title": "国家补贴：OPPO Find X8s+ 5G手机",
+     "price": 2899.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "今日必买：OPPO Find X8s 5G手机 16GB+512GB 月光白",
+     "price": 3399.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s 5G手机 16GB+512GB 星野黑",
+     "price": 3300.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "国家补贴：OPPO Find X8s+ 5G手机 12GB+512GB",
+     "price": 2860.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 12+512",
+     "price": 2728.5,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 5G手机 16GB+512GB 星野黑",
+     "price": 3599.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 5G手机 16GB+512GB 月光白",
+     "price": 3599.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "今日必买：OPPO Find X8s 5G手机 12GB+256GB 海岛蓝",
+     "price": 2762.5,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s+ 12+512",
+     "price": 2729.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s 5G手机 12GB+256GB 月光白",
+     "price": 2762.5,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s 5G手机 12GB+256GB 月光白",
+     "price": 2694.5,
+     "source": "smzdm"
+    },
+    {
+     "title": "OPPO Find X8s 5G手机 12GB+256GB 海岛蓝",
+     "price": 2762.5,
+     "source": "smzdm"
+    }
+   ]
+  },
+  {
+   "keyword": "mate 80",
+   "page": "mate_80",
+   "items": [
+    {
+     "title": "适用华为MATE80手机壳新款MATE80PROMAX全包防摔MATE70文字书法MATE60PRO个性荔枝纹感男女诸事",
+     "price": 75.95,
+     "source": "dangdang"
+    },
+    {
+     "title": "【政府补贴至高15%】 MATE 80 麒麟9020芯片 第二代红枫影像直屏鸿蒙智能手机官方旗舰店188",
+     "price": 8840.95,
+     "source": "dangdang"
+    },
+    {
+     "title": "【顶配新快充】充电线三合一数据线一拖三6A手机车载适用于华为mate80苹果17安卓多头三头多功能充电宝",
+     "price": 763.3,
+     "source": "dangdang"
+    },
+    {
+     "title": "适用华为mate80手机壳新款mate80promax全包防摔mate70文字书法mate60pro个性荔枝纹感男女诸事",
+     "price": 53.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 3771.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 3580.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 3699.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 4659.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 4814.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 4349.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "华为 Mate 80 手机 12GB+512GB 雪域白",
+     "price": 4079.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 手机 12GB+512GB 云杉绿",
+     "price": 4079.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 12+512G",
+     "price": 3949.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80手机正品新款智能学生",
+     "price": 3699.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 16GB+512GB 雪域白 5G手机",
+     "price": 4249.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 手机 12GB+256GB",
+     "price": 3899.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 学生商务通用手机 6.75英寸直屏旗舰 无网应急通信 +5750mAh长续航81",
+     "price": 4059.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 麒麟芯片 鸿蒙AI 华为手机",
+     "price": 3899.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 Pro 手机 12GB+512GB 晨曦金",
+     "price": 5099.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 Pro Max 全金属玄武 智能手机",
+     "price": 6099.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 Pro 手机 12GB+512GB 曜石黑",
+     "price": 5099.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "今日必买：华为 Mate 80 Pro Max 手机 16GB+1TB 极昼金",
+     "price": 7379.1,
+     "source": "smzdm"
+    }
+   ]
+  },
+  {
+   "keyword": "Mate80",
+   "page": "Mate80",
+   "items": [
+    {
+     "title": "适用华为MATE80手机壳新款MATE80PROMAX全包防摔MATE70文字书法MATE60PRO个性荔枝纹感男女诸事",
+     "price": 75.95,
+     "source": "dangdang"
+    },
+    {
+     "title": "【顶配新快充】充电线三合一数据线一拖三6A手机车载适用于华为mate80苹果17安卓多头三头多功能充电宝",
+     "price": 763.3,
+     "source": "dangdang"
+    },
+    {
+     "title": "适用华为mate80手机壳新款mate80promax全包防摔mate70文字书法mate60pro个性荔枝纹感男女诸事",
+     "price": 53.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "【政府补贴至高15%】 MATE 80 麒麟9020芯片 第二代红枫影像直屏鸿蒙智能手机官方旗舰店188",
+     "price": 8840.95,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 3771.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 3580.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 3699.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 4659.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 4814.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海尔(Haier)滚筒洗衣机全自动单洗 8公斤大容量 一级能效超薄小型不占地超薄平嵌EG80MATE33S 星蕴银",
+     "price": 4349.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "华为 Mate 80 16GB+512GB 雪域白 5G手机",
+     "price": 4249.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 手机 12GB+512GB 雪域白",
+     "price": 4079.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 Pro Max 全金属玄武 智能手机",
+     "price": 6099.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 麒麟芯片 鸿蒙AI 华为手机",
+     "price": 3899.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 手机 12GB+256GB",
+     "price": 3899.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 3期免息+15%】Huawei/华为 Mate 80 Pro手机官方旗舰店新款商务手机鸿蒙6Mate80系列官网m",
+     "price": 4739.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 12GB+512GB 曜石黑 5G手机",
+     "price": 4569.51,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 学生商务通用手机 6.75英寸直屏旗舰 无网应急通信 +5750mAh长续航81",
+     "price": 4059.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 16GB+512GB 雪域白 5G手机",
+     "price": 4572.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 Pro 手机 12GB+512GB 晨曦金",
+     "price": 5099.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 16GB+512GB 晨曦金 5G手机",
+     "price": 4818.26,
+     "source": "smzdm"
+    },
+    {
+     "title": "国家补贴：华为 Mate 80 Pro Max 16GB+512GB 极地银 手机",
+     "price": 6659.1,
+     "source": "smzdm"
+    }
+   ]
+  },
+  {
+   "keyword": "华为 Mate 80",
+   "page": "华为_Mate_80",
+   "items": [
+    {
+     "title": "适用华为MATE80手机壳新款MATE80PROMAX全包防摔MATE70文字书法MATE60PRO个性荔枝纹感男女诸事",
+     "price": 75.95,
+     "source": "dangdang"
+    },
+    {
+     "title": "【顶配新快充】充电线三合一数据线一拖三6A手机车载适用于华为mate80苹果17安卓多头三头多功能充电宝",
+     "price": 763.3,
+     "source": "dangdang"
+    },
+    {
+     "title": "适用华为mate80手机壳新款mate80promax全包防摔mate70文字书法mate60pro个性荔枝纹感男女诸事",
+     "price": 53.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "怎么挑适用华为mate50荣耀80Pro GT无线蓝牙骨传导耳机不入耳运动",
+     "price": 159.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "绿联适用华为Pura80Pro手机壳Mate60Pro保护壳Mate70Pro新款轻薄nova14/13全包防摔Mate",
+     "price": 37.5,
+     "source": "dangdang"
+    },
+    {
+     "title": "绿联适用华为Pura80Pro手机膜新款Mate60Pro秒贴Mate70Pro钢化膜mateX5贴膜X3曲面P60无尘",
+     "price": 66.8,
+     "source": "dangdang"
+    },
+    {
+     "title": "【磨砂玻璃】铂信适用华为pura70/80手机壳新款Pura70pro全包镜头p70防摔超薄Ultra保护套mate70",
+     "price": 72.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "适用华为P60Pro/P50P40钢化膜Mate50/40Pro手机rs全屏覆盖nova11/10/9/8荣耀magic",
+     "price": 109.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "华为 Mate 80 16GB+512GB 雪域白 5G手机",
+     "price": 4249.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 Pro 手机 12GB+512GB 晨曦金",
+     "price": 5099.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 手机 12GB+256GB",
+     "price": 3899.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 新品mate80pro手机可选】2026新品手机90Pro Max 支持NFC北斗星闪8500mAh巨鲸电池鸿蒙A",
+     "price": 3198.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 Pro Max 全金属玄武 智能手机",
+     "price": 6099.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 手机 12GB+512GB 云杉绿",
+     "price": 4079.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "今日必买：华为 Mate 80 Pro Max 手机 16GB+1TB 极昼金",
+     "price": 7379.1,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 手机 12GB+512GB 晨曦金",
+     "price": 4164.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 手机 12GB+512GB 晨曦金",
+     "price": 4279.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 Pro 手机 12GB+512GB 曜石黑",
+     "price": 5099.15,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 Pro Max 手机 16GB+512GB 极昼金",
+     "price": 6569.1,
+     "source": "smzdm"
+    },
+    {
+     "title": "华为 Mate 80 Pro 手机 12GB+512GB 晨曦金",
+     "price": 5999.0,
+     "source": "smzdm"
+    }
+   ]
+  },
+  {
+   "keyword": "iPhone 15",
+   "page": "iPhone_15",
+   "items": [
+    {
+     "title": "【iPhone15 百变磁吸背盖手机壳 】 新品哈利波特正版苹果手机壳百变磁吸背盖可替换背盖iPhone保护套【善水图书 【本店支持开发票 如需帮助请联系客服】",
+     "price": 214.17,
+     "source": "dangdang"
+    },
+    {
+     "title": "【iPhone 15 Pro 】 新品哈利波特华纳正版周边苹果手机壳百变磁吸背盖可替换背板iPhone1516保护套【善 【本店支持开发票 如需帮助请联系客服】",
+     "price": 214.17,
+     "source": "dangdang"
+    },
+    {
+     "title": "【iPhone15 Pro 百变磁吸背盖手机壳 】 新品哈利波特正版苹果手机壳百变磁吸背盖可替换背盖iPhone保护套【 【本店支持开发票 如需帮助请联系客服】",
+     "price": 214.17,
+     "source": "dangdang"
+    },
+    {
+     "title": "【iPhone 15 】 新品哈利波特华纳正版周边苹果手机壳百变磁吸背盖可替换背板iPhone1516保护套【善水图书 【本店支持开发票 如需帮助请联系客服】",
+     "price": 214.17,
+     "source": "dangdang"
+    },
+    {
+     "title": "【iPhone15 Pro Max 百变磁吸背盖手机壳 】 新品哈利波特正版苹果手机壳百变磁吸背盖可替换背盖iPhone 【本店支持开发票 如需帮助请联系客服】",
+     "price": 214.17,
+     "source": "dangdang"
+    },
+    {
+     "title": "【iPhone 15 Pro Max 】 新品哈利波特华纳正版周边苹果手机壳百变磁吸背盖可替换背板iPhone1516保 【本店支持开发票 如需帮助请联系客服】",
+     "price": 214.17,
+     "source": "dangdang"
+    },
+    {
+     "title": "海外直订iphone 15 Pro Max User Guide: Unlocking the Power and Po",
+     "price": 165.48,
+     "source": "dangdang"
+    },
+    {
+     "title": "预订 iPhone 15 Manual: Unlock the Ultimate iPhone 15 Pro Max E 【全球购】进口原版图书，一般5-8周左",
+     "price": 182.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "海外直订iPhone 15 Guide: An Illustrated and Simple-to-Follow Gui",
+     "price": 187.15,
+     "source": "dangdang"
+    },
+    {
+     "title": "【3-6周达】iPhone 15 Guide for Seniors: Easy-to-Follow Learning 【全球购】进口原版图书，一般3-6周左右",
+     "price": 199.0,
+     "source": "dangdang"
+    },
+    {
+     "title": "Apple iPhone15/14/13/12/苹果 15/14/13/12 全网通激活无使用 黑色 256G",
+     "price": 4248.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "Apple iPhone 15 5G手机 512GB 粉色",
+     "price": 7561.01,
+     "source": "smzdm"
+    },
+    {
+     "title": "PLUS会员、今日必买：小米 15 5G 手机 白色 16GB+512GB",
+     "price": 2981.51,
+     "source": "smzdm"
+    },
+    {
+     "title": "小米 MI/小米 15 5G 手机 丁香紫 16GB+512GB",
+     "price": 2981.51,
+     "source": "smzdm"
+    },
+    {
+     "title": "小米 MI/小米 15 5G 手机 丁香紫 16GB+512GB",
+     "price": 2981.51,
+     "source": "smzdm"
+    },
+    {
+     "title": "国家补贴：Apple iPhone Air 5G手机",
+     "price": 4999.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "适用苹果14手机壳透明软13Pro/11promax/xs/12/178硅胶15保护壳16",
+     "price": 1.9,
+     "source": "smzdm"
+    },
+    {
+     "title": "小米 15 16GB+512GB 白色 手机",
+     "price": 2981.51,
+     "source": "smzdm"
+    },
+    {
+     "title": "Apple iPhone Air 5G手机",
+     "price": 4999.0,
+     "source": "smzdm"
+    },
+    {
+     "title": "绿联 康宁膜AR抗反射手机膜 适用苹果全系列 防摔无黑边",
+     "price": 35.9,
+     "source": "smzdm"
+    },
+    {
+     "title": "小米 15 16GB+512GB 浅草绿 5G手机",
+     "price": 2981.5,
+     "source": "smzdm"
+    },
+    {
+     "title": "小米 15 12GB+512GB 黑色 5G手机",
+     "price": 2981.51,
+     "source": "smzdm"
+    }
+   ]
+  }
+ ]
+}

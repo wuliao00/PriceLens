@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 引导流程通用 -->
+    <string name="onboarding_next">下一步</string>
+    <string name="onboarding_back">上一步</string>
+    <string name="onboarding_done">开始比价</string>
+    <string name="onboarding_step_count">%1$d / %2$d</string>
+    <string name="onboarding_skip_all">暂时跳过</string>
+    <string name="onboarding_permission_note">这两项权限都可以稍后在设置页开启，跳过不影响先看历史价。</string>
+    <string name="onboarding_status_granted">已开启</string>
+    <string name="onboarding_status_missing">未开启</string>
+
+    <!-- 第 1 步：价值说明（一屏讲清"打开电商 App 自动弹比价"） -->
+    <string name="onboarding_welcome_title">打开购物 App，比价自动出现</string>
+    <string name="onboarding_welcome_desc">不用复制链接、不用来回切换应用：在京东 / 淘宝 / 拼多多打开商品页，PriceLens 自动识别当前价格，并在页面上弹出比价浮窗。</string>
+    <string name="onboarding_welcome_p1">自动比价：浮窗显示历史最低与是否建议入手</string>
+    <string name="onboarding_welcome_p2">数据只在手机：价格与标题不上传任何服务器</string>
+    <string name="onboarding_welcome_p3">永久免费：开源、无会员、无内购，收费的都是骗子</string>
+    <string name="onboarding_welcome_note">接下来两步是自动比价的必要权限，最后一步可选，随时可以跳过。</string>
+
+    <!-- 第 2 步：无障碍服务 -->
+    <string name="onboarding_acc_title">开启无障碍服务（自动比价的前提）</string>
+    <string name="onboarding_acc_desc">系统要求由你手动确认：在打开的「无障碍」列表里找到 PriceLens 比价助手 → 允许 → 确认开启。本应用只监听京东 / 淘宝 / 拼多多。</string>
+    <string name="onboarding_acc_action">去系统设置开启</string>
+    <string name="onboarding_acc_shizuku">用 Shizuku 一键开启（推荐）</string>
+    <string name="onboarding_acc_shizuku_open">Shizuku 已安装但服务未启动：点「打开 Shizuku」启动后再一键开启</string>
+    <string name="onboarding_acc_shizuku_grant">点「授权 Shizuku」，在弹窗中允许后会自动开启无障碍与悬浮窗</string>
+
+    <!-- 第 3 步：悬浮窗 -->
+    <string name="onboarding_overlay_title">允许显示悬浮窗（比价浮窗的画布）</string>
+    <string name="onboarding_overlay_desc">识别到价格后，浮窗要显示在购物应用之上，需要「悬浮窗 / 显示在其他应用上层」权限。点下面的按钮直接到系统授权页。</string>
+    <string name="onboarding_overlay_action">去系统授权</string>
+    <string name="onboarding_overlay_rom_note">部分厂商 ROM 会把该权限改名成「显示在其他应用上层」或「悬浮窗管理」，找不到时可在系统设置里搜应用名。</string>
+
+    <!-- 第 4 步：可选凭证 -->
+    <string name="onboarding_creds_title">可选：补齐历史价格数据源</string>
+    <string name="onboarding_creds_desc">这一步完全可以跳过。不填也能看实时比价，只是历史价格曲线的完整度会低一些。</string>
+    <string name="onboarding_creds_mmb">慢慢买 Cookie · 完整历史价格曲线</string>
+    <string name="onboarding_creds_key">星罗好货 apikey · 历史低价参考与盯价兜底</string>
+    <string name="onboarding_creds_login">登录自动抓取</string>
+    <string name="onboarding_creds_note">凭证只保存在本机，仅用于向对应数据源替你取数。</string>
+
+    <!-- 完成后仍缺权限：首页提示条 -->
+    <string name="setup_hint_title">自动比价还没生效</string>
+    <string name="setup_hint_body">还缺 %1$s。开启后打开京东 / 淘宝 / 拼多多商品页就会自动弹比价浮窗。</string>
+    <string name="setup_hint_action">继续开启</string>
+    <string name="setup_hint_dismiss">本次不再提示</string>
+    <string name="setup_hint_missing_acc">无障碍服务</string>
+    <string name="setup_hint_missing_overlay">悬浮窗权限</string>
+    <string name="setup_hint_missing_both">无障碍服务与悬浮窗权限</string>
+
+    <!-- 设置页入口 -->
+    <string name="settings_replay_onboarding">重新查看新手引导</string>
+    <string name="settings_replay_onboarding_desc">权限开启、悬浮窗、可选凭证四步，随时可重看</string>
+    <string name="settings_replay_action">查看</string>
+</resources>
