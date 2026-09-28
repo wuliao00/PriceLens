@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -144,36 +145,13 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
         watchViewModel.acknowledgeFeedback()
     }
 
-    when {
-        historyAsync is AsyncValue.Loading<*> || (loading && history == null) -> {
-            ShimmerList()
-            return
-        }
-        history == null -> {
-            EmptyState(
-                icon = if (historyAsync is AsyncValue.Error<*>) {
-                    Icons.Filled.Warning
-                } else {
-                    Icons.Filled.QueryStats
-                },
-                title = stringResource(
-                    if (historyAsync is AsyncValue.Error<*>) {
-                        R.string.error_load_failed
-                    } else {
-                        R.string.empty_search_first
-                    }
-                ),
-                desc = stringResource(
-                    if (historyAsync is AsyncValue.Error<*>) {
-                        R.string.error_retry_hint
-                    } else {
-                        R.string.price_empty_hint
-                    }
-                ),
-                modifier = Modifier.padding(Dims.SpacingXL)
-            )
-            return
-        }
+    // 只有"正在取历史"才整页骨架。**没有历史曲线绝不能提前 return**：
+    // 盯价入口与「盯价检查状态」卡必须在没有曲线时照样出现——用户搜到的常常是
+    // 当当/值得买候选（归属不到京东 SKU），旧实现在这里 return，于是这些商品
+    // 永远看不到盯价入口，只看到一句"请先搜索商品"（真机 2026-09-28 实测）。
+    if (historyAsync is AsyncValue.Loading<*> || (loading && productAsync.valueOrNull() == null)) {
+        ShimmerList()
+        return
     }
 
     Column(Modifier.fillMaxSize().padding(Dims.SpacingXL)) {
@@ -186,45 +164,75 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
             )
             Spacer(Modifier.height(Dims.SpacingM))
         }
-        PriceCard(
-            modifier = Modifier.fillMaxWidth(),
-            onLongClick = { showSheet = true }
-        ) {
-            Row {
-                Text(
-                    stringResource(R.string.price_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.weight(1f)
-                )
-                PriceBadge(
-                    judgment.label,
-                    tone = when (judgment) {
-                        is PriceJudgment.LOW -> BadgeTone.POSITIVE
-                        is PriceJudgment.SUSPICIOUS -> BadgeTone.NEGATIVE
-                        else -> BadgeTone.NEUTRAL
+        // 三种"没有曲线"的成因分开说，否则用户按提示去做的事是白做：
+        //  ① 取历史失败（Error）② 还没搜过（关键词为空）
+        //  ③ 搜过了但候选归属不到京东 SKU（SearchViewModel 此时把 history 置回 Idle）
+        if (history == null) {
+            val failed = historyAsync is AsyncValue.Error<*>
+            val searched = keyword.isNotBlank()
+            EmptyState(
+                icon = when {
+                    failed -> Icons.Filled.Warning
+                    searched -> Icons.Filled.Info
+                    else -> Icons.Filled.QueryStats
+                },
+                title = stringResource(
+                    when {
+                        failed -> R.string.error_load_failed
+                        searched -> R.string.watch_no_curve_title
+                        else -> R.string.empty_search_first
                     }
-                )
-            }
-            Spacer(Modifier.height(Dims.SpacingM))
-            PriceChartCanvas(
-                history = history,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
+                ),
+                desc = stringResource(
+                    when {
+                        failed -> R.string.error_retry_hint
+                        searched -> R.string.watch_no_curve_desc
+                        else -> R.string.price_empty_hint
+                    }
+                ),
+                modifier = Modifier.padding(vertical = Dims.SpacingXL)
             )
-            Spacer(Modifier.height(Dims.SpacingM))
-            Row {
-                Text(
-                    stringResource(R.string.price_lowest, PriceFormatter.format(history.lowest)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
+        } else {
+            PriceCard(
+                modifier = Modifier.fillMaxWidth(),
+                onLongClick = { showSheet = true }
+            ) {
+                Row {
+                    Text(
+                        stringResource(R.string.price_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    PriceBadge(
+                        judgment.label,
+                        tone = when (judgment) {
+                            is PriceJudgment.LOW -> BadgeTone.POSITIVE
+                            is PriceJudgment.SUSPICIOUS -> BadgeTone.NEGATIVE
+                            else -> BadgeTone.NEUTRAL
+                        }
+                    )
+                }
+                Spacer(Modifier.height(Dims.SpacingM))
+                PriceChartCanvas(
+                    history = history,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
                 )
-                Text(
-                    stringResource(R.string.price_highest, PriceFormatter.format(history.highest)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(Modifier.height(Dims.SpacingM))
+                Row {
+                    Text(
+                        stringResource(R.string.price_lowest, PriceFormatter.format(history.lowest)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        stringResource(R.string.price_highest, PriceFormatter.format(history.highest)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
@@ -323,9 +331,13 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-                    if (prefill is TargetPrefill.Prefilled && history.lowest > 0) {
+                    // 同 SKU 历史最低价：Prefilled 本身就要求有曲线，这里仍按可空取，
+                    // 不再依赖"上面已经 return 过"这种隐式非空（曲线区改成局部 if 后
+                    // 整页不再有 history 的 smart cast）。
+                    val sameSkuLowest = history?.lowest ?: 0.0
+                    if (prefill is TargetPrefill.Prefilled && sameSkuLowest > 0) {
                         Text(
-                            stringResource(R.string.watch_target_same_sku_low, PriceFormatter.format(history.lowest)),
+                            stringResource(R.string.watch_target_same_sku_low, PriceFormatter.format(sameSkuLowest)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -400,7 +412,9 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
         )
     }
 
-    if (showSheet) {
+    // 长按复制当前价只在有曲线时成立（入口就是曲线卡的长按）；这里显式判空，
+    // 顺带让 history 在块内 smart cast 回非空。
+    if (showSheet && history != null) {
         ModalBottomSheet(onDismissRequest = { showSheet = false }) {
             TextButton(onClick = {
                 val clipboard =

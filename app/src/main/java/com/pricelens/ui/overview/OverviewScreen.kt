@@ -81,12 +81,17 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
             SourceStatusRow(searchViewModel)
         }
         if (product == null) {
+            // 空态有两种完全不同的成因：① 还没搜过（此时说"未匹配到"是假因果）；
+            // ② 上游有条目但全被相关性过滤掉（关键词过短/写法不匹配）——文案分别处理。
+            val searched = keyword.isNotBlank()
             item(key = "empty_title") {
                 Spacer(Modifier.height(Dims.SpacingL))
                 Text(
-                    // 空态多为"上游有条目但全被相关性过滤掉"（关键词过短/写法不匹配），
-                    // 如实说明并给出可执行的关键词写法（文案见 res/values/strings_search.xml）
-                    stringResource(R.string.search_no_relevant_result, keyword),
+                    if (searched) {
+                        stringResource(R.string.search_no_relevant_result, keyword)
+                    } else {
+                        stringResource(R.string.search_start_hint)
+                    },
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -119,7 +124,11 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
                 EmptyState(
                     icon = Icons.Filled.OndemandVideo,
                     title = stringResource(R.string.overview_guide_bili_title),
-                    desc = stringResource(R.string.overview_guide_bili_desc, keyword),
+                    desc = if (searched) {
+                        stringResource(R.string.overview_guide_bili_desc, keyword)
+                    } else {
+                        stringResource(R.string.overview_guide_bili_desc_blank)
+                    },
                     actionLabel = stringResource(R.string.overview_guide_bili_action),
                     onAction = onGoBilibili
                 )

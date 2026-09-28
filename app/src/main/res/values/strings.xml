@@ -55,6 +55,8 @@
     <string name="overview_guide_link_desc">复制京东/淘宝/拼多多的商品链接，粘贴到上方搜索框，直接查看历史价格与优惠券。</string>
     <string name="overview_guide_bili_title">查看B站评测</string>
     <string name="overview_guide_bili_desc">B站真实用户评测不受商品数据源限制，搜索「%1$s」看看大家的实际体验。</string>
+    <!-- 还没输入关键词时不能渲染成「」：空引号读起来像出错 -->
+    <string name="overview_guide_bili_desc_blank">B站真实用户评测不受商品数据源限制，搜商品名看看大家的实际体验。</string>
     <string name="overview_guide_bili_action">切换到 B站</string>
     <string name="overview_live_price">%1$s · 实时价 ¥%2$s</string>
     <string name="overview_live_default_source">本机账号</string>

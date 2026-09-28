@@ -69,4 +69,10 @@
     <string name="watch_stale_notify_no_channel">这些目标所属平台没有查价通道（京东公开查价 p.3.cn 已下线）。点开查看替代方案</string>
     <string name="watch_stale_notify_no_price">连续多轮取不到现价：请在设置里配置星罗好货 API Key，或改用无障碍实时价。点开查看</string>
     <string name="watch_stale_notify_bad_id">有目标的主键不合法（空 SKU 遗留行），请在「我的」页删除后重新添加。点开查看</string>
+
+    <!-- 盯价页空态的第三种情形：已经搜过了，但这件商品归属不到可查历史价的京东 SKU。
+         此时说"请先搜索商品"是假因果（真机 2026-09-28 实测：搜 mate 80 命中当当候选后，
+         盯价页仍提示"请先搜索商品"）。 -->
+    <string name="watch_no_curve_title">这件商品暂时没有可查的历史价格曲线</string>
+    <string name="watch_no_curve_desc">历史价按京东商品 ID 查询；本轮候选（来自当当/值得买）没有归属到明确的京东 SKU，所以曲线、历史最低与入手建议一律留空，不做猜测。想看到曲线：粘贴一条京东/淘宝商品链接再搜，或在「我的 → 设置」配置慢慢买 Cookie / 星罗好货 API Key。</string>
 </resources>

@@ -6,4 +6,6 @@
 <resources>
     <!-- 过滤后为空时的如实提示：不是"没这个商品"，而是"没匹配上关键词" -->
     <string name="search_no_relevant_result">未匹配到与「%1$s」直接相关的商品，试试更完整的型号名（如 OPPO Find X8s / 华为 Mate 80）</string>
+    <!-- 还没发起过搜索时的提示：此时不能说"未匹配到"——什么都没被查过，那是假因果 -->
+    <string name="search_start_hint">还没搜索：输入商品名，或直接粘贴京东 / 淘宝 / 拼多多的商品链接</string>
 </resources>
