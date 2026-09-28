@@ -358,18 +358,19 @@ git checkout main
 #     需要真正拦住旧版本时才提高 minSupportedVersionCode（见下方"强制更新开关"）。
 
 # 5.3 同步 Gitee 镜像（客户端只认 Gitee 为主源，国内实测 github/raw.githubusercontent 直连不通）
-#     ⚠ 不要 `git push --force gitee main:main`：Gitee 的 main 与 GitHub 的 main 是
-#     **两条互不相干的历史**（2026-09-28 实测：GitHub main 只有 16 个提交且最早的是
-#     `docs: add English & Russian README`，Gitee main 有 43 个提交、含 v2.3→v2.5 全过程与
-#     dependabot 合并；`git merge-base` 无输出）。GitHub 侧靠 tag v2.3.0/v2.4.3/v2.4.4 还指着
-#     Gitee 那条线上的提交，但**分支历史上没有**。强推会让 Gitee 上这条公开历史从 main 消失。
-#     内容侧不用担心：`git diff --name-status gitee/main main` 里 0 个 D（Gitee 没有独有文件），
-#     main 的树是更新的那一份。所以用"合并但保留自己内容"的做法，两个远端都是快进、无需 --force：
+#     正常情况这就是一次快进推送，不需要 --force，也不需要任何合并：
 git remote add gitee git@gitee.com:wuliao11541/PriceLens.git   # 一次性；SSH 已授权（Hi wuliao00(@wuliao11541)）
 git fetch gitee main:refs/remotes/gitee/main
-git merge --no-ff -s ours gitee/main -m "chore(mirror): 合并 Gitee 镜像历史（内容取 GitHub main，不引入冲突）"
-git push origin main     # 快进：合并提交以 origin/main 为第一父
-git push gitee main      # 快进：gitee/main 是第二父
+git merge-base --is-ancestor gitee/main main && git push gitee main
+#     ⚠ 判断"两条历史是否分叉"之前先看本地是不是浅克隆：`test -f .git/shallow`。
+#     浅克隆里 `git merge-base` 会**没有输出**，看起来像"两条互不相干的历史"，于是去做
+#     --allow-unrelated-histories 合并、甚至想 --force 推——都是被量具骗了。
+#     2026-09-28 就被骗过一次：当时 `git rev-list --count main` 报 16，`git log main | tail`
+#     只到 `docs: add English & Russian README`；`git fetch --unshallow origin` 之后同一个
+#     分支报 61 个提交、一直数到 `197dfef chore: initial commit - PriceLens v2.3 开源版`，
+#     而 Gitee 的 tip `0746936` 本来就在这条线上（`--is-ancestor` 为真、落后 0 个提交）。
+#     也就是说 GitHub 与 Gitee 从来就是同一条历史，直接快进即可（v2.6.0 那次因为已经推上去
+#     了一个 no-op 的 `-s ours` 合并提交，就不回退了——改写已发布的分支比多一个合并提交更糟）。
 # 验证清单可达（404=还没同步；200 且 Content-Length 对得上=OK）
 curl -sI "https://gitee.com/wuliao11541/PriceLens/raw/main/update.json?v=13&t=1" | head -5
 # Gitee CDN 有 60s 服务端缓存，客户端已用 ?v=&t=（t=nowMs/60000，即分钟桶）破缓存，清单发布后约 1 分钟客户端可见。

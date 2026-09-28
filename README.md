@@ -66,13 +66,17 @@
 
 ### 国内加速下载（推荐）
 
-| 平台 | 蓝奏云（推荐，国内加速） | 夸克网盘（备选） | GitHub Release |
-|------|--------|----------|----------------|
-| **Android** | [PriceLens-Android-2.5.1.apk](https://www.ilanzou.com/s/hrqKVtJO?code=4455) | [PriceLens-Android-2.5.1.apk](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
-| **Windows** | [PriceLens-Desktop-Setup-2.1.0.exe](https://www.ilanzou.com/s/hrqKVtJO?code=4455)| [PriceLens-Desktop-Setup-2.1.0.exe](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) | [Release](https://github.com/wuliao00/PriceLens/releases) |
+| 平台 | Gitee（国内直链，免登录） | GitHub Release | 蓝奏云 | 夸克网盘 |
+|------|--------|----------|--------|----------|
+| **Android v2.6.0** | [PriceLens-2.6.0.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.0.apk) | [Release v2.6.0](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0) | 待更新（当前 2.5.1） | 待更新（当前 2.5.1） |
+| **Windows** | — | [Release](https://github.com/wuliao00/PriceLens/releases) | [Setup-2.1.0.exe](https://www.ilanzou.com/s/hrqKVtJO?code=4455) | [Setup-2.1.0.exe](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) |
 
   ⚠️ **蓝奏云提取码：4455**（已含在链接参数中，打开即可下载）；夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
-  网盘当前挂的是 v2.5.1；**v2.6.0 请走 [GitHub Release](https://github.com/wuliao00/PriceLens/releases) 或 Gitee 发行版附件**。
+  网盘当前挂的还是 v2.5.1。**v2.6.0 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源）
+  与 GitHub Release 上，包体 2,220,224 字节，
+  `sha256 = c753d83a1be7713f533d6a60b162b21d805b24f229e0961052bb30c5120008c9`。
+  从 2.5.x 的 CI 构建包升级需要先卸载一次（两侧签名不同，本地盯价目标会清空）；
+  此后 2.6.0 起的包可以互相覆盖安装，应用内"检查更新"也能直接升级。
 
 ---
 
@@ -189,7 +193,7 @@ npm run build        # 产出 dist/PriceLens-<version>-x64.exe 与 .zip（免安
 ### 🧭 上手引导与版本更新（v2.6.0 新增）
 - **首启新手引导**：四步分步流——① 一屏讲清"打开京东/淘宝/拼多多自动弹比价"的用法；② 无障碍授权（有 Shizuku 时置顶"一键开启"）；③ 悬浮窗授权；④ 可选凭据（慢慢买 Cookie / 星罗 apikey，**明示可跳过**，只影响历史价完整度）。每步可跳过、可回退，**权限没给也不卡完成**；设置页可随时"重新查看新手引导"，缺权限时首页顶部有一条可关闭的提示条。
 - **比价浮窗信息层级**：默认折叠成**胶囊条**（不遮商品价与购买按钮），点开才展开——当前价 + **价格口径标签**（页面价/券后价/到手价）、历史位置一句话、多平台同款胶囊、券（门槛 0 显示"无门槛"）、底部灰字**来源与时间**（"来源 慢慢买 · 3 小时前 · 非实时"）。缺数据的行整行不出现；**只有识别到确定性商品 ID 才显示历史价与多平台比价**，仅凭标题相似命中时降级为"识别到标题 · 点击在 App 内搜索"，绝不把别的商品的历史价当成当前商品价。
-- **应用内检查更新 / 强制更新（更新源 Gitee）**：清单 `update.json` 经 Gitee 公开镜像以 raw 直链下发（国内实测可达，GitHub raw 在本环境直连不通），下载优先级 Gitee 发行版附件 → GitHub Release → 手动下载页；三级弹窗语义（阻断 / 强提示可跳过 / 可选），**一律 fail-open**——清单拉不到、解析失败、schemaVersion 未知、sha256 不可信、清单超 30 天，任一情况都不阻断用户。安装包 **sha256 校验后**才交给系统安装器，支持 Range 断点续传与"安装未知应用"授权引导，连续 3 次失败自动降级为普通提示。回滚只需 revert `update.json` 一个文件。
+- **应用内检查更新 / 强制更新（更新源 Gitee）**：清单 `update.json` 经 Gitee 公开镜像以 raw 直链下发（国内实测可达，GitHub raw 在本环境直连不通），下载优先级 Gitee `dist` 分支 raw 直链 → GitHub Release → 手动下载页；三级弹窗语义（阻断 / 强提示可跳过 / 可选），**一律 fail-open**——清单拉不到、解析失败、schemaVersion 未知、sha256 不可信、清单超 30 天，任一情况都不阻断用户。安装包 **sha256 校验后**才交给系统安装器，支持 Range 断点续传与"安装未知应用"授权引导，连续 3 次失败自动降级为普通提示。回滚只需 revert `update.json` 一个文件。
 
 ### 🧩 桌面端自动化（v2.1.0 新增）
 - **盯价后台任务**：30 分钟周期轮询目标价，低于目标价时系统通知；关闭窗口后托盘常驻继续轮询，重启自动恢复未完成任务，托盘菜单可“立即检查”
