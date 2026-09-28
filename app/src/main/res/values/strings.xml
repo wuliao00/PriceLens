@@ -123,7 +123,10 @@
     <string name="community_shihuo">识货</string>
     <string name="community_smzdm">什么值得买</string>
     <string name="community_subsidy">国补</string>
-    <string name="community_worth_votes">值 %1$d / 不值 %2$d</string>
+    <!-- 社区「值不值」：一行给结论再给原始票数（旧文案只有「值 0 / 不值 0」，
+         票数其实列表页就有；且用 labelSmall 11sp 挤在价格右侧，真机几乎看不清） -->
+    <string name="community_worth_votes">社区 %3$d%% 说值（%1$d 值 · %2$d 不值）</string>
+    <string name="community_worth_none">社区还没人投票</string>
 
     <!-- 个人页 -->
     <string name="profile_tagline">全网比价决策工具 · v%1$s</string>

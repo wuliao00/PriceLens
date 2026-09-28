@@ -23,7 +23,7 @@ class SmzdmApi @Inject constructor(private val client: ApiClient) {
         val url: String,
         val image: String = "",
         val mall: String = "",
-        val positive: Int = 0,      // 值/不不值投票需进文章页拉取，列表页先置 0
+        val positive: Int = 0,      // 列表页 SSR 直出，见 extractZhiVotes
         val negative: Int = 0
     )
 
@@ -72,13 +72,16 @@ class SmzdmApi @Inject constructor(private val client: ApiClient) {
                     .replace(Regex("^//"), "https://")
                 val mall = (item.selectFirst(".feed-block-info a.z-highlight, .feed-block-extras span")
                     ?.text()?.trim() ?: "").ifEmpty { "未知渠道" }
+                val votes = extractZhiVotes(item)
 
                 posts += SmzdmPost(
                     title = title.take(60),
                     price = price,
                     url = if (rawUrl.startsWith("//")) "https:$rawUrl" else rawUrl,
                     image = image,
-                    mall = mall
+                    mall = mall,
+                    positive = votes.first,
+                    negative = votes.second
                 )
                 if (posts.size >= 10) break
             }
@@ -90,6 +93,27 @@ class SmzdmApi @Inject constructor(private val client: ApiClient) {
             val m = Regex("(?:¥|￥|\\s)(\\d{2,6}(?:\\.\\d{1,2})?)(?:元|\\b)").find(text)
                 ?: return null
             return m.groupValues[1].toDoubleOrNull()
+        }
+
+        /**
+         * 「值 / 不值」投票数。旧注释写"需进文章页拉取，列表页先置 0"是**未验证的推断**，
+         * 后果是社区页每条恒显「值 0 / 不值 0」+ 一根空进度条（真机 2026-09-28 复现）。
+         * 实况：列表页 SSR 里就带着票数——
+         * `span.J_zhi_like_fav[data-zhi-type="1|-1"] > span.unvoted-wrap > span` 是计数
+         * （夹具 smzdm_faxian.html / smzdm_youhui.html 各 14~16 处，实测 15/0、4/1、0/1…）。
+         * 同一 item 里同方向出现多次时取最大值（不同 data-article 的重复按钮不应相加）。
+         */
+        private fun extractZhiVotes(item: org.jsoup.nodes.Element): Pair<Int, Int> {
+            var up = 0
+            var down = 0
+            for (el in item.select("span.J_zhi_like_fav[data-zhi-type]")) {
+                val n = el.selectFirst(".unvoted-wrap span")?.text()?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+                when (el.attr("data-zhi-type").trim()) {
+                    "1" -> up = maxOf(up, n)
+                    "-1" -> down = maxOf(down, n)
+                }
+            }
+            return up to down
         }
     }
 }

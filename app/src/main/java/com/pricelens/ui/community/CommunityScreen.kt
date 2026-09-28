@@ -203,22 +203,37 @@ private fun PostCard(post: SmzdmApi.SmzdmPost, onClick: () -> Unit) {
                 )
                 Spacer(Modifier.width(Dims.SpacingM))
             }
-            val total = (post.positive + post.negative).coerceAtLeast(1)
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.community_worth_votes, post.positive, post.negative),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                LinearProgressIndicator(
-                    progress = { post.positive.toFloat() / total },
-                    color = semantic.lowPrice,
-                    trackColor = semantic.suspicious.copy(alpha = 0.25f),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(Dims.SpacingXS)
-                )
-            }
+        }
+        // 「值不值」原来挤在价格右侧的剩余宽度里、用 labelSmall(≈11sp) 显示，
+        // 真机上几乎看不清；而且票数恒为 0 时也照样报「值 0 / 不值 0」。
+        // 现在整行展示，并且**没票就说没票**，不摆一根空进度条冒充结论。
+        Spacer(Modifier.height(Dims.SpacingS))
+        if (post.positive + post.negative > 0) {
+            Text(
+                stringResource(
+                    R.string.community_worth_votes,
+                    post.positive,
+                    post.negative,
+                    post.positive * 100 / (post.positive + post.negative)
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            LinearProgressIndicator(
+                progress = { post.positive.toFloat() / (post.positive + post.negative) },
+                color = semantic.lowPrice,
+                trackColor = semantic.suspicious.copy(alpha = 0.25f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = Dims.SpacingXS)
+                    .height(Dims.SpacingXS)
+            )
+        } else {
+            Text(
+                stringResource(R.string.community_worth_none),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

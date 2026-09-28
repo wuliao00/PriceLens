@@ -33,4 +33,15 @@ class SmzdmParserTest {
         assertTrue("过滤后不应含其它品牌", relevant.none { it.title.contains("小米") })
         assertTrue("过滤后不应含配件", relevant.none { it.title.contains("镜头膜") || it.title.contains("数据线") })
     }
+
+    @Test
+    fun `list page SSR carries zhi votes per deal`() {
+        val posts = SmzdmApi.parseSearchPage(fixture("smzdm_faxian.html"))
+        val voted = posts.filter { it.positive + it.negative > 0 }
+        // 旧实现写"票数需进文章页拉取"于是列表页恒置 0 → 社区页每条都显示「值 0 / 不值 0」。
+        // 实况：span.J_zhi_like_fav[data-zhi-type] 里就带着计数，不必多打一次请求。
+        assertTrue("列表页 SSR 就带票数，解析结果不应全为 0", voted.isNotEmpty())
+        assertTrue("不该出现负票", posts.all { it.positive >= 0 && it.negative >= 0 })
+        assertTrue("应解析出夹具里那条 4 值 / 1 不值", voted.any { it.positive == 4 && it.negative == 1 })
+    }
 }
