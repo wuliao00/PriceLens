@@ -100,10 +100,18 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: read
+    # 镜像推送的凭据在这里落地（步骤级 if 读不到 secrets，只能读 env）
+    env:
+      GITEE_TOKEN: ${{ secrets.GITEE_MIRROR_TOKEN }}
+      GITEE_USER: ${{ secrets.GITEE_MIRROR_USERNAME }}
 
     steps:
       - name: Checkout 代码
         uses: actions/checkout@v4
+        with:
+          # 默认 fetch-depth: 1 是浅克隆，推 Gitee 会被拒（shallow update not allowed），
+          # 而且校验清单也不需要历史——但为了让镜像步可用，这里取完整历史。
+          fetch-depth: 0
 
       - name: 校验 update.json 自洽性
         run: |
@@ -166,22 +174,25 @@ jobs:
           PY
 
       # 缺 GITEE_MIRROR_TOKEN 时不执行、不报错；Gitee 抖动也只告警不阻断流水线
+      # ⚠ 步骤级 if 里**不能**用 secrets 上下文（Actions 会报
+      #   "Unrecognized named-value: 'secrets'"，整条流水线 0 秒失败且 run 名退化成文件路径）。
+      #   所以密钥先在本 job 的 env 里落地，if 只读 env。
       - name: 推送 Gitee 公开镜像（更新源）
-        if: ${{ secrets.GITEE_MIRROR_TOKEN != '' }}
+        if: ${{ env.GITEE_TOKEN != '' }}
         continue-on-error: true
-        env:
-          GITEE_TOKEN: ${{ secrets.GITEE_MIRROR_TOKEN }}
-          GITEE_USER: ${{ secrets.GITEE_MIRROR_USERNAME }}
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git remote add gitee "https://oauth2:${GITEE_TOKEN}@gitee.com/${GITEE_USER:-wuliao11541}/PriceLens.git"
-          git push --force gitee HEAD:refs/heads/main
+          git remote add gitee "https://${GITEE_USER:-wuliao11541}:${GITEE_TOKEN}@gitee.com/${GITEE_USER:-wuliao11541}/PriceLens.git"
+          # 不用 --force：GitHub 与 Gitee 的 main 是同一条历史，正常推送就是快进。
+          # 也不设 fetch-depth: 0 的话 checkout 是浅克隆，推完整历史会被 Gitee 以
+          # "shallow update not allowed" 拒掉——所以上面 Checkout 代码必须带 fetch-depth: 0。
+          git push gitee HEAD:refs/heads/main
           echo "已推送 Gitee 镜像，客户端清单地址：https://gitee.com/${GITEE_USER:-wuliao11541}/PriceLens/raw/main/update.json"
 
       - name: 缺少镜像密钥时跳过
-        if: ${{ secrets.GITEE_MIRROR_TOKEN == '' }}
-        run: echo "::notice::未配置 GITEE_MIRROR_TOKEN，跳过 Gitee 镜像推送（清单校验已完成）"
+        if: ${{ env.GITEE_TOKEN == '' }}
+        run: echo "::notice::未配置 GITEE_MIRROR_TOKEN，跳过 Gitee 镜像推送（清单校验已完成）。维护机上的 SSH 通道（git remote add gitee git@gitee.com:wuliao11541/PriceLens.git）是已验证可用的替代路径。"
 
   # ========== Desktop 构建与测试 ==========
   desktop-build:
