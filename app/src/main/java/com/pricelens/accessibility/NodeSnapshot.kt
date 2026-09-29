@@ -117,15 +117,21 @@ internal fun bfs(root: NodeSnapshot): List<NodeSnapshot> {
     return out
 }
 
-/** 子树内所有可读文本（text + contentDescription），用于邻近关键词/语境判定 */
+/**
+ * 子树内所有可读文本（text + contentDescription），用于邻近关键词/语境判定。
+ *
+ * 一律过 [PriceNodeMatcher.cleanTitle]：真机京东会把按钮文案用 U+200B 零宽字符填充
+ * （取证见 `InvisibleTextSanitizingTest`），未清洗时 `contains("立即预约")` 这类判定会**静默失配**，
+ * 症状是"词表明明收了，浮窗还是不弹"。
+ */
 internal fun subtreeTexts(node: NodeSnapshot): List<String> {
     val out = ArrayList<String>()
     val queue = ArrayDeque<NodeSnapshot>()
     queue.addLast(node)
     while (queue.isNotEmpty()) {
         val n = queue.removeFirst()
-        n.text?.let { if (it.isNotBlank()) out.add(it) }
-        n.contentDescription?.let { if (it.isNotBlank()) out.add(it) }
+        PriceNodeMatcher.cleanTitle(n.text)?.let { out.add(it) }
+        PriceNodeMatcher.cleanTitle(n.contentDescription)?.let { out.add(it) }
         n.children.forEach { queue.addLast(it) }
     }
     return out

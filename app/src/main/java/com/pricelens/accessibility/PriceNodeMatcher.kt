@@ -123,9 +123,19 @@ object PriceNodeMatcher {
     private val PURE_NUMBER = Regex("\\d{1,9}(?:\\.\\d{1,2})?")
     private val DATEISH = Regex("^[\\d\\s.,%\\-/:年月日]+$")
 
-    /** 规整标题文本：trim + 连续空白压缩为单空格；空返回 null */
+    /**
+     * 不可见控制字符：零宽空格/零宽不连/零宽连、词连接符、BOM，以及双向文本的标记符。
+     * 它们**不是** Unicode 空白字符 —— `String.trim()`（按 Char.isWhitespace）与正则 `\s`
+     * 都认不出来，所以必须显式删。
+     */
+    private val INVISIBLE = Regex("[\\u200B-\\u200F\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]")
+
+    /**
+     * 规整标题文本：先删不可见控制字符（真机京东商详页用 U+200B 填充标题防爬，
+     * 见 `InvisibleTextSanitizingTest` 的取证说明），再 trim + 连续空白压缩为单空格；空返回 null
+     */
     fun cleanTitle(raw: String?): String? {
-        val t = raw?.trim()?.replace('\u00A0', ' ')?.replace(Regex("\\s+"), " ")
+        val t = raw?.replace(INVISIBLE, "")?.trim()?.replace('\u00A0', ' ')?.replace(Regex("\\s+"), " ")
         return t?.takeIf { it.isNotEmpty() }
     }
 
