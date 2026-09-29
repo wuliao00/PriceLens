@@ -1,5 +1,6 @@
 package com.pricelens.ui.components
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -201,13 +202,14 @@ fun PriceOverlay(
 
                     // ② 历史位置（防错配硬规则：仅确定性 ID 才允许出现）
                     val low = if (detected.itemId != null) lowestWithinDays(bundle?.history, 90) else null
-                    if (low != null && low > 0) {
-                        val pct = ((detected.price - low) / low * 100).roundToInt()
+                    val line = historyLineFor(low, detected.price)
+                    if (low != null && line != HistoryLine.NONE) {
+                        val pct = ((detected.price - low.price) / low.price * 100).roundToInt()
                         Text(
-                            text = if (pct > 0) {
-                                stringResource(R.string.ovl_history_high, PriceFormatter.format(low), pct)
+                            text = if (line == HistoryLine.WINDOW_NEAR_LOW || line == HistoryLine.OLDER_NEAR_LOW) {
+                                stringResource(historyLineStringRes(line), PriceFormatter.format(low.price))
                             } else {
-                                stringResource(R.string.ovl_history_near_low, PriceFormatter.format(low))
+                                stringResource(historyLineStringRes(line), PriceFormatter.format(low.price), pct)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -265,15 +267,24 @@ fun PriceOverlay(
                     }
 
                     // ⑤ 底部灰字：来源 + 数据时间 + 非实时（必须项；stale 再补一行降级提示）
+                    // 数据时间取自 bundle.fetchedAtMs（= 本次最老那份数据的抓取时刻）；
+                    // 时刻不可知时明说"未知"，绝不拿打包时刻冒充"刚刚"（F3 缺陷二）。
                     val b = bundle
+                    val fetchedAt = b?.fetchedAtMs
                     Text(
-                        text = if (b != null) {
-                            stringResource(R.string.ovl_footer_bundle, b.sourceLabel ?: "-", TimeAgo.format(b.fetchedAtMs))
-                        } else {
-                            stringResource(
+                        text = when {
+                            b == null -> stringResource(
                                 R.string.ovl_footer_live,
                                 detected.sourceText ?: stringResource(R.string.ovl_source_unknown)
                             )
+
+                            fetchedAt != null -> stringResource(
+                                R.string.ovl_footer_bundle,
+                                b.sourceLabel ?: "-",
+                                TimeAgo.format(fetchedAt)
+                            )
+
+                            else -> stringResource(R.string.ovl_footer_bundle_no_time, b.sourceLabel ?: "-")
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline
@@ -333,15 +344,61 @@ private fun OverlayChip(text: String, tone: Color) {
     }
 }
 
+/** 历史最低行的取数口径：这个最低价是从哪个池子里算出来的 */
+internal enum class LowPriceScope {
+    /** N 天窗口内有曲线点 —— 可以宣称"N 天最低" */
+    WITHIN_DAYS,
+
+    /** 窗口内一个点都没有，值取自更早的曲线 —— 不许再出现窗口天数断言 */
+    OLDER_ONLY
+}
+
+/** 浮窗"历史最低"行的一枚数据：值 + 取数口径（口径必须是返回值的一部分，不能被 ifEmpty 吞掉） */
+internal data class LowPrice(val price: Double, val scope: LowPriceScope)
+
+/** 历史最低行要落哪条文案（NONE = 这一行不出） */
+internal enum class HistoryLine { NONE, WINDOW_HIGH, WINDOW_NEAR_LOW, OLDER_HIGH, OLDER_NEAR_LOW }
+
 /**
- * N 天窗口内的最低价：慢慢买曲线点 date 为 yyyy-MM-dd（ISO 字典序=时间序），
- * 直接字符串比较裁剪；曲线不足 N 天时用全量点（历史价行仍可出，文案里写明窗口）。
- * 纯计算，单独抽出便于未来在 ViewModel 侧复用/测试。
+ * N 天窗口内的最低价 + 它的取数口径。曲线点 date 为 yyyy-MM-dd（ISO 字典序=时间序），直接字符串比较裁剪。
+ *
+ * 返回 [LowPrice] 而不是裸 Double：窗口内没有点时，min 取的是**更早的历史曲线**，
+ * 此时调用方必须换成"90 天窗口外"口径的文案（F3 缺陷一）。
+ * 完全没有可用点（无曲线 / 点全为空 / 最低值 ≤0）→ null，那一行整行不出。
  */
-internal fun lowestWithinDays(history: ManmanbuyApi.History?, days: Int, today: LocalDate = LocalDate.now()): Double? {
+internal fun lowestWithinDays(history: ManmanbuyApi.History?, days: Int, today: LocalDate = LocalDate.now()): LowPrice? {
     if (history == null || history.points.isEmpty()) return null
     val cutoff = today.minusDays(days.toLong()).toString()
     val windowed = history.points.filter { it.date >= cutoff }
+    // 窗口内没点时仍用全量点算 min（曲线可能整体都比窗口老），
+    // 但口径必须如实标成 OLDER_ONLY —— 那个数不是"90 天内最低"（F3 缺陷一）
+    val scope = if (windowed.isEmpty()) LowPriceScope.OLDER_ONLY else LowPriceScope.WITHIN_DAYS
     val pool = windowed.ifEmpty { history.points }
-    return pool.minOf { it.price }.takeIf { it > 0.0 }
+    val price = pool.minOf { it.price }.takeIf { it > 0.0 } ?: return null
+    return LowPrice(price, scope)
+}
+
+/**
+ * 历史最低行的文案选择（纯函数）：窗口口径 × 当前价是否高于最低价。
+ * 与 [historyLineStringRes] 一起放在 Compose 之外，JVM 层即可断言"窗口外老数据绝不会拿到 90 天文案"。
+ */
+internal fun historyLineFor(low: LowPrice?, currentPrice: Double): HistoryLine {
+    if (low == null || low.price <= 0.0) return HistoryLine.NONE
+    val aboveLow = currentPrice > low.price
+    return when {
+        low.scope == LowPriceScope.OLDER_ONLY && aboveLow -> HistoryLine.OLDER_HIGH
+        low.scope == LowPriceScope.OLDER_ONLY -> HistoryLine.OLDER_NEAR_LOW
+        aboveLow -> HistoryLine.WINDOW_HIGH
+        else -> HistoryLine.WINDOW_NEAR_LOW
+    }
+}
+
+/** [HistoryLine] → 浮窗文案资源（"90 天最低"仅允许出现在 WINDOW_* 两条） */
+@StringRes
+internal fun historyLineStringRes(line: HistoryLine): Int = when (line) {
+    HistoryLine.WINDOW_HIGH -> R.string.ovl_history_high
+    HistoryLine.WINDOW_NEAR_LOW -> R.string.ovl_history_near_low
+    HistoryLine.OLDER_HIGH -> R.string.ovl_history_high_older
+    HistoryLine.OLDER_NEAR_LOW -> R.string.ovl_history_near_low_older
+    HistoryLine.NONE -> R.string.ovl_history_near_low // 不被消费：NONE 时整行不渲染
 }

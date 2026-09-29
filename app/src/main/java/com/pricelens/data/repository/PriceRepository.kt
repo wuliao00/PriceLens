@@ -231,32 +231,49 @@ class PriceRepository @Inject constructor(
      *    为 null 时历史价与多平台报价返回空——绝不把别的 SKU 的历史价当当前商品价；
      *  - 券/当当/识货是关键词通道，返回前逐条过 [QueryRelevance.isRelevant] 过滤，
      *    UI 侧仍需标注"不同店铺/规格，仅供参考"；
-     *  - [OverlayBundle.stale]=true 表示本次用到的缓存 key 命中 [staleKeys]（降级回吐旧数据）。
+     *  - [OverlayBundle.stale]=true 表示本次用到的缓存 key 命中 [staleKeys]（降级回吐旧数据）；
+     *  - [OverlayBundle.fetchedAtMs] 是**本次 bundle 里最老那份数据的抓取时刻**（多来源取 min，见
+     *    [bundleFetchedAtMs]），不是 bundle 的组装时刻——命中缓存时脚注据此说"N 天前"，
+     *    问不到时刻则 null（脚注改说"数据抓取时间未知"），绝不冒充"刚刚"（F3 缺陷二）。
      *
      * 全部经既有 [CachedSource] 通道取数：与 SearchViewModel 的同 key 搜索共享 singleflight，
      * 不新增额外网络放大。
      */
     suspend fun overlayBundle(keyword: String, jdSku: String?): OverlayBundle {
         val historyUrl = jdSku?.let { "https://item.jd.com/$it.html" }
+        val historyKey = historyUrl?.let { "mmb:history:$it" }
+        val couponKey = "gwd:coupon:$keyword"
+        val dangdangKey = "dd:search:$keyword"
+        val shihuoKey = "sh:search:$keyword"
         val history = historyUrl?.let { url -> runCatching { getPriceHistory(url) }.getOrNull() }
         val coupons = runCatching { searchCoupons(keyword) }.getOrNull()
             ?.sortedByDescending { it.amount }
             ?.take(3)
             ?: emptyList()
+        // 真正往 bundle 里放了值的 key 才参与"数据时刻"计算（空源不拖后腿）
+        val contributedKeys = ArrayList<String>(4)
+        if (history != null && historyKey != null) contributedKeys.add(historyKey)
+        if (coupons.isNotEmpty()) contributedKeys.add(couponKey)
         val platforms = ArrayList<PlatformQuote>(2)
         if (jdSku != null) {
             runCatching { searchDangdang(keyword) }.getOrNull()
                 ?.firstOrNull { it.price > 0 && QueryRelevance.isRelevant(keyword, it.title) }
-                ?.let { platforms.add(PlatformQuote(platform = "当当", price = it.price)) }
+                ?.let {
+                    platforms.add(PlatformQuote(platform = "当当", price = it.price))
+                    contributedKeys.add(dangdangKey)
+                }
             runCatching { searchShihuo(keyword) }.getOrNull()
                 ?.firstOrNull { it.price > 0 && QueryRelevance.isRelevant(keyword, it.title) }
-                ?.let { platforms.add(PlatformQuote(platform = "识货", price = it.price)) }
+                ?.let {
+                    platforms.add(PlatformQuote(platform = "识货", price = it.price))
+                    contributedKeys.add(shihuoKey)
+                }
         }
         val usedKeys = listOfNotNull(
-            historyUrl?.let { "mmb:history:$it" },
-            "gwd:coupon:$keyword",
-            if (jdSku != null) "dd:search:$keyword" else null,
-            if (jdSku != null) "sh:search:$keyword" else null
+            historyKey,
+            couponKey,
+            if (jdSku != null) dangdangKey else null,
+            if (jdSku != null) shihuoKey else null
         )
         val stale = usedKeys.any { it in staleKeys.value }
         return OverlayBundle(
@@ -264,10 +281,21 @@ class PriceRepository @Inject constructor(
             coupons = coupons,
             platforms = platforms,
             sourceLabel = if (history != null) "慢慢买" else "什么值得买",
-            fetchedAtMs = System.currentTimeMillis(),
+            fetchedAtMs = bundleFetchedAtMs(contributedKeys, keyAge = ::dataAgeCandidates),
             stale = stale
         )
     }
+
+    /**
+     * 某个缓存 key 的数据抓取时刻候选：
+     *  - L1 内存条目 `createdAt`（网络写回=本轮抓取时刻；L2 提升/降级兜底=快照自己的时刻，见 [CachedSource]）
+     *  - L2 Room `cache_entries.cachedAt`
+     * 两处都可能问不到（被淘汰/被清理/写回失败），缺失就不给。
+     */
+    private suspend fun dataAgeCandidates(key: String): List<Long?> = listOfNotNull(
+        memoryCache.peek(key)?.createdAt,
+        db.cacheEntryDao().get(key)?.cachedAt
+    )
 
     // ---------- 个人页 / 设置页 ----------
 
@@ -396,6 +424,28 @@ class PriceRepository @Inject constructor(
 }
 
 /**
+ * [OverlayBundle.fetchedAtMs] 的口径：本次 bundle 中**最老那份数据**的抓取时刻（多来源取 min，保守）。
+ *
+ * @param keys 真正往 bundle 里放了数据的缓存 key（没贡献数据的 key 不参与，空表 → null）
+ * @param keyAge 某个 key 已知的抓取时刻候选（L1 条目写入时刻 / L2 行 cachedAt；拿不到就给 null）
+ * @return 最老的那个候选；任一参与 key 完全没有时间信息 → null = 时刻不可知，
+ *         绝不退回 [nowMs] 假装"刚抓的"（F3 缺陷二：打包时刻冒充数据时刻）。
+ */
+internal suspend fun bundleFetchedAtMs(
+    keys: List<String>,
+    keyAge: suspend (String) -> List<Long?>,
+    nowMs: Long = System.currentTimeMillis()
+): Long? {
+    if (keys.isEmpty()) return null
+    // 未来时刻（设备时钟被往回调过）不是可信的年龄证据，按"问不到"处理
+    val oldestPerKey = keys.map { key -> keyAge(key).filterNotNull().filter { it <= nowMs }.minOrNull() }
+    val known = oldestPerKey.filterNotNull()
+    // 任一参与 key 问不到时刻 → 整包时间不可知；不退回 nowMs（那等于继续说"刚刚"）
+    if (known.size != keys.size) return null
+    return known.min()
+}
+
+/**
  * [PriceRepository.overlayBundle] 的返回结构（A2 新增，仅浮窗消费）。
  * 空字段=缺数据，浮窗"缺什么隐什么"，不做占位。
  */
@@ -408,8 +458,8 @@ data class OverlayBundle(
     val platforms: List<PlatformQuote>,
     /** 人读来源（"慢慢买"/"什么值得买"），浮窗灰脚注必须项 */
     val sourceLabel: String?,
-    /** 数据聚合时间戳（浮窗显示"3 小时前"用） */
-    val fetchedAtMs: Long,
+    /** 本次 bundle 里最老那份数据的抓取时刻（口径见 [bundleFetchedAtMs]）；null=时刻不可知，脚注不许说"刚刚" */
+    val fetchedAtMs: Long?,
     /** 本次用到的缓存 key 是否有任一处于 staleKeys 降级态 */
     val stale: Boolean
 )

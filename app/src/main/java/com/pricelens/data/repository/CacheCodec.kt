@@ -151,7 +151,9 @@ class CachedSource<T : Any>(
         if (snapshot != null) {
             val (value, cachedAt) = snapshot
             if (now() - cachedAt <= ttlMs) {
-                cache.put(key, codec.encode(value), ttlMs)
+                // 提升回 L1 时带上快照自己的抓取时刻：L1 条目的 createdAt 语义是
+                // "这份数据是什么时候抓的"，用 now() 会把几天前的数据洗成刚抓的（F3 缺陷二）
+                cache.put(key, codec.encode(value), ttlMs, createdAtMs = cachedAt)
                 hub.register(key) { refresh() }
                 tracker.markFresh(key)
                 return value
@@ -194,7 +196,8 @@ class CachedSource<T : Any>(
 
         // 降级兜底：返回陈旧快照并标记（短 TTL 入 L1，后续读取持续触发重验证）
         snapshot?.first?.let { stale ->
-            cache.put(key, codec.encode(stale), STALE_RETRY_TTL_MS)
+            // 同上：createdAt 记快照自己的抓取时刻，不记本轮兜底时刻
+            cache.put(key, codec.encode(stale), STALE_RETRY_TTL_MS, createdAtMs = snapshot.second)
             tracker.markStale(key)
             hub.register(key) { refresh() }
             return stale

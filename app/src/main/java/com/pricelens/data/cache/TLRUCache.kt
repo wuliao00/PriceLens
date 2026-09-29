@@ -70,11 +70,17 @@ class TLRUCache<K : Any>(
     /** 返回原始条目，不更新访问时间、不触发重验证（供调用方自行判定过期/陈旧语义） */
     fun peek(key: K): Entry? = map[key]
 
-    fun put(key: K, value: String, ttlMs: Long = defaultTtlMs, pinned: Boolean = false) {
+    /**
+     * 写入条目。[createdAtMs] 的语义是**这份数据是什么时候抓的**（不是"什么时候放进 L1 的"）：
+     * 网络写回传 now()，L2 快照提升/降级兜底传快照自己的 cachedAt——
+     * 否则一次提升就会把几天前的数据洗成"刚刚"，下游的数据年龄口径全部失真（F3 缺陷二）。
+     * 默认 now()，调用方不传即视为"本轮刚抓的"。
+     */
+    fun put(key: K, value: String, ttlMs: Long = defaultTtlMs, pinned: Boolean = false, createdAtMs: Long = now()) {
         synchronized(map) {
             val existing = map[key]
             if (existing != null) currentSize -= existing.sizeBytes
-            val entry = Entry(key, value, now(), now(), ttlMs, pinned)
+            val entry = Entry(key, value, createdAtMs, now(), ttlMs, pinned)
             map[key] = entry
             currentSize += entry.sizeBytes
             evict()
