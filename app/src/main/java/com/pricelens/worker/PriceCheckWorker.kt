@@ -41,7 +41,8 @@ class PriceCheckWorker @AssistedInject constructor(
         LogT.i(
             "盯价轮次：目标 ${outcome.total}，查到价 ${outcome.checked}，" +
                 "达标 ${outcome.triggered}，跳过 无通道/${outcome.skipped.noChannel}" +
-                " 坏ID/${outcome.skipped.badTargetId} 无现价/${outcome.skipped.noPrice}，" +
+                " 坏ID/${outcome.skipped.badTargetId} 无现价/${outcome.skipped.noPrice}" +
+                "（其中只有星罗历史低价参考值 ${outcome.skipped.referenceOnly}），" +
                 "整轮失败平台 ${outcome.failedPlatformCount}"
         )
         // 任一平台整轮失败 → retry，WorkManager 按退避策略重排，不影响 30 分钟周期；

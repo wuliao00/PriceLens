@@ -59,6 +59,9 @@
     <string name="watch_skip_no_channel">%1$d 个目标因平台无查价通道被跳过</string>
     <string name="watch_skip_bad_id">%1$d 个目标缺少合法平台 ID（旧版本遗留），无法跟踪</string>
     <string name="watch_skip_no_price">%1$d 个目标本轮取不到现价（京东公开查价已下线，需星罗 API Key 或无障碍实时价）</string>
+    <!-- F1（2026-09-29）：星罗是「历史低价榜」，它给的券后价是历史位置、不是现价。
+         这类目标本轮同样计入"取不到现价"，但脚注要能说出真实成因：不是没数据，是数据不是现价。 -->
+    <string name="watch_status_reference_only">其中 %1$d 个目标只拿到星罗「券后历史低价」参考值：它不是现价，因此没有发降价通知，也没有写进历史曲线</string>
     <string name="watch_status_stalled">本轮没有任何目标查到价格，不会有任何降价提醒。</string>
     <string name="watch_check_now">立即检查一次</string>
     <string name="watch_check_running">检查中…</string>

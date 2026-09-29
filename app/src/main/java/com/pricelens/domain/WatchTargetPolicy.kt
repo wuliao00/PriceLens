@@ -115,18 +115,26 @@ data class WatchTargetRef(
     val targetPrice: Double
 )
 
-/** 一轮检查里"被跳过的目标"按原因分类的计数 */
+/**
+ * 一轮检查里"被跳过的目标"按原因分类的计数。
+ *
+ * [referenceOnly] 不是第四个互斥桶，而是对 `noPrice` 的**补充说明**：这些目标本轮
+ * 不是完全没数据，而是只拿到了"券后历史低价"这类参考值（F1）。它同时计入 `noPrice`
+ * （所以 [total] 不重复相加），盯价页脚注用它如实区分"啥都没查到"和"查到的不是现价"。
+ */
 data class WatchSkipCounts(
     val noChannel: Int = 0,
     val badTargetId: Int = 0,
-    val noPrice: Int = 0
+    val noPrice: Int = 0,
+    val referenceOnly: Int = 0
 ) {
     val total: Int get() = noChannel + badTargetId + noPrice
 
     operator fun plus(other: WatchSkipCounts) = WatchSkipCounts(
-        noChannel + other.noChannel,
-        badTargetId + other.badTargetId,
-        noPrice + other.noPrice
+        noChannel = noChannel + other.noChannel,
+        badTargetId = badTargetId + other.badTargetId,
+        noPrice = noPrice + other.noPrice,
+        referenceOnly = referenceOnly + other.referenceOnly
     )
 
     /** 非零原因，按可行动性排序（先说"平台根本没通道"，再说"本轮取不到价"） */
@@ -323,13 +331,19 @@ object WatchTargetPolicy {
     fun isTrackableTarget(productId: String, platform: String): Boolean =
         isTrackablePlatform(platform) && externalIdOf(productId, platform) != null
 
-    /** 本轮该目标的跳过原因；null 表示可以正常比对 */
-    fun skipReasonFor(target: WatchTargetRef, prices: Map<String, Double>, lookupFailed: Boolean): SkipReason? {
+    /**
+     * 本轮该目标的跳过原因；null 表示可以正常比对。
+     *
+     * F1：判定看的是"有没有**现价**"，不是"有没有一个正数"。
+     * 星罗券后历史低价这类参考样本（[PriceSample.isLive] 为 false）在这里就被判成
+     * [SkipReason.PRICE_UNAVAILABLE]，因此既不会进 `checked`，也拿不到触发通知的机会。
+     */
+    fun skipReasonFor(target: WatchTargetRef, prices: Map<String, PriceSample>, lookupFailed: Boolean): SkipReason? {
         if (!isTrackablePlatform(target.platform)) return SkipReason.NO_PRICE_CHANNEL
         if (externalIdOf(target.productId, target.platform) == null) return SkipReason.INVALID_TARGET_ID
         if (lookupFailed) return SkipReason.PRICE_UNAVAILABLE
-        val price = prices[externalIdOf(target.productId, target.platform)] ?: 0.0
-        return if (price <= 0) SkipReason.PRICE_UNAVAILABLE else null
+        val sample = prices[externalIdOf(target.productId, target.platform)]
+        return if (sample == null || !sample.isLive) SkipReason.PRICE_UNAVAILABLE else null
     }
 
     /**
@@ -338,23 +352,29 @@ object WatchTargetPolicy {
      */
     fun classifyRound(
         targets: List<WatchTargetRef>,
-        pricesByPlatform: Map<String, Map<String, Double>>,
+        pricesByPlatform: Map<String, Map<String, PriceSample>>,
         failedPlatforms: Set<String> = emptySet()
     ): WatchRoundReport {
         var checked = 0
         var noChannel = 0
         var badId = 0
         var noPrice = 0
+        var referenceOnly = 0
         val triggered = mutableListOf<String>()
         for (target in targets) {
-            when (skipReasonFor(target, pricesByPlatform[target.platform].orEmpty(), target.platform in failedPlatforms)) {
+            val prices = pricesByPlatform[target.platform].orEmpty()
+            val sample = externalIdOf(target.productId, target.platform)?.let { prices[it] }
+            when (skipReasonFor(target, prices, target.platform in failedPlatforms)) {
                 SkipReason.NO_PRICE_CHANNEL -> noChannel++
                 SkipReason.INVALID_TARGET_ID -> badId++
-                SkipReason.PRICE_UNAVAILABLE -> noPrice++
+                SkipReason.PRICE_UNAVAILABLE -> {
+                    noPrice++
+                    if (sample != null && sample.price > 0 && sample.source.referenceOnly) referenceOnly++
+                }
                 null -> {
                     checked++
                     val price = pricesByPlatform.getValue(target.platform)
-                        .getValue(externalIdOf(target.productId, target.platform)!!)
+                        .getValue(externalIdOf(target.productId, target.platform)!!).price
                     if (target.targetPrice > 0 && price <= target.targetPrice) triggered += target.productId
                 }
             }
@@ -363,7 +383,12 @@ object WatchTargetPolicy {
             total = targets.size,
             checked = checked,
             triggeredProductIds = triggered,
-            skipped = WatchSkipCounts(noChannel, badId, noPrice)
+            skipped = WatchSkipCounts(
+                noChannel = noChannel,
+                badTargetId = badId,
+                noPrice = noPrice,
+                referenceOnly = referenceOnly
+            )
         )
     }
 

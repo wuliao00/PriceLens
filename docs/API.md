@@ -108,7 +108,7 @@ class Crawler {
 | 识货 搜索 | PC 搜索地址废弃（302 首页，数据是热榜） | 改走 m 站 `m.shihuo.cn/search?type=goods`；结构不符→空 |
 | 京东 商品页 | `item.jd.com` 对脚本请求返回风控页（标题"京东验证"） | 改走 `item.m.jd.com` 的 `_itemInfo`；风控页标题不使用 |
 | 京东 查价 | `p.3.cn` 公网 DNS 不再返回可达地址（DoH 双证） | 尽力尝试；失败时价格置空 + UI 明示"请在京东 App 查看" |
-| 慢慢买 公开接口 | 已下线（404） | 用自填 Cookie 的 SSR 通道 / 自建曲线 / 星罗 apikey 合并 |
+| 慢慢买 公开接口 | 已下线（404） | 用自填 Cookie 的 SSR 通道 / 自建曲线 合并；星罗 apikey 命中榜单时**只有 in-sale 价（goods_list_money）够格补今日点**，`real_money` 是券后历史低价、只作参考展示（不写曲线、不触发降价通知，见 `domain/PriceSampling`） |
 | 值得买/券频道 | 瑞数 WAF，浏览器 UA 拿 202 挑战页 | Googlebot UA 放行；挑战页识别为 Blocked |
 | 全部搜索源 | 结果常混入配件/图书/其它品牌/热榜 | `QueryRelevance` 统一过滤（两端同规则） |
 

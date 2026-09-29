@@ -226,6 +226,9 @@ class WatchTargetPolicyTest {
 
     // ---------- 4. 检查轮次如实记账（含 p.3.cn 不可达） ----------
 
+    /** 便捷构造：本轮现价的默认来源是京东 p.3.cn（这些用例只验记账，不验来源） */
+    private fun jdPrice(price: Double) = PriceSample(price, PriceSource.JD_P3CN)
+
     private fun refs() = listOf(
         WatchTargetRef("jd:$sku", "jd", 3999.0),
         WatchTargetRef("jd:", "jd", 100.0),
@@ -263,7 +266,7 @@ class WatchTargetPolicyTest {
     fun `mixed targets are accounted by reason without double counting`() {
         val report = WatchTargetPolicy.classifyRound(
             refs(),
-            pricesByPlatform = mapOf("jd" to mapOf(sku to 3599.0)),
+            pricesByPlatform = mapOf("jd" to mapOf(sku to jdPrice(3599.0))),
             failedPlatforms = emptySet()
         )
         assertEquals(3, report.total)
@@ -280,7 +283,7 @@ class WatchTargetPolicyTest {
     fun `price above target does not trigger a notification`() {
         val report = WatchTargetPolicy.classifyRound(
             listOf(WatchTargetRef("jd:$sku", "jd", 3000.0)),
-            pricesByPlatform = mapOf("jd" to mapOf(sku to 3599.0))
+            pricesByPlatform = mapOf("jd" to mapOf(sku to jdPrice(3599.0)))
         )
         assertEquals(1, report.checked)
         assertTrue(report.triggeredProductIds.isEmpty())
@@ -290,7 +293,7 @@ class WatchTargetPolicyTest {
     fun `zero priced response is treated as no price rather than a drop`() {
         val report = WatchTargetPolicy.classifyRound(
             listOf(WatchTargetRef("jd:$sku", "jd", 3999.0)),
-            pricesByPlatform = mapOf("jd" to mapOf(sku to 0.0))
+            pricesByPlatform = mapOf("jd" to mapOf(sku to jdPrice(0.0)))
         )
         assertEquals(0, report.checked)
         assertEquals(1, report.skipped.noPrice)
@@ -320,7 +323,7 @@ class WatchTargetPolicyTest {
 
     @Test
     fun `skip reason per target distinguishes channel id and price problems`() {
-        val prices = mapOf(sku to 3599.0)
+        val prices = mapOf(sku to jdPrice(3599.0))
         assertNull(WatchTargetPolicy.skipReasonFor(WatchTargetRef("jd:$sku", "jd", 3999.0), prices, false))
         assertEquals(
             SkipReason.INVALID_TARGET_ID,

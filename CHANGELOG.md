@@ -7,6 +7,31 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **星罗「券后历史低价」不再冒充现价（假降价通知 + 曲线自污染，F1）**：星罗好货接口本身是
+  「历史低价榜」（`jd_historyLowPriceRank`），旧实现把它的 `real_money`（券后**历史**低价）
+  当成"本轮现价"塞进无标记的 `Map<String, Double>`，于是价格没有下降也会发
+  「当前 ¥X ≤ 目标 ¥Y」的降价通知；同一个值还被写成"今天的曲线点"落进历史表，使曲线最低点
+  恒 ≤ 它 ⇒ 入手建议几乎恒判「≈ 历史低价 / 可入」。而真正该当现价的 `goods_list_money`
+  （在售价）两端都解析、却没有任何消费点。现在：
+  - 新增带来源的价格样本 `domain/PriceSample`（`JD_P3CN` / `LINKSTARS_LIST` /
+    `LINKSTARS_HISTORY_LOW`），字段选择与资格判定收口在纯函数 `domain/PriceSampling`；
+  - 兜底优先取在售价，只有它 ≤0 时才允许退到券后历史低价，并如实标成"参考值"；
+  - 参考值**不触发降价通知**、**不写进历史曲线**，计入 `skipped.noPrice`（另记
+    `WatchSkipCounts.referenceOnly`），盯价页脚注说明真实成因；
+  - 通知文案跟着来源走：非京东在售价时标题改为「已达目标价」，正文写
+    「星罗好货在售价 ¥X ≤ 目标 ¥Y · 非实时」，不再冒充「当前价」。
+  回归测试 `domain/WatchPriceSourceTest`（3 条，各带对照组）先在"旧行为逐字转录"的实现上
+  跑红，再改实现转绿。桌面端同一处缺陷同步修正（`linkstars.toPriceSample/curveWorthy`），
+  同规则用例并入 `desktop/_unit_check.js`。
+- **当当候选主图恒为灰占位图（F5）**：当当列表页懒加载把真图写在 `data-original`、`src` 是
+  `images/model/guan/url_none.png`（2026-09-29 实况 60 条里 59 条如此，`data-src` 出现 0 次），
+  旧解析只读 `src`/`data-src` ⇒ 除第一条外每条候选都拿到相对路径的占位图，`AppImage` 的
+  `takeIf { it.startsWith("http") }` 于是恒显示灰块。取值顺序改为
+  「非占位 `src` → `data-original` → `data-src`」；并把 `DangdangParserTest` 从"只断言
+  `items[0]`"（唯一一条 `src` 就是真图的，正好把这个缺陷遮住）改为遍历夹具全部 8 条。
+
 ## [2.6.0] - 2026-09-28
 
 > v2.6.0 是"接口内容准确性"的第二轮：把上一轮修的数据源问题在**真机链路**上跑通

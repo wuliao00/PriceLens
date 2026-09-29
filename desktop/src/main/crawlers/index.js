@@ -130,7 +130,8 @@ async function searchProducts(q) {
  * 历史价格三源合并（与 Android PriceRepository.buildHistory 对齐）：
  *  1. 慢慢买：公开 JSON + 用户自填 Cookie 的 SSR 通道
  *  2. 自建曲线：本地累积的每日采样点（readLocal/writeLocal 由 ipc 注入）
- *  3. 星罗好货：京东 SKU 命中历史低价榜时补今日参考点
+ *  3. 星罗好货：京东 SKU 命中榜单时补点——只有在售价（goods_list_money）够格，
+ *     券后历史低价（real_money）不写进曲线（F1，2026-09-29）
  * @param {string} url 商品链接
  * @param {{apikey?:string, cookie?:string,
  *   readLocal?: () => Promise<Array<{date:string,price:number}>>,
@@ -152,10 +153,14 @@ async function getHistoryMerged(url, creds = {}) {
   }
   if (sku && creds.apikey) {
     const deal = await linkstars.lookupSku(sku, creds.apikey).catch(() => null);
-    if (deal && deal.couponPrice > 0) {
+    // F1（2026-09-29，与 Android PriceRepository.buildHistory 同规则）：
+    // 星罗是「历史低价榜」，只有它的在售价（goods_list_money）够格补今日的曲线点；
+    // real_money（券后历史低价）是历史位置，写进曲线等于自己造历史。
+    const sample = linkstars.curveWorthy(linkstars.toPriceSample(deal));
+    if (sample) {
       const today = new Date().toISOString().slice(0, 10);
       if (!points.some((p) => p.date === today)) {
-        points = points.concat([{ date: today, price: deal.couponPrice }]).sort((a, b) => a.date.localeCompare(b.date));
+        points = points.concat([{ date: today, price: sample.price }]).sort((a, b) => a.date.localeCompare(b.date));
       }
     }
   }

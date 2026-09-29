@@ -60,6 +60,31 @@ class DangdangApi @Inject constructor(private val client: ApiClient) {
         }
 
         /**
+         * 主图取值顺序（F5，2026-09-29）：非占位的 `src` → `data-original` → `data-src`。
+         *
+         * 当当列表页用懒加载：真图写在 `data-original`，`src` 是灰占位块
+         * `images/model/guan/url_none.png`。2026-09-29 实况 60 条里 59 条如此，`data-src` 出现 0 次。
+         * 旧实现只读 `src`（非空即返回）与 `data-src`，于是除第一条外每条候选都拿到相对路径的占位图，
+         * `AppImage` 的 `takeIf { it.startsWith("http") }` 把它变成 null → 概览/浮窗恒显示灰块。
+         * `data-src` 保留在链尾是为了站点回退到旧懒加载属性时不至于全丢。
+         */
+        private fun realImageUrl(img: org.jsoup.nodes.Element?): String {
+            if (img == null) return ""
+            for (attr in listOf("src", "data-original", "data-src")) {
+                val value = img.attr(attr)
+                if (value.isNotEmpty() && !isPlaceholderImage(value)) return absolutize(value)
+            }
+            return ""
+        }
+
+        /** 懒加载占位图/无图兜底：不是商品主图，不能当候选图片用 */
+        private fun isPlaceholderImage(url: String): Boolean =
+            url.contains("url_none") || url.contains("nobook") || url.contains("noresult") || url.contains("loading")
+
+        /** 当当的图床地址常写成协议相对（`//img3m9.ddimg.cn/...`），补成 https 才能被 Coil 加载 */
+        private fun absolutize(url: String): String = if (url.startsWith("//")) "https:$url" else url
+
+        /**
          * 纯解析（无网络），供单测用固定页面快照验证选择器有效性。
          * 列表结构：`<ul class="bigimg">` 下每个 `<li id="p<skuId>">`，含 title/price/img。
          */
@@ -90,9 +115,7 @@ class DangdangApi @Inject constructor(private val client: ApiClient) {
                     ?: li.selectFirst("p.price .price_r")?.text()?.let { parsePrice(it) }
                 val originalValid = original?.takeIf { it > price }
 
-                val img = li.selectFirst("a.pic img")
-                val image = (img?.attr("src")?.ifEmpty { img.attr("data-src") } ?: "")
-                    .replace(Regex("^//"), "https://")
+                val image = realImageUrl(li.selectFirst("a.pic img"))
 
                 items += DangdangItem(
                     skuId = li.attr("id"),

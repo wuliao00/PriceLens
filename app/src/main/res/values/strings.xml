@@ -167,6 +167,10 @@
     <!-- 降价通知 -->
     <string name="notification_price_drop_title">%1$s 降价了！</string>
     <string name="notification_price_drop_text">当前 ¥%1$s ≤ 目标 ¥%2$s</string>
+    <!-- F1（2026-09-29）：现价来源不是京东在售价时，不能再写「当前 ¥X」，也不能声称「降价了」
+         （我们并没有观察到降价，只是看到一个非实时的标价低于目标）。标题与正文都如实带来源。 -->
+    <string name="notification_watch_below_target_title">%1$s 已达目标价</string>
+    <string name="notification_price_drop_sourced">%2$s ¥%1$s ≤ 目标 ¥%3$s · 非实时，以京东页面为准</string>
 
     <!-- 设置页 -->
     <string name="settings_title">设置</string>

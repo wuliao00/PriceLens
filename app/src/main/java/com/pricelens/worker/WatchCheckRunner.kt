@@ -13,6 +13,9 @@ import com.pricelens.R
 import com.pricelens.data.local.AppDatabase
 import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.data.remote.JdApi
+import com.pricelens.domain.PriceSample
+import com.pricelens.domain.PriceSampling
+import com.pricelens.domain.PriceSource
 import com.pricelens.domain.SkipReason
 import com.pricelens.domain.WatchRoundReport
 import com.pricelens.domain.WatchSkipCounts
@@ -40,6 +43,12 @@ import kotlinx.coroutines.flow.StateFlow
  *    「平台无通道 / 主键非法 / 本轮取不到现价」；
  *  - 每轮结果写入 [lastRound]（盯价页直接展示，不再只有日志）；
  *  - 连续多轮零进展时，发一条**可点开**的说明通知（每进程只发一次，恢复进展后重新允许）。
+ *
+ * 2026-09-29 F1：星罗好货接口是「历史低价榜」，旧实现把它的 `real_money`（券后历史低价）
+ * 当成现价塞进无标记的 `Map<String, Double>`，于是"价格没降也发降价通知"，同一个值还被
+ * 写成"今天的曲线点"污染历史表。现在每轮的现价是带来源的 [PriceSample]，取哪个字段、
+ * 能不能通知、能不能进曲线一律收口在 [PriceSampling]；本轮只有参考值的目标计入
+ * `skipped.noPrice`（并另记 [com.pricelens.domain.WatchSkipCounts.referenceOnly] 供盯价页脚注）。
  */
 @Singleton
 class WatchCheckRunner @Inject constructor(
@@ -100,7 +109,7 @@ class WatchCheckRunner @Inject constructor(
         val targets = entities.map { WatchTargetRef(it.productId, it.platform, it.targetPrice) }
         val byPlatform = targets.groupBy { it.platform }
 
-        val pricesByPlatform = mutableMapOf<String, Map<String, Double>>()
+        val pricesByPlatform = mutableMapOf<String, Map<String, PriceSample>>()
         val failedPlatforms = mutableSetOf<String>()
         for ((platform, group) in byPlatform) {
             if (!WatchTargetPolicy.isTrackablePlatform(platform)) continue
@@ -116,8 +125,8 @@ class WatchCheckRunner @Inject constructor(
             val target = entities.firstOrNull { it.productId == productId } ?: continue
             val platform = target.platform
             val sku = WatchTargetPolicy.externalIdOf(productId, platform) ?: continue
-            val current = pricesByPlatform[platform]?.get(sku) ?: continue
-            sendNotification(context, target, current)
+            val sample = pricesByPlatform[platform]?.get(sku) ?: continue
+            sendNotification(context, target, sample)
             triggered++
         }
 
@@ -141,7 +150,8 @@ class WatchCheckRunner @Inject constructor(
             LogT.w(
                 "盯价本轮零进展：${outcome.total} 个目标，" +
                     "无通道 ${outcome.skipped.noChannel}、主键非法 ${outcome.skipped.badTargetId}、" +
-                    "取不到现价 ${outcome.skipped.noPrice}"
+                    "取不到现价 ${outcome.skipped.noPrice}" +
+                    "（其中只有星罗历史低价参考值 ${outcome.skipped.referenceOnly}）"
             )
         } else {
             stalledRounds = 0
@@ -155,7 +165,7 @@ class WatchCheckRunner @Inject constructor(
     }
 
     /** 按 platform 分发查价；null = 该平台本轮失败（应重试），空 Map = 通道在但一个价都没拿到 */
-    private suspend fun fetchPlatformPrices(platform: String, targets: List<PriceTargetEntity>): Map<String, Double>? {
+    private suspend fun fetchPlatformPrices(platform: String, targets: List<PriceTargetEntity>): Map<String, PriceSample>? {
         if (platform != WatchTargetPolicy.PLATFORM_JD) return emptyMap()
         val skus = targets.mapNotNull { WatchTargetPolicy.externalIdOf(it.productId, platform) }
         val base = runCatching {
@@ -163,39 +173,62 @@ class WatchCheckRunner @Inject constructor(
         }.onFailure { e ->
             LogT.w("盯价：京东查价失败：${e.javaClass.simpleName}")
         }.getOrNull()
-        // 星罗兜底：p.3.cn 整轮失败或缺价 SKU 时，用历史低价榜券后价补
+        // 星罗兜底：p.3.cn 整轮失败或缺价 SKU 时补样本。
+        // 取榜单的哪个字段、补进来的值算不算"现价"，一律由 PriceSampling 决定（F1 收口点）。
+        val p3cn = p3cnSamples(base)
         val missing = skus.filter { (base?.get(it) ?: 0.0) <= 0 }
         val apikey = settings.linkstarsApiKey
-        if (missing.isEmpty() || apikey.isBlank()) return base
-        val extra = mutableMapOf<String, Double>()
+        if (missing.isEmpty() || apikey.isBlank()) {
+            return PriceSampling.composeJd(p3cn, emptyMap(), p3cnFailed = base == null)
+        }
+        val references = LinkedHashMap<String, PriceSample>()
         for (sku in missing) {
-            val deal = runCatching { linkstarsApi.lookupSku(sku, apikey) }.getOrNull()
-            if (deal != null && deal.couponPrice > 0) extra[sku] = deal.couponPrice
+            val deal = runCatching { linkstarsApi.lookupSku(sku, apikey) }.getOrNull() ?: continue
+            val sample = PriceSampling.linkstarsSample(deal.listPrice, deal.couponPrice) ?: continue
+            references[sku] = sample
         }
-        return when {
-            base == null && extra.isNotEmpty() -> extra
-            base != null -> base + extra
-            else -> null // p.3.cn 整轮失败且星罗无补 → 视作平台级失败，交给 Worker 退避重试
-        }
+        return PriceSampling.composeJd(p3cn, references, p3cnFailed = base == null)
     }
+
+    /** p.3.cn 的裸价表 → 带来源标记的样本表（京东在售价） */
+    private fun p3cnSamples(base: Map<String, Double>?): Map<String, PriceSample> =
+        base?.mapValues { (_, price) -> PriceSample(price, PriceSource.JD_P3CN) }.orEmpty()
 
     private fun entitiesOf(entities: List<PriceTargetEntity>, refs: List<WatchTargetRef>): List<PriceTargetEntity> {
         val ids = refs.map { it.productId }.toSet()
         return entities.filter { it.productId in ids }
     }
 
-    private fun sendNotification(context: Context, target: PriceTargetEntity, current: Double) {
+    /**
+     * 达标通知，文案跟着现价的**来源**走（F1，2026-09-29）。
+     *
+     *  - [PriceSource.JD_P3CN]（京东在售价）：沿用「¥X 降价了！／当前 ¥X ≤ 目标 ¥Y」；
+     *  - [PriceSource.LINKSTARS_LIST]（星罗榜单里的在售价）：标题只说"已达目标价"——
+     *    我们并没有观察到它降价，只是这个非实时的标价低于目标；正文写明来源与"非实时"；
+     *  - [PriceSource.LINKSTARS_HISTORY_LOW]（券后历史低价）：走不到这里，
+     *    `WatchTargetPolicy.skipReasonFor` 已经把它判成"本轮取不到现价"，
+     *    既不计 checked 也不进 [WatchRoundReport.triggeredProductIds]。
+     */
+    private fun sendNotification(context: Context, target: PriceTargetEntity, sample: PriceSample) {
         if (!notificationsAllowed(context)) return
+        val price = PriceFormatter.formatRaw(sample.price)
+        val targetPrice = PriceFormatter.formatRaw(target.targetPrice)
+        val liveFromJd = sample.source == PriceSource.JD_P3CN
+        val title = if (liveFromJd) {
+            context.getString(R.string.notification_price_drop_title, target.title)
+        } else {
+            context.getString(R.string.notification_watch_below_target_title, target.title)
+        }
+        val text = if (liveFromJd) {
+            context.getString(R.string.notification_price_drop_text, price, targetPrice)
+        } else {
+            context.getString(R.string.notification_price_drop_sourced, price, sample.source.label, targetPrice)
+        }
         val notification = NotificationCompat.Builder(context, CHANNEL_PRICE_ALERT)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(context.getString(R.string.notification_price_drop_title, target.title))
-            .setContentText(
-                context.getString(
-                    R.string.notification_price_drop_text,
-                    PriceFormatter.formatRaw(current),
-                    PriceFormatter.formatRaw(target.targetPrice)
-                )
-            )
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()

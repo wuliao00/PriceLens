@@ -22,6 +22,7 @@ const { isRelevant, querySegments, matchesSegments } = require('./src/main/utils
 const ranking = require('./src/main/utils/ranking');
 const { extractCoupon } = require('./src/main/crawlers/gwdang');
 const { parseItemPage } = require('./src/main/crawlers/jd');
+const linkstars = require('./src/main/crawlers/linkstars');
 
 const FIXTURES = path.join(__dirname, '..', 'app', 'src', 'test', 'resources', 'fixtures');
 const fixture = (name) => fs.readFileSync(path.join(FIXTURES, name), 'utf8');
@@ -234,6 +235,28 @@ check('_itemInfo 商品名与主图', () => {
 });
 check('风控页（京东验证）被拒绝', () => {
   assert.strictEqual(parseItemPage(fixture('jd_risk.html'), '100012043978'), null);
+});
+
+// F1（2026-09-29）：星罗是「历史低价榜」，couponPrice 是历史位置、不是现价。
+// 与 Android `app/src/test/java/com/pricelens/domain/WatchPriceSourceTest` 同一批数值、同一条规则。
+console.log('== 星罗价格来源（F1，与 Android WatchPriceSourceTest 同用例） ==');
+check('在售价优先于券后历史低价，且来源标成 LINKSTARS_LIST', () => {
+  const s = linkstars.toPriceSample({ listPrice: 5999, couponPrice: 4999 });
+  assert.strictEqual(s.price, 5999);
+  assert.strictEqual(s.source, 'LINKSTARS_LIST');
+  assert.strictEqual(s.live, true);
+  assert.ok(linkstars.curveWorthy(s), '在售价才有资格补今日的曲线点');
+});
+check('只有在售价缺失才退到券后历史低价，且只作参考', () => {
+  const s = linkstars.toPriceSample({ listPrice: 0, couponPrice: 4999 });
+  assert.strictEqual(s.price, 4999);
+  assert.strictEqual(s.source, 'LINKSTARS_HISTORY_LOW');
+  assert.strictEqual(s.live, false);
+  assert.strictEqual(linkstars.curveWorthy(s), null, '历史低价参考不得写进历史曲线（否则等于自己造历史）');
+});
+check('榜单两个字段都没有 → 本轮没有价格', () => {
+  assert.strictEqual(linkstars.toPriceSample({ listPrice: 0, couponPrice: 0 }), null);
+  assert.strictEqual(linkstars.toPriceSample(null), null);
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项${process.exitCode ? '（存在失败项）' : '，全部通过'}`);

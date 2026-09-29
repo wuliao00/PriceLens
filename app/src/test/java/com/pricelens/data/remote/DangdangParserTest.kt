@@ -2,6 +2,7 @@ package com.pricelens.data.remote
 
 import com.pricelens.util.QueryRelevance
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -34,6 +35,22 @@ class DangdangParserTest {
         // 实况页里"定价：¥214.17"与现价相同，不应展示为划线原价
         val items = DangdangApi.parseSearchPage(fixture("dangdang_search.html"))
         assertNull(items[0].originalPrice)
+    }
+
+    @Test
+    fun `every parsed row yields a real absolute image url instead of the lazy placeholder`() {
+        // F5 回归（2026-09-29）：当当懒加载把真图放在 `data-original`，`src` 是 url_none.png 占位图
+        // ——夹具 8 条里 7 条如此，2026-09-29 实况 60 条里 59 条如此。
+        // 旧解析只读 src/data-src（该站点 data-src 出现 0 次），于是候选主图恒为灰占位图；
+        // 而上面的用例只断言 items[0]（唯一一条 src 就是真图的），所以这套测试一直是绿的。
+        val items = DangdangApi.parseSearchPage(fixture("dangdang_search.html"))
+        assertEquals(8, items.size)
+        items.forEachIndexed { index, item ->
+            val image = item.image
+            assertTrue("第 ${index + 1} 条(${item.skuId}) 主图应为绝对地址，实际「$image」", image.startsWith("https://"))
+            assertFalse("第 ${index + 1} 条(${item.skuId}) 主图仍是懒加载占位图：$image", image.contains("url_none"))
+            assertTrue("第 ${index + 1} 条(${item.skuId}) 主图应指向当当图床：$image", image.contains("ddimg.cn"))
+        }
     }
 
     @Test

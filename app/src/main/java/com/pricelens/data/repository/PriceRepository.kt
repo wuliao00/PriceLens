@@ -14,6 +14,7 @@ import com.pricelens.data.remote.JdApi
 import com.pricelens.data.remote.ManmanbuyApi
 import com.pricelens.data.remote.ShihuoApi
 import com.pricelens.data.remote.SmzdmApi
+import com.pricelens.domain.PriceSampling
 import com.pricelens.util.QueryRelevance
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -95,7 +96,9 @@ class PriceRepository @Inject constructor(
      * 三源合并（2026-09 慢慢买公开接口下线）：
      *  1. 慢慢买：公开 JSON + 用户自填 Cookie 的 SSR 通道
      *  2. 自建曲线：Room price_history 每日采样点
-     *  3. 星罗好货：按京东 SKU 在历史低价榜命中时补今日参考点
+     *  3. 星罗好货：按京东 SKU 命中榜单时补点——但只有**在售价**（goods_list_money）够格；
+     *     券后历史低价（real_money）是历史位置，写进曲线等于自己造历史（F1，2026-09-29），
+     *     资格判定在 `domain/PriceSampling.curveWorthy`。
      * 任一有数据即返回，并把结果写回自建曲线库。
      */
     private suspend fun buildHistory(productUrl: String): ManmanbuyApi.History? {
@@ -113,10 +116,14 @@ class PriceRepository @Inject constructor(
             val deal = runCatching {
                 linkstarsApi.lookupSku(sku, settingsRepository.linkstarsApiKey)
             }.getOrNull()
-            if (deal != null && deal.couponPrice > 0) {
+            // 星罗补点：取榜单的哪个字段、这个值有没有资格当"今日的曲线点"，一律由 PriceSampling 判
+            val sample = PriceSampling.curveWorthy(
+                deal?.let { PriceSampling.linkstarsSample(it.listPrice, it.couponPrice) }
+            )
+            if (sample != null) {
                 val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
                     .format(java.util.Date())
-                if (points.none { it.date == today }) points += ManmanbuyApi.PricePoint(today, deal.couponPrice)
+                if (points.none { it.date == today }) points += ManmanbuyApi.PricePoint(today, sample.price)
             }
         }
         if (points.isEmpty()) return null

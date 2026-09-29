@@ -477,6 +477,15 @@ private fun WatchStatusCard(summary: WatchCheckRunner.RoundSummary?, untrackable
                     color = MaterialTheme.colorScheme.error
                 )
             }
+            // F1：只有"券后历史低价"参考值的目标已被判成本轮无现价（不发通知、不进曲线），
+            // 这里补一行脚注说清真实成因，避免用户以为星罗通道给的是今天的价。
+            if (summary.skipped.referenceOnly > 0) {
+                Text(
+                    stringResource(R.string.watch_status_reference_only, summary.skipped.referenceOnly),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (summary.stalled) {
                 Spacer(Modifier.height(Dims.SpacingS))
                 Text(

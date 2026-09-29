@@ -7,8 +7,14 @@ import javax.inject.Singleton
  * 星罗好货开放平台（openapi.linkstars.com）：「历史低价榜」
  * GET /api/jd_historyLowPriceRank?apikey=..&v=1.0.0&page=N
  * 榜单为人工审核的历史最低价同款商品（每页 100 条，最多 10 页）。
- * 用途：① 按京东 SKU 命中时给出 在售价/券后价 参考；② 盯价查价兜底。
+ * 用途：① 按京东 SKU 命中时给出 在售价/券后历史低价 参考；② 盯价查价兜底。
  * apikey 由用户在「设置 → 数据源凭证」自行注册填入（免费额度）。
+ *
+ * ⚠ 两个价不是同一回事（F1，2026-09-29）：
+ *  - [Deal.listPrice]（`goods_list_money`）= 在售价，才有资格当"本轮现价"；
+ *  - [Deal.couponPrice]（`real_money`）= 券后**历史**低价，是历史位置，
+ *    只能作参考展示：不得触发降价通知、不得写进历史曲线。
+ * 取舍与后果都由 `domain/PriceSampling` 统一执行，本类不再被直接当现价消费。
  */
 @Singleton
 class LinkstarsApi @Inject constructor(private val client: ApiClient) {
@@ -16,8 +22,8 @@ class LinkstarsApi @Inject constructor(private val client: ApiClient) {
     data class Deal(
         val goodsId: String,
         val title: String,
-        val listPrice: Double,     // 在售价
-        val couponPrice: Double    // 券后历史低价
+        val listPrice: Double,     // 在售价（可当现价）
+        val couponPrice: Double    // 券后历史低价（只作参考，不是现价）
     )
 
     /** 在榜单（最多 10 页）内查找指定京东 SKU；未命中或失败返回 null */
