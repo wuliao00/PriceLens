@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-29T04:27:00Z",
+  "generatedAt": "2026-09-29T08:19:00Z",
   "channel": "stable",
   "latest": {
-    "versionCode": 15,
-    "versionName": "2.6.1",
+    "versionCode": 16,
+    "versionName": "2.6.2",
     "releaseDate": "2026-09-29"
   },
   "minSupportedVersionCode": 14,
@@ -14,12 +14,12 @@
     {
       "label": "Gitee（国内直连）",
       "kind": "apk",
-      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.1.apk"
+      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.2.apk"
     },
     {
       "label": "GitHub Release",
       "kind": "apk",
-      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.6.1/PriceLens-2.6.1.apk"
+      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.6.2/PriceLens-2.6.2.apk"
     },
     {
       "label": "Gitee 发行版页",
@@ -32,7 +32,7 @@
       "url": "https://github.com/wuliao00/PriceLens/releases/latest"
     }
   ],
-  "sha256": "82a17b5754a9f38ca0aafea565db1d0aa5a86aafa5cb9c5c35568d26a8a62aaf",
+  "sha256": "f2afaa62ad5366e546bed87e154f97c022dfdcca83ed883bf110c7e160355a46",
   "sizeBytes": 2224320,
   "notes": [
     "新增新手引导：首启四步（价值说明 → 无障碍 → 悬浮窗 → 可选凭据），设置页可重看",
@@ -43,7 +43,8 @@
     "盯价链路按平台分发并如实上报跳过原因，不再硬编码京东",
     "修复：社区「值不值」不再恒显示 0（列表页 SSR 就带票数），改为整行可读文案",
     "修复：星罗「券后历史低价」不再冒充现价 —— 价格没降也会发降价通知、入手建议恒判「可入」",
-    "修复：当当候选商品主图不再恒为灰色占位图（懒加载真图在 data-original）"
+    "修复：当当候选商品主图不再恒为灰色占位图（懒加载真图在 data-original）",
+    "修复：取不到数据时不再谎报「正常」和「关键词不匹配」——没网/被反爬挡时如实说明源不可达"
   ],
   "cooldownHours": 24
 }
