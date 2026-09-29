@@ -89,7 +89,8 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
             // 空态有三种完全不同的成因（F4，2026-09-29）：
             //  ① 还没搜过；② 搜过、一个源都没够着（断网/被拦）；③ 搜过、够着了但没匹配上关键词。
             // ②从前落到③的文案上，用户被告知"关键词写错了"，而真正的问题是没连上网。
-            // 判定抽成纯函数 OverviewEmptyState.causeOf（可 JVM 单测），这里只做字符串映射。
+            // 判定抽成纯函数 EmptyStateCauseOf.of()（ui/common/EmptyStateCause.kt，可 JVM 单测），
+            // 概览/社区/B站 三页共用同一规则，这里只做字符串映射。
             val searched = keyword.isNotBlank()
             val emptyCause = EmptyStateCauseOf.of(
                 searched,

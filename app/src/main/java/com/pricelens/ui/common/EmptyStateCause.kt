@@ -20,7 +20,7 @@ enum class EmptyStateCause {
     UNREACHABLE,
 
     /** 至少一个源够着了、也确实没给出可用条目 → 该说"未匹配到/未发现" */
-    NO_MATCH,
+    NO_MATCH
 }
 
 /** 成因判定入口（概览 / 社区 / B站 共用同一规则） */

@@ -62,7 +62,11 @@ class SourceChipStateTest {
     /** 非集合载荷（历史价那种结构化对象）不该被当成"空表" */
     @Test
     fun `non collection payload success is 正常 even if it carries no list`() {
-        val value: AsyncValue<Any> = AsyncValue.Success(object { val n = 1 })
+        val value: AsyncValue<Any> = AsyncValue.Success(
+            object {
+                val n = 1
+            }
+        )
         assertEquals(SourceChipState.OK, sourceChipStateOf(value, null))
     }
 }

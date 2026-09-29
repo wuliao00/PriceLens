@@ -12,7 +12,7 @@
       F4（2026-09-29）：本轮一个数据源都没够着时的成因说明。
       上面那条"未匹配到…试试更完整的型号名"是一句**断言**：它宣称"查过了、是关键词的问题"。
       断网/被反爬拦住时这句话把用户推去做无用功（改关键词），而真正该做的动作是检查网络。
-      判定在 ui/overview/OverviewEmptyState.causeOf（纯函数，有 JVM 单测）。
+      判定在 ui/common/EmptyStateCause.kt 的 EmptyStateCauseOf.of()（纯函数，有 JVM 单测）。
     -->
     <string name="search_unreachable_result">「%1$s」暂时取不到数据：网络不可达或数据源被拦截，与关键词写法无关（联网后重新搜索即可）</string>
 </resources>

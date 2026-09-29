@@ -49,9 +49,10 @@ class EmptyStateCauseTest {
     fun `reached but zero results still reports keyword mismatch`() {
         assertEquals(
             EmptyStateCause.NO_MATCH,
+            // reached() = 够着了、过滤后 0 条；net = 另一个源挂了
             EmptyStateCauseOf.of(
                 searched = true,
-                sources = listOf(reached(), net) // 够着了、过滤后 0 条 + 另一个源挂了
+                sources = listOf(reached(), net)
             )
         )
     }

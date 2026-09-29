@@ -149,38 +149,48 @@ class PriceRepository @Inject constructor(
     // 以前这里是 `?: emptyList()`，四种结局全被压成空表 ⇒ 徽标「正常」+ 文案「未匹配到关键词」。
 
     suspend fun searchVideos(keyword: String): List<BiliApi.BiliVideo> = kvSource(
-        key = "bili:search:$keyword", ttlMs = CacheTTL.BILI_SEARCH,
-        codec = BiliVideosCodec, source = SOURCE_BILI,
+        key = "bili:search:$keyword",
+        ttlMs = CacheTTL.BILI_SEARCH,
+        codec = BiliVideosCodec,
+        source = SOURCE_BILI,
         fetch = { biliApi.searchVideos(keyword) },
         cacheable = { it.isNotEmpty() }
     ).getList()
 
     suspend fun searchCoupons(keyword: String): List<GwdangApi.Coupon> = kvSource(
-        key = "gwd:coupon:$keyword", ttlMs = CacheTTL.COUPON,
-        codec = CouponsCodec, source = SOURCE_GWD,
+        key = "gwd:coupon:$keyword",
+        ttlMs = CacheTTL.COUPON,
+        codec = CouponsCodec,
+        source = SOURCE_GWD,
         fetch = { gwdangApi.searchCoupons(keyword) },
         cacheable = { it.isNotEmpty() }
     ).getList()
 
     suspend fun searchSmzdm(keyword: String): List<SmzdmApi.SmzdmPost> = kvSource(
-        key = "smz:search:$keyword", ttlMs = CacheTTL.SMZDM_FEED,
-        codec = SmzdmPostsCodec, source = SOURCE_SMZDM,
+        key = "smz:search:$keyword",
+        ttlMs = CacheTTL.SMZDM_FEED,
+        codec = SmzdmPostsCodec,
+        source = SOURCE_SMZDM,
         fetch = { smzdmApi.searchPosts(keyword) },
         cacheable = { it.isNotEmpty() }
     ).getList()
 
     /** 关键词搜索商品候选：当当搜索（SSR 稳定，主数据源） */
     suspend fun searchDangdang(keyword: String): List<DangdangApi.DangdangItem> = kvSource(
-        key = "dd:search:$keyword", ttlMs = CacheTTL.SMZDM_FEED,
-        codec = DangdangItemsCodec, source = SOURCE_DD,
+        key = "dd:search:$keyword",
+        ttlMs = CacheTTL.SMZDM_FEED,
+        codec = DangdangItemsCodec,
+        source = SOURCE_DD,
         fetch = { dangdangApi.searchProducts(keyword) },
         cacheable = { it.isNotEmpty() }
     ).getList()
 
     /** 识货搜索（社区页补充源：鞋服/数码等当当覆盖不到的品类，含国补标记） */
     suspend fun searchShihuo(keyword: String): List<ShihuoApi.ShihuoItem> = kvSource(
-        key = "sh:search:$keyword", ttlMs = CacheTTL.SMZDM_FEED,
-        codec = ShihuoItemsCodec, source = SOURCE_SH,
+        key = "sh:search:$keyword",
+        ttlMs = CacheTTL.SMZDM_FEED,
+        codec = ShihuoItemsCodec,
+        source = SOURCE_SH,
         fetch = { shihuoApi.searchProducts(keyword) },
         cacheable = { it.isNotEmpty() }
     ).getList()

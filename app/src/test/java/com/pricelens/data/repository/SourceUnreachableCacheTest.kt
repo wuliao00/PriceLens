@@ -31,7 +31,8 @@ class SourceUnreachableCacheTest {
     }
 
     private val tmpCache = File.createTempFile("pl-f4-l3", "").let {
-        it.delete(); File(it.absolutePath).also { f -> f.mkdirs() }
+        it.delete()
+        File(it.absolutePath).also { f -> f.mkdirs() }
     }
 
     /** 真实 DangdangApi，域名处于熔断期：本轮根本去不成 search.dangdang.com */
@@ -121,8 +122,10 @@ class SourceUnreachableCacheTest {
         val value = outcome.getOrNull()
 
         assertEquals("应回吐 L2 旧快照", snapshot, value)
-        assertTrue("降级回吐旧数据必须标记 stale（UI 据此提示「上一次商品数据」）",
-            h.tracker.stale.value.contains("dd:search:mate 80"))
+        assertTrue(
+            "降级回吐旧数据必须标记 stale（UI 据此提示「上一次商品数据」）",
+            h.tracker.stale.value.contains("dd:search:mate 80")
+        )
         assertEquals("连续失败应记在健康度上", 1, h.health.failureCount("dd"))
     }
 
