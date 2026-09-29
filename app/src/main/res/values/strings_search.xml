@@ -8,4 +8,11 @@
     <string name="search_no_relevant_result">未匹配到与「%1$s」直接相关的商品，试试更完整的型号名（如 OPPO Find X8s / 华为 Mate 80）</string>
     <!-- 还没发起过搜索时的提示：此时不能说"未匹配到"——什么都没被查过，那是假因果 -->
     <string name="search_start_hint">还没搜索：输入商品名，或直接粘贴京东 / 淘宝 / 拼多多的商品链接</string>
+    <!--
+      F4（2026-09-29）：本轮一个数据源都没够着时的成因说明。
+      上面那条"未匹配到…试试更完整的型号名"是一句**断言**：它宣称"查过了、是关键词的问题"。
+      断网/被反爬拦住时这句话把用户推去做无用功（改关键词），而真正该做的动作是检查网络。
+      判定在 ui/overview/OverviewEmptyState.causeOf（纯函数，有 JVM 单测）。
+    -->
+    <string name="search_unreachable_result">「%1$s」暂时取不到数据：网络不可达或数据源被拦截，与关键词写法无关（联网后重新搜索即可）</string>
 </resources>

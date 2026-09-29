@@ -29,16 +29,23 @@ class DangdangApi @Inject constructor(private val client: ApiClient) {
         val url: String
     )
 
+    /**
+     * F4（2026-09-29）：`client.getHtml`（可空桥）换成 `getHtmlResult`（四态），
+     * Blocked/Network 经 [toSourceFailure] 冒泡 —— 断网/被挡时**不再**返回 `emptyList()`。
+     * 返回空表现在只剩一种含义：够着了当当，且过滤后确实没有相关条目。
+     */
     suspend fun searchProducts(keyword: String): List<DangdangItem> {
         val q = try {
             java.net.URLEncoder.encode(keyword, "GBK")
         } catch (_: Exception) {
             java.net.URLEncoder.encode(keyword, "UTF-8")
         }
-        val html = client.getHtml(
+        val result = client.getHtmlResult(
             "https://search.dangdang.com/?key=$q&act=input",
             referer = "https://www.dangdang.com/"
-        ) ?: return emptyList()
+        )
+        result.toSourceFailure()?.let { throw it }
+        val html = (result as? CrawlerResult.Success)?.data ?: return emptyList()
         val all = parseSearchPage(html)
         val relevant = all.filter { QueryRelevance.isRelevant(keyword, it.title) }
         if (all.isNotEmpty() && relevant.isEmpty()) {

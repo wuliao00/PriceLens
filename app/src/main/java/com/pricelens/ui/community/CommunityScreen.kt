@@ -33,6 +33,8 @@ import com.pricelens.R
 import com.pricelens.data.remote.ShihuoApi
 import com.pricelens.data.remote.SmzdmApi
 import com.pricelens.ui.common.AsyncValue
+import com.pricelens.ui.common.EmptyStateCause
+import com.pricelens.ui.common.EmptyStateCauseOf
 import com.pricelens.ui.common.valueOrDefault
 import com.pricelens.ui.components.AppImage
 import com.pricelens.ui.components.EmptyState
@@ -55,6 +57,7 @@ import com.pricelens.util.UrlOpener
 @Composable
 fun CommunityScreen(searchViewModel: SearchViewModel) {
     val loading by searchViewModel.loading.collectAsStateWithLifecycle()
+    val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
     val postsAsync by searchViewModel.posts.collectAsStateWithLifecycle()
     val shihuoAsync by searchViewModel.shihuo.collectAsStateWithLifecycle()
     val posts = postsAsync.valueOrDefault(emptyList())
@@ -67,13 +70,28 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
     }
     val anyError = postsAsync is AsyncValue.Error<*> || shihuoAsync is AsyncValue.Error<*>
     if (posts.isEmpty() && shihuoItems.isEmpty()) {
+        // F4（2026-09-29）：三种成因分开说（判定见 EmptyStateCauseOf，有 JVM 单测）。
+        // 修复前这里只有两分支，"识货/值得买都被拦或全机断网"会落到 else 上，
+        // 对刚搜过的人讲「请先搜索商品」——一句没发生过的原因。
+        val emptyCause = EmptyStateCauseOf.of(
+            keyword.isNotBlank(),
+            listOf(postsAsync, shihuoAsync)
+        )
         EmptyState(
-            icon = if (anyError) Icons.Filled.Warning else Icons.Filled.ChatBubble,
+            icon = if (emptyCause == EmptyStateCause.UNREACHABLE) Icons.Filled.Warning else Icons.Filled.ChatBubble,
             title = stringResource(
-                if (anyError) R.string.error_load_failed else R.string.empty_search_first
+                when (emptyCause) {
+                    EmptyStateCause.NOT_SEARCHED -> R.string.empty_search_first
+                    EmptyStateCause.UNREACHABLE -> R.string.error_load_failed
+                    EmptyStateCause.NO_MATCH -> R.string.community_no_result
+                }
             ),
             desc = stringResource(
-                if (anyError) R.string.error_retry_hint else R.string.community_empty_hint
+                when (emptyCause) {
+                    EmptyStateCause.NOT_SEARCHED -> R.string.community_empty_hint
+                    EmptyStateCause.UNREACHABLE -> R.string.error_retry_hint
+                    EmptyStateCause.NO_MATCH -> R.string.community_no_result_desc
+                }
             ),
             modifier = Modifier.padding(Dims.SpacingXL)
         )

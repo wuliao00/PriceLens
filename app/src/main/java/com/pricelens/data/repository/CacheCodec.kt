@@ -1,6 +1,7 @@
 package com.pricelens.data.repository
 
 import com.pricelens.data.cache.TLRUCache
+import com.pricelens.data.remote.SourceUnreachableException
 import com.pricelens.util.LogT
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -98,9 +99,13 @@ class RevalidateHub @Inject constructor() {
  *  3. 源健康则走网络（[fetch] 已含仓储层 singleflight）：
  *     成功 → 写回 L1+L2、记录健康、注册重验证；
  *     异常 → 记一次连续失败（取消异常直接透传，不记账不降级）；
- *     null = 合法空结果 → 不记失败（区分网络失败与空结果）
- *  4. 源被降级或网络失败：有 L2 快照则返回旧数据并标记 [StaleTracker]
- *     （站点改版/断网先展示旧数据而非报错），无快照返回 null
+ *     null = 合法空结果 → 不记失败也不抛出（区分网络失败与"这商品真的没数据"）
+ *  4. 网络失败/被拦截：有 L2 快照则返回旧数据并标记 [StaleTracker]
+ *     （站点改版/断网先展示旧数据而非报错）；
+ *     **没有快照则把失败原样抛出**（F4，2026-09-29）——以前返回 null，仓储层一句
+ *     `?: emptyList()` 就把"根本没够着"伪装成"搜了但没匹配上"，
+ *     并让 [SourceHealth] 的三连败冷却永远触发不了
+ *  5. 源在失败冷却期内（本轮压根没去访问它）且无快照：同样抛出
  *
  * @param T 领域类型；列表源传 List<X> 并用 [cacheable] 排除空列表
  */
@@ -158,6 +163,10 @@ class CachedSource<T : Any>(
         }
 
         // L3：网络取数（源降级时跳过，直接走陈旧兜底）
+        // F4（2026-09-29）：本轮"有没有够着数据源"必须一路带到底。failure 记录成因，
+        // 供"没有旧快照可兜"时冒泡——以前这里 return null，仓储层 `?: emptyList()`
+        // 就把"被反爬/断网"变成了"这商品真没结果"。
+        var failure: Throwable? = null
         if (!health.isDegraded(source)) {
             val fresh = try {
                 fetch()
@@ -166,6 +175,7 @@ class CachedSource<T : Any>(
             } catch (e: Exception) {
                 LogT.w("NET 源[$source]取数异常 $key: ${e.javaClass.simpleName}")
                 health.recordFailure(source) // 仅真实业务异常记账
+                failure = e
                 null
             }
             if (fresh != null) {
@@ -174,16 +184,37 @@ class CachedSource<T : Any>(
                 tracker.markFresh(key)
                 return fresh
             }
-            // fetch() 返回 null 属合法空结果：不计失败（区分网络失败与 Empty）
+            // fetch() 返回 null 属合法空结果：不计失败也不抛出（区分"没数据"与"取不到"）
+        } else {
+            // 冷却期内本轮根本没去访问该源：这不是"该商品没结果"，别让它长得像空结果
+            failure = SourceUnreachableException(
+                "源[$source]处于失败冷却期(剩余 ${health.remainingCooldownMs(source)}ms)，本轮未发起请求"
+            )
         }
 
         // 降级兜底：返回陈旧快照并标记（短 TTL 入 L1，后续读取持续触发重验证）
-        return snapshot?.first?.also { stale ->
+        snapshot?.first?.let { stale ->
             cache.put(key, codec.encode(stale), STALE_RETRY_TTL_MS)
             tracker.markStale(key)
             hub.register(key) { refresh() }
+            return stale
         }
+        failure?.let { throw it }
+        return null
     }
+
+    /**
+     * 列表型源专用取数（F4，2026-09-29）：返回值必非空。
+     *
+     * 语义收口成一句话——**空表 = 够着了且确实 0 条；没够着 = 抛出**：
+     *  - 成功（含 0 条）→ 返回该表；
+     *  - 失败且无旧快照 → [get] 已经把失败抛出（见类文档第 4 步）；
+     *  - 返回 null 只可能是 fetch 违约（既不报错也不给值），这属实现缺陷，
+     *    这里如实抛出让它可见，而不是 `?: emptyList()` 把它咽成"没结果"。
+     */
+    suspend fun getList(): T = get() ?: throw SourceUnreachableException(
+        "源[$source]取数既未返回值也未报错（契约违约）：$key"
+    )
 
     /** 后台重验证：跳过 L1/L2 直取网络；真实异常记健康度，下次读取再试 */
     suspend fun refresh() {

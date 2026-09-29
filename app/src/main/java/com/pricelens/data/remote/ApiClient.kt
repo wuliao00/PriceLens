@@ -26,8 +26,12 @@ import javax.inject.Singleton
  *
  * 阶段2 改造：新增返回 [CrawlerResult] 的 *Result 方法，携带失败原因
  * （反爬拦截 / 网络异常 / 空响应）；原返回 nullable 的旧方法签名不变，
- * 内部委托新方法并经 [asNullable] 转换，8 个 *Api 解析类零改动。
+ * 内部委托新方法并经 [asNullable] 转换。
  * 限流 / 熔断 / 403 处理 / 反爬挑战页识别 / 重试逻辑与改造前完全一致。
+ *
+ * F4（2026-09-29）：五个关键词搜索列表解析类不再经 [asNullable] 塌缩（改用 *Result 方法），
+ * "被挡了/没连上"从此与"够着了但 0 条"在下游可区分；本类的四态语义与限速/熔断逻辑未动，
+ * 只补了"成功要清除该域名失败记录"一处（[recordOutcome]）。
  */
 @Singleton
 class ApiClient @Inject constructor(
@@ -148,7 +152,12 @@ class ApiClient @Inject constructor(
             val result = rateLimiter.withLimit<CrawlerResult<String>>(domain) {
                 executeOnceResult(build, domain, url)
             } ?: CrawlerResult.Blocked("域名熔断中(反爬暂停): $domain")
-            if (result.isSuccess()) return result
+            if (result.isSuccess()) {
+                // F4（2026-09-29）：成功也要记一笔（= 清掉该域名的旧失败），
+                // 否则 lastOutcomeFor 只会"曾经失败过就永远算失败"，恢复后徽标仍写「反爬」。
+                recordOutcome(domain, result)
+                return result
+            }
             last = result
             attempt++
         }
@@ -201,7 +210,13 @@ class ApiClient @Inject constructor(
     }
 
     private fun recordOutcome(domain: String, result: CrawlerResult<String>) {
-        if (result !is CrawlerResult.Success) lastOutcomes[domain] = result
+        // F4（2026-09-29）：成功必须**清除**旧记录。原先只写不删 ⇒ 某域名一次失败后
+        // lastOutcomeFor 在整个进程里永久返回失败，诊断徽标会反向说谎（"恢复后仍写反爬"）。
+        if (result is CrawlerResult.Success) {
+            lastOutcomes.remove(domain)
+        } else {
+            lastOutcomes[domain] = result
+        }
     }
 
     /** 常见反爬 JS challenge 页特征（如什么值得买的 probe.js 探测页） */

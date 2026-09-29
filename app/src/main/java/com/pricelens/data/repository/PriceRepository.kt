@@ -141,27 +141,33 @@ class PriceRepository @Inject constructor(
     }
 
     // ---------- B站 / 优惠券 / 值得买 / 当当 / 识货（L1 → L2 → L3） ----------
+    //
+    // F4（2026-09-29）口径变更：这五个关键词通道改用 [CachedSource.getList]，
+    // 返回的**空表只有一种含义 = "够着了该源、过滤后确实 0 条"**；
+    // 断网 / 被反爬拦 / 源在失败冷却期 → 抛出类型化异常（由 CachedSource 冒泡），
+    // 上游 SearchViewModel 写成 AsyncValue.Error、徽标写「反爬/失败」、空态写「取不到数据」。
+    // 以前这里是 `?: emptyList()`，四种结局全被压成空表 ⇒ 徽标「正常」+ 文案「未匹配到关键词」。
 
     suspend fun searchVideos(keyword: String): List<BiliApi.BiliVideo> = kvSource(
         key = "bili:search:$keyword", ttlMs = CacheTTL.BILI_SEARCH,
         codec = BiliVideosCodec, source = SOURCE_BILI,
         fetch = { biliApi.searchVideos(keyword) },
         cacheable = { it.isNotEmpty() }
-    ).get() ?: emptyList()
+    ).getList()
 
     suspend fun searchCoupons(keyword: String): List<GwdangApi.Coupon> = kvSource(
         key = "gwd:coupon:$keyword", ttlMs = CacheTTL.COUPON,
         codec = CouponsCodec, source = SOURCE_GWD,
         fetch = { gwdangApi.searchCoupons(keyword) },
         cacheable = { it.isNotEmpty() }
-    ).get() ?: emptyList()
+    ).getList()
 
     suspend fun searchSmzdm(keyword: String): List<SmzdmApi.SmzdmPost> = kvSource(
         key = "smz:search:$keyword", ttlMs = CacheTTL.SMZDM_FEED,
         codec = SmzdmPostsCodec, source = SOURCE_SMZDM,
         fetch = { smzdmApi.searchPosts(keyword) },
         cacheable = { it.isNotEmpty() }
-    ).get() ?: emptyList()
+    ).getList()
 
     /** 关键词搜索商品候选：当当搜索（SSR 稳定，主数据源） */
     suspend fun searchDangdang(keyword: String): List<DangdangApi.DangdangItem> = kvSource(
@@ -169,7 +175,7 @@ class PriceRepository @Inject constructor(
         codec = DangdangItemsCodec, source = SOURCE_DD,
         fetch = { dangdangApi.searchProducts(keyword) },
         cacheable = { it.isNotEmpty() }
-    ).get() ?: emptyList()
+    ).getList()
 
     /** 识货搜索（社区页补充源：鞋服/数码等当当覆盖不到的品类，含国补标记） */
     suspend fun searchShihuo(keyword: String): List<ShihuoApi.ShihuoItem> = kvSource(
@@ -177,7 +183,7 @@ class PriceRepository @Inject constructor(
         codec = ShihuoItemsCodec, source = SOURCE_SH,
         fetch = { shihuoApi.searchProducts(keyword) },
         cacheable = { it.isNotEmpty() }
-    ).get() ?: emptyList()
+    ).getList()
 
     // ---------- 搜索记录 / 收藏 ----------
 

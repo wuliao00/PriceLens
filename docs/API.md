@@ -98,21 +98,48 @@ class Crawler {
 | 淘宝/拼多多/咕咚/Keep | 无障碍读价 | ✅（本机账号实时读价，无爬虫） | — | — | — | — |
 | 盯价（后台） | `worker/PriceCheckWorker` | ✅ 京东（其他平台接入中） | — | — | — | — |
 
-### 数据源实况与降级约定（2026-09-25 实测）
+### 数据源实况与降级约定（2026-09-25 实测；2026-09-29 F4 增补"不可达 ≠ 无结果"契约）
 
 上游站点近年频繁改版/收紧，解析器按"**宁可如实降级，不给不准确内容**"的原则实现：
 
 | 数据源 | 当前实况 | 本项目处理 |
 |--------|----------|------------|
 | 当当 搜索 | 列表价格节点已迁移到 `span.search_now_price` | 三级取价（新→旧→文本），解析条数记日志 |
-| 识货 搜索 | PC 搜索地址废弃（302 首页，数据是热榜） | 改走 m 站 `m.shihuo.cn/search?type=goods`；结构不符→空 |
+| 识货 搜索 | PC 搜索地址废弃（302 首页，数据是热榜） | 改走 m 站 `m.shihuo.cn/search?type=goods`；结构不符→空；请求域名是 `m.shihuo.cn`（状态行的诊断键必须与之一致） |
 | 京东 商品页 | `item.jd.com` 对脚本请求返回风控页（标题"京东验证"） | 改走 `item.m.jd.com` 的 `_itemInfo`；风控页标题不使用 |
 | 京东 查价 | `p.3.cn` 公网 DNS 不再返回可达地址（DoH 双证） | 尽力尝试；失败时价格置空 + UI 明示"请在京东 App 查看" |
 | 慢慢买 公开接口 | 已下线（404） | 用自填 Cookie 的 SSR 通道 / 自建曲线 合并；星罗 apikey 命中榜单时**只有 in-sale 价（goods_list_money）够格补今日点**，`real_money` 是券后历史低价、只作参考展示（不写曲线、不触发降价通知，见 `domain/PriceSampling`） |
 | 值得买/券频道 | 瑞数 WAF，浏览器 UA 拿 202 挑战页 | Googlebot UA 放行；挑战页识别为 Blocked |
+| B站 搜索 | wbi 签名 + 未登录态常被 `code=-412` 拒 | **读业务码**：`code != 0` 视为反爬失败（与桌面端 `crawlers/bilibili.js:114-116` 同规则），不再与"零结果"混为一谈 |
 | 全部搜索源 | 结果常混入配件/图书/其它品牌/热榜 | `QueryRelevance` 统一过滤（两端同规则） |
 
-> 回归方式：Android 侧夹具化单测（`app/src/test/resources/fixtures/`，取自上述实况页面）；
+#### 关键词搜索通道的三态契约（F4，2026-09-29）
+
+**"没够着数据源"与"够着了但确实没有"是两件事，全链路不得压成同一个值。**
+
+| 结局 | 产生条件 | 网络层（`CrawlerResult`） | 解析类 | 仓储（`CachedSource`） | 徽标 | 空态文案 |
+|------|----------|--------------------------|--------|------------------------|------|----------|
+| 有数据 | 2xx + 解析出条目 | `Success` | 返回 N 条 | `Success(N 条)`，`recordSuccess` | 「正常」 | — |
+| 无结果 | 2xx 但过滤后 0 条 / 空响应体 | `Success` / `Empty` | 返回 `emptyList()` | `Success(空表)`，**不计失败** | 「无结果」 | 「未匹配到与「关键词」直接相关的商品…」 |
+| 取不到 | 超时/DNS/连接拒绝/非 2xx；403/412/JS 挑战页；源在失败冷却期 | `Network` / `Blocked` | **抛** `SourceUnreachableException` / `CrawlerBlockedException` | 有旧快照 → 回吐旧数据 + `staleKeys` 标记 + `recordFailure`；无快照 → 原样抛出 | 「失败」/「反爬」 | 「暂时取不到数据：网络不可达或数据源被拦截，与关键词写法无关」 |
+
+要点：
+
+- 判定入口 `data/remote/CrawlerResult.toSourceFailure()`（唯一映射点）；展示侧两处纯函数
+  `ui/components/sourceChipStateOf()`、`ui/common/EmptyStateCauseOf.of()`（均可 JVM 单测，无 Compose 依赖）。
+- `recordFailure` 只由"取不到"触发 ⇒ `SourceHealth` 的**连续 3 次失败 → 2 分钟冷却**对反爬风暴/断网才真的生效
+  （F4 前解析类从不抛，这条降级路径是死代码）。
+- 冷却期内且无旧快照时**同样算取不到**——本轮压根没去访问该源，不能宣称"这个关键词没结果"。
+- `AsyncValue.Error.cause` 携带成因，`fallback` 携带旧数据：各页"顶部提示 + 照常展示旧列表"的分支由此可达。
+- 例外（本轮未收口，仍是可空桥）：`JdApi`（京东商品页）、`ManmanbuyApi`（历史价）、`LinkstarsApi`（星罗）
+  仍用 `getHtml`/`getJson` 的 `String?` 桥，其 `null` 一律按"合法无数据"处理。
+  影响面与后续计划见交付报告「没做」栏（F5/F17 同族）。
+- 桌面端爬虫层本来就是这个契约（`smzdm.js:57/93`、`gwdang.js:70-73`、`bilibili.js:115`、`manmanbuy.js:90` 全部 `throw`），
+  Android 这一轮是向桌面端拉平，不是新增规则。
+
+> 回归方式：Android 侧夹具化单测（`app/src/test/resources/fixtures/`，取自上述实况页面）
+> + F4 用例 `SourceUnreachableTest`、`SourceUnreachableCacheTest`、`CrawlerOutcomeMappingTest`、
+> `SourceChipStateTest`、`EmptyStateCauseTest`（真 `ApiClient` + 熔断域名造"不可达"，全程不发网络请求）；
 > 桌面侧运行 `node desktop/_crawler_check.js "<关键词>"` 做发布前巡检。
 
 ### 更新通道（v2.6.0 起，更新源 Gitee）

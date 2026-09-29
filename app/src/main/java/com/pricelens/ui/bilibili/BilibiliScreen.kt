@@ -28,6 +28,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
 import com.pricelens.data.remote.BiliApi
 import com.pricelens.ui.common.AsyncValue
+import com.pricelens.ui.common.EmptyStateCause
+import com.pricelens.ui.common.EmptyStateCauseOf
 import com.pricelens.ui.common.valueOrDefault
 import com.pricelens.ui.components.AppImage
 import com.pricelens.ui.components.EmptyState
@@ -48,6 +50,7 @@ import com.pricelens.util.UrlOpener
 @Composable
 fun BilibiliScreen(searchViewModel: SearchViewModel) {
     val loading by searchViewModel.loading.collectAsStateWithLifecycle()
+    val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
     val videosAsync by searchViewModel.videos.collectAsStateWithLifecycle()
     val videos = videosAsync.valueOrDefault(emptyList())
 
@@ -65,10 +68,25 @@ fun BilibiliScreen(searchViewModel: SearchViewModel) {
         return
     }
     if (videos.isEmpty()) {
+        // F4（2026-09-29）：上一行已经把"取不到"分流到 error_load_failed，
+        // 走到这里的只剩两种：没搜过 / B站答了但 0 条。后者不能说「请先搜索商品」。
+        val emptyCause = EmptyStateCauseOf.of(keyword.isNotBlank(), listOf(videosAsync))
         EmptyState(
             icon = Icons.Filled.OndemandVideo,
-            title = stringResource(R.string.empty_search_first),
-            desc = stringResource(R.string.bili_empty_hint),
+            title = stringResource(
+                when (emptyCause) {
+                    EmptyStateCause.NOT_SEARCHED -> R.string.empty_search_first
+                    EmptyStateCause.UNREACHABLE -> R.string.error_load_failed
+                    EmptyStateCause.NO_MATCH -> R.string.bili_no_result
+                }
+            ),
+            desc = stringResource(
+                when (emptyCause) {
+                    EmptyStateCause.NOT_SEARCHED -> R.string.bili_empty_hint
+                    EmptyStateCause.UNREACHABLE -> R.string.error_retry_hint
+                    EmptyStateCause.NO_MATCH -> R.string.bili_no_result_desc
+                }
+            ),
             modifier = Modifier.padding(Dims.SpacingXL)
         )
         return

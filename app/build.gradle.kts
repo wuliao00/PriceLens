@@ -64,6 +64,13 @@ android {
         }
     }
 
+    testOptions {
+        // F4 回归用例要走 ApiClient / CachedSource 的真实代码路径，它们会调 LogT（→ android.util.Log）。
+        // 未设该项时 android.util.Log 在 JVM 单测里抛 "not mocked"，会把"源不可达"伪装成另一种异常，
+        // 让断言假绿——因此必须返回默认值（no-op）。
+        unitTests.isReturnDefaultValues = true
+    }
+
     lint {
         // release 不需要 lint 检查（避免 build 时缺失 lint 报告文件导致失败）
         checkReleaseBuilds = false

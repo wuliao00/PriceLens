@@ -27,11 +27,16 @@ class GwdangApi @Inject constructor(private val client: ApiClient) {
         val url: String
     )
 
+    /**
+     * F4（2026-09-29）：同 [SmzdmApi.searchPosts]——券频道与爆料走同一个 search.smzdm.com，
+     * 被 WAF 拦住时冒泡失败，不再返回 `emptyList()` 让找券页说"未发现优惠券"。
+     */
     suspend fun searchCoupons(keyword: String): List<Coupon> {
         val url = "https://search.smzdm.com/?c=youhui&s=" +
             java.net.URLEncoder.encode(keyword, "UTF-8") + "&v=a&order=score"
-        val html = client.getHtml(url, referer = "https://www.smzdm.com/", userAgent = BOT_UA)
-            ?: return emptyList()
+        val result = client.getHtmlResult(url, referer = "https://www.smzdm.com/", userAgent = BOT_UA)
+        result.toSourceFailure()?.let { throw it }
+        val html = (result as? CrawlerResult.Success)?.data ?: return emptyList()
         val all = parseSearchPage(html)
         val relevant = all.filter { QueryRelevance.isRelevant(keyword, it.title) }
         if (all.isNotEmpty() && relevant.isEmpty()) {

@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
+import com.pricelens.data.remote.CrawlerBlockedException
 import com.pricelens.data.remote.CrawlerResult
 import com.pricelens.ui.common.AsyncValue
 import com.pricelens.ui.overview.SearchViewModel
@@ -30,8 +31,14 @@ import com.pricelens.ui.theme.fg
  * 数据源状态行（清晰原则：一屏看清每个源的真实结局）。
  *
  * 每源（历史价/当当/B站/优惠券/爆料/识货）一枚状态徽标：
- *  - AsyncValue.Loading → 加载中；Success → 正常；Error → 失败
- *  - Error 且 [SearchViewModel.lastOutcome] 为 [CrawlerResult.Blocked] → 反爬
+ *  - AsyncValue.Loading → 加载中
+ *  - Success(有数据) → 正常
+ *  - Success(空表) → **无结果**：够着了该源、过滤后确实 0 条（F4 前这一格写成「正常」）
+ *  - Error → 反爬（cause 是 [CrawlerBlockedException]，或 [SearchViewModel.lastOutcome] 为 Blocked）/ 失败
+ *  - Idle → 未查询
+ *
+ * 已知合并：当当徽标共用 `posts` 的状态（当当是候选主源，成功即进入爆料/候选），
+ * 所以"当当正常而值得买被拦"时当当会跟着显示反爬；域名结果只用于区分反爬与失败。
  *
  * 域名诊断结果随 outcomesVersion（每轮搜索结束递增）刷新，此处订阅它
  * 以便搜索结束后重组时读到最新的 lastOutcomeFor 结果。
@@ -90,7 +97,9 @@ fun SourceStatusRow(viewModel: SearchViewModel, modifier: Modifier = Modifier) {
         SourceChip(
             stringResource(R.string.src_label_shihuo),
             shihuo,
-            viewModel.lastOutcome("www.shihuo.cn")
+            // 识货的请求走 m 站（`ShihuoApi.searchProducts` 的 `https://m.shihuo.cn/search?...`），
+            // 域名诊断键必须是 m.shihuo.cn——旧值 www.shihuo.cn 永远查不到记录，反爬/失败无从区分
+            viewModel.lastOutcome("m.shihuo.cn")
         )
     }
 }
@@ -98,25 +107,20 @@ fun SourceStatusRow(viewModel: SearchViewModel, modifier: Modifier = Modifier) {
 /** 单源状态徽标：名称 · 状态（语义色背景胶囊） */
 @Composable
 private fun SourceChip(name: String, value: AsyncValue<*>, outcome: CrawlerResult<String>?) {
-    val status = when (value) {
-        is AsyncValue.Loading -> SourceUiState.LOADING
-        is AsyncValue.Success -> SourceUiState.OK
-        is AsyncValue.Error ->
-            if (outcome is CrawlerResult.Blocked) SourceUiState.BLOCKED else SourceUiState.FAILED
-        is AsyncValue.Idle -> SourceUiState.IDLE
-    }
+    val status = sourceChipStateOf(value, outcome)
     val tone = when (status) {
-        SourceUiState.OK -> BadgeTone.POSITIVE
-        SourceUiState.BLOCKED, SourceUiState.FAILED -> BadgeTone.NEGATIVE
-        SourceUiState.LOADING, SourceUiState.IDLE -> BadgeTone.NEUTRAL
+        SourceChipState.OK -> BadgeTone.POSITIVE
+        SourceChipState.BLOCKED, SourceChipState.FAILED -> BadgeTone.NEGATIVE
+        SourceChipState.LOADING, SourceChipState.IDLE, SourceChipState.NO_RESULTS -> BadgeTone.NEUTRAL
     }
     val stateText = stringResource(
         when (status) {
-            SourceUiState.LOADING -> R.string.src_state_loading
-            SourceUiState.OK -> R.string.src_state_ok
-            SourceUiState.BLOCKED -> R.string.src_state_blocked
-            SourceUiState.FAILED -> R.string.src_state_failed
-            SourceUiState.IDLE -> R.string.src_state_idle
+            SourceChipState.LOADING -> R.string.src_state_loading
+            SourceChipState.OK -> R.string.src_state_ok
+            SourceChipState.NO_RESULTS -> R.string.src_state_empty
+            SourceChipState.BLOCKED -> R.string.src_state_blocked
+            SourceChipState.FAILED -> R.string.src_state_failed
+            SourceChipState.IDLE -> R.string.src_state_idle
         }
     )
 
@@ -147,4 +151,34 @@ private fun SourceChip(name: String, value: AsyncValue<*>, outcome: CrawlerResul
     }
 }
 
-private enum class SourceUiState { LOADING, OK, FAILED, BLOCKED, IDLE }
+/** 徽标状态（F4 起对外可见，便于纯函数单测；渲染映射仍在本文件的 [SourceChip]） */
+enum class SourceChipState { LOADING, OK, NO_RESULTS, FAILED, BLOCKED, IDLE }
+
+/**
+ * 「这一枚徽标该写什么」的唯一判定（F4，2026-09-29；纯函数，可 JVM 单测）。
+ *
+ *  - `Success(空表)` 从 `OK` 里拆出来：仓储层已保证"空表 = 够着了且确实 0 条"，
+ *    它与"根本没够着"是两件事，共用「正常」就是把"没查到"说成"查到了但什么都没有"；
+ *  - `Error` 的成因优先看 `cause`（解析类冒泡的类型化失败），域名诊断结果作参考：
+ *    任一指向反爬就写「反爬」，否则「失败」。
+ *
+ * 修复前这里只有 `Success → OK`，于是断网整场也能全绿。
+ */
+fun sourceChipStateOf(value: AsyncValue<*>, outcome: CrawlerResult<String>?): SourceChipState = when (value) {
+    is AsyncValue.Loading -> SourceChipState.LOADING
+    is AsyncValue.Success ->
+        if (value.data.isEmptyCollection()) SourceChipState.NO_RESULTS else SourceChipState.OK
+    is AsyncValue.Error ->
+        if (value.cause is CrawlerBlockedException || outcome is CrawlerResult.Blocked) {
+            SourceChipState.BLOCKED
+        } else {
+            SourceChipState.FAILED
+        }
+    is AsyncValue.Idle -> SourceChipState.IDLE
+}
+
+/**
+ * "成功但一个条目都没有"的判定。非集合载荷（如历史价 [com.pricelens.data.remote.ManmanbuyApi.History]）
+ * 不算空：它能进到 Success 就说明该源给了可用的结构化结果。
+ */
+private fun Any?.isEmptyCollection(): Boolean = (this as? Collection<*>)?.isEmpty() == true

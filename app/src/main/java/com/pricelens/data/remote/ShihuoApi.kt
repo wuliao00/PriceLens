@@ -34,14 +34,21 @@ class ShihuoApi @Inject constructor(private val client: ApiClient) {
         val url: String = ""
     )
 
+    /**
+     * F4（2026-09-29）：走四态 `getHtmlResult`，Blocked/Network 冒泡。
+     * 下面那句 `识货搜索无结果或结构异常` 日志从此只在**够着了**时才会出现——
+     * 断网时以前也打这条日志，把排查带去"页面结构"方向。
+     */
     suspend fun searchProducts(keyword: String): List<ShihuoItem> {
         val encoded = java.net.URLEncoder.encode(keyword, "UTF-8")
         val url = "https://m.shihuo.cn/search?page=1&page_size=30&type=goods&keywords=$encoded"
-        val body = client.getHtml(
+        val result = client.getHtmlResult(
             url,
             referer = "https://m.shihuo.cn/search/goods?keywords=$encoded",
             userAgent = MOBILE_UA
-        ) ?: return emptyList()
+        )
+        result.toSourceFailure()?.let { throw it }
+        val body = (result as? CrawlerResult.Success)?.data ?: return emptyList()
         val all = parseSearchPage(body, keyword)
         if (all.isEmpty()) {
             LogT.w("识货搜索无结果或结构异常: [$keyword]")

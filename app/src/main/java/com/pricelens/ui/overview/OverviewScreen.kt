@@ -31,6 +31,8 @@ import com.pricelens.data.remote.GwdangApi
 import com.pricelens.data.remote.JdApi
 import com.pricelens.data.remote.ManmanbuyApi
 import com.pricelens.ui.common.AsyncValue
+import com.pricelens.ui.common.EmptyStateCause
+import com.pricelens.ui.common.EmptyStateCauseOf
 import com.pricelens.ui.common.valueOrDefault
 import com.pricelens.ui.common.valueOrNull
 import com.pricelens.ui.components.AppImage
@@ -61,6 +63,9 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
     val historyAsync by searchViewModel.history.collectAsStateWithLifecycle()
     val judgment by searchViewModel.judgment.collectAsStateWithLifecycle()
     val couponsAsync by searchViewModel.coupons.collectAsStateWithLifecycle()
+    val postsAsync by searchViewModel.posts.collectAsStateWithLifecycle()
+    val videosAsync by searchViewModel.videos.collectAsStateWithLifecycle()
+    val shihuoAsync by searchViewModel.shihuo.collectAsStateWithLifecycle()
     val livePrice by searchViewModel.livePrice.collectAsStateWithLifecycle()
     val realtimeSource by searchViewModel.realtimeSource.collectAsStateWithLifecycle()
 
@@ -81,16 +86,24 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
             SourceStatusRow(searchViewModel)
         }
         if (product == null) {
-            // 空态有两种完全不同的成因：① 还没搜过（此时说"未匹配到"是假因果）；
-            // ② 上游有条目但全被相关性过滤掉（关键词过短/写法不匹配）——文案分别处理。
+            // 空态有三种完全不同的成因（F4，2026-09-29）：
+            //  ① 还没搜过；② 搜过、一个源都没够着（断网/被拦）；③ 搜过、够着了但没匹配上关键词。
+            // ②从前落到③的文案上，用户被告知"关键词写错了"，而真正的问题是没连上网。
+            // 判定抽成纯函数 OverviewEmptyState.causeOf（可 JVM 单测），这里只做字符串映射。
             val searched = keyword.isNotBlank()
+            val emptyCause = EmptyStateCauseOf.of(
+                searched,
+                listOf(postsAsync, videosAsync, couponsAsync, shihuoAsync, historyAsync)
+            )
             item(key = "empty_title") {
                 Spacer(Modifier.height(Dims.SpacingL))
                 Text(
-                    if (searched) {
-                        stringResource(R.string.search_no_relevant_result, keyword)
-                    } else {
-                        stringResource(R.string.search_start_hint)
+                    when (emptyCause) {
+                        EmptyStateCause.NOT_SEARCHED -> stringResource(R.string.search_start_hint)
+                        EmptyStateCause.UNREACHABLE ->
+                            stringResource(R.string.search_unreachable_result, keyword)
+                        EmptyStateCause.NO_MATCH ->
+                            stringResource(R.string.search_no_relevant_result, keyword)
                     },
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

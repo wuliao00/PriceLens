@@ -27,11 +27,16 @@ class SmzdmApi @Inject constructor(private val client: ApiClient) {
         val negative: Int = 0
     )
 
+    /**
+     * F4（2026-09-29）：走四态 `getHtmlResult`，Blocked/Network 冒泡（详见 [toSourceFailure]）。
+     * 值得买前置瑞数 WAF，"被挡"是常态结局之一，不能再伪装成"这条关键词没内容"。
+     */
     suspend fun searchPosts(keyword: String): List<SmzdmPost> {
         val url = "https://search.smzdm.com/?c=faxian&s=" +
             java.net.URLEncoder.encode(keyword, "UTF-8") + "&v=a&order=score"
-        val html = client.getHtml(url, referer = "https://www.smzdm.com/", userAgent = BOT_UA)
-            ?: return emptyList()
+        val result = client.getHtmlResult(url, referer = "https://www.smzdm.com/", userAgent = BOT_UA)
+        result.toSourceFailure()?.let { throw it }
+        val html = (result as? CrawlerResult.Success)?.data ?: return emptyList()
         val all = parseSearchPage(html)
         val relevant = all.filter { QueryRelevance.isRelevant(keyword, it.title) }
         if (all.isNotEmpty() && relevant.isEmpty()) {

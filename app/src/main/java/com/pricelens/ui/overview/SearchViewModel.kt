@@ -6,11 +6,13 @@ import com.pricelens.accessibility.PriceEvents
 import com.pricelens.accessibility.ShopPlatform
 import com.pricelens.data.remote.ApiClient
 import com.pricelens.data.remote.BiliApi
+import com.pricelens.data.remote.CrawlerBlockedException
 import com.pricelens.data.remote.CrawlerResult
 import com.pricelens.data.remote.GwdangApi
 import com.pricelens.data.remote.ManmanbuyApi
 import com.pricelens.data.remote.ShihuoApi
 import com.pricelens.data.remote.SmzdmApi
+import com.pricelens.data.remote.SourceUnreachableException
 import com.pricelens.data.repository.PriceRepository
 import com.pricelens.domain.ProductCandidate
 import com.pricelens.domain.ProductCandidateResolver
@@ -192,6 +194,13 @@ class SearchViewModel @Inject constructor(
                     throw e // 取消透传：不把取消写成空结果/继续执行
                 } catch (e: Exception) {
                     LogT.w("候选兜底链异常: ${e.javaClass.simpleName}")
+                    // F4（2026-09-29）：类型化的"源没够着"不能只写日志。
+                    // 候选链是 当当 → 值得买 串行，这里吞掉的话 爆料/当当 两枚徽标会停在非 Error 态，
+                    // 而下面的并行 jobs 又各自独立问一次——把成因写进 posts，徽标与空态才有正确的因。
+                    if (e is CrawlerBlockedException || e is SourceUnreachableException) {
+                        val previous = (_posts.value as? AsyncValue.Success)?.data
+                        _posts.value = AsyncValue.Error(e, previous)
+                    }
                     emptyList()
                 }
                 if (smzdmPosts.isNotEmpty()) {

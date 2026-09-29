@@ -40,6 +40,9 @@
     <string name="src_state_blocked">反爬</string>
     <string name="src_state_failed">失败</string>
     <string name="src_state_idle">未查询</string>
+    <!-- F4（2026-09-29）：够着了该源、过滤后确实 0 条 —— 不能与「正常」共用一个词，
+         也不能与"根本没够着"（反爬/失败）混在一起 -->
+    <string name="src_state_empty">无结果</string>
 
     <!-- 通用状态 -->
     <string name="error_load_failed">加载失败</string>
@@ -73,6 +76,9 @@
 
     <!-- B站页 -->
     <string name="bili_empty_hint">搜索后聚合 B 站真实评测</string>
+    <!-- F4（2026-09-29）：已经搜过了、B站也答了但 0 条 —— 此时"请先搜索商品"是假因果 -->
+    <string name="bili_no_result">未发现相关视频</string>
+    <string name="bili_no_result_desc">已查询 B 站，没有与该关键词相关的视频</string>
     <string name="bili_risk_hint">%1$d 条视频被标记为疑似商单/含夸大宣传话术，已沉底展示（规则识别仅供参考）</string>
     <string name="bili_risk_sponsored">疑似商单</string>
     <string name="bili_risk_hype">夸大宣传</string>
@@ -120,6 +126,9 @@
 
     <!-- 社区页 -->
     <string name="community_empty_hint">搜索后聚合识货商品与什么值得买最新爆料</string>
+    <!-- F4（2026-09-29）：已经搜过了、爆料/识货也答了但 0 条 —— 此时"请先搜索商品"是假因果 -->
+    <string name="community_no_result">未发现相关爆料</string>
+    <string name="community_no_result_desc">已查询识货与什么值得买，没有与该关键词直接相关的条目</string>
     <string name="community_shihuo">识货</string>
     <string name="community_smzdm">什么值得买</string>
     <string name="community_subsidy">国补</string>
