@@ -9,6 +9,13 @@ package com.pricelens.accessibility
  * android.widget.Button 或带 contentDescription 的可点击容器），
  * 文本/ID 为真实 dump 的脱敏改写。AccessibilityNodeInfo 在 JVM 单测不可构造
  * （无 mockito/Robolectric），因此被测对象全部是 NodeSnapshot.kt 的纯函数。
+ *
+ * 局限与本文件的补集：以上快照**只能证明"规则按构造时的想象不误判"**，证明不了
+ * "真实的京东首页不会触发规则"。真机实采的两棵京东树（首页 + 搜索页，2026-09-29
+ * 从 vivo V2156A dump）走的是另一条链路：`app/src/test/resources/fixtures/jd_*_20260929.xml`
+ * → [UiAutomatorDump]（含生产侧 4000 节点/64 深度预算复刻）→ [RealDumpGatingTest]。
+ * 真机上已验证：手工夹具 jdHomePage() 不带"加入购物车"信号，而**真实首页带**，
+ * 首页不弹窗靠的是"商详分区标记/立购动作"这一关 —— 这类差异只有真机能暴露。
  */
 
 /** 文本叶子节点（TextView 形态） */
