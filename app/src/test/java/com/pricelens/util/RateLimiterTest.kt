@@ -36,7 +36,11 @@ class RateLimiterTest {
 
     @Test
     fun `penalized domain refused without invoking block until penalty expires`() = runBlocking {
-        val limiter = RateLimiter(penaltyMs = 120)
+        // penaltyMs 不能取得比"机器调度一次"还短：2026-09-29 本机开着杀毒实时扫描时，
+        // 120ms 的窗口在 penalize() 与下面第一次断言之间就烧完了，测试随机报
+        // "expected null, but was:<ok>"（单独重跑又是绿的）。留 400ms 让"熔断期内"这段
+        // 与调度无关，过期段用一次明显更长的 sleep 验证，方向上只会更保守。
+        val limiter = RateLimiter(penaltyMs = 400)
         assertFalse(limiter.isPenalized("jd.com"))
         limiter.penalize("jd.com")
         assertTrue(limiter.isPenalized("jd.com"))
@@ -48,7 +52,7 @@ class RateLimiterTest {
             }
         )
         assertFalse(invoked) // 熔断期内不发起请求
-        Thread.sleep(150)
+        Thread.sleep(900)
         assertFalse(limiter.isPenalized("jd.com"))
         assertEquals("ok", limiter.withLimit("jd.com") { "ok" })
     }
