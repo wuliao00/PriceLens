@@ -68,17 +68,17 @@
 
 | 平台 | Gitee（国内直链，免登录） | GitHub Release | 蓝奏云 | 夸克网盘 |
 |------|--------|----------|--------|----------|
-| **Android v2.6.0** | [PriceLens-2.6.0.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.0.apk) | [Release v2.6.0](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0) | 待更新（当前 2.5.1） | 待更新（当前 2.5.1） |
+| **Android v2.6.1** | [PriceLens-2.6.1.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.1.apk) | [Release v2.6.1](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.1) | 待更新（当前 2.5.1） | 待更新（当前 2.5.1） |
 | **Windows** | — | [Release](https://github.com/wuliao00/PriceLens/releases) | [Setup-2.1.0.exe](https://www.ilanzou.com/s/hrqKVtJO?code=4455) | [Setup-2.1.0.exe](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) |
 
   ⚠️ **蓝奏云提取码：4455**（已含在链接参数中，打开即可下载）；夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
-  网盘当前挂的还是 v2.5.1。**v2.6.0 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源）
+  网盘当前挂的还是 v2.5.1。**v2.6.1 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源）
   与 GitHub Release 上，包体 2,224,320 字节，
-  `sha256 = f574515884dcd6861245c583d903a857bc3c25a299ac592743f51f75a44b33a0`
+  `sha256 = 82a17b5754a9f38ca0aafea565db1d0aa5a86aafa5cb9c5c35568d26a8a62aaf`
   （这个值与 `update.json` 里的 `sha256` 必须一致；每次重新出包都三处同步：清单、
   `dist` 分支的包、GitHub Release 附件）。
   从 2.5.x 的 CI 构建包升级需要先卸载一次（两侧签名不同，本地盯价目标会清空）；
-  此后 2.6.0 起的包可以互相覆盖安装，应用内"检查更新"也能直接升级。
+  此后 2.6.x 的包之间可以互相覆盖安装，应用内"检查更新"也能直接升级。
 
 ---
 
