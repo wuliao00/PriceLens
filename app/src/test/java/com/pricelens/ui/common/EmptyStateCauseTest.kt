@@ -81,4 +81,25 @@ class EmptyStateCauseTest {
             EmptyStateCauseOf.of(searched = true, sources = listOf(loading, net))
         )
     }
+
+    /**
+     * 为什么调用方只能传"本页真正依赖的源"：B站/券/历史价的 L1-L2 缓存在断网时照样命中，
+     * 状态仍是 Success。把它混进商品候选的判定里，NO_MATCH 就会盖掉 UNREACHABLE，
+     * 屏幕上又回到「未匹配到与「关键词」直接相关的商品」——而真正没够着的是当当/值得买。
+     * 概览页因此收窄成 posts + shihuo（见 `OverviewScreen` 里的注释）。
+     */
+    @Test
+    fun `a stale-but-successful unrelated channel must not be counted as evidence`() {
+        val cachedUnrelated = AsyncValue.Success(listOf("上一轮留下的 B 站视频"))
+        assertEquals(
+            "候选源（当当→值得买→识货）全挂时只能说取不到数据",
+            EmptyStateCause.UNREACHABLE,
+            EmptyStateCauseOf.of(searched = true, sources = listOf(blocked, net, net))
+        )
+        assertEquals(
+            "反面对照：同一个失败列表里多塞一个 Success，结论就被翻成 NO_MATCH（这正是不能混传的原因）",
+            EmptyStateCause.NO_MATCH,
+            EmptyStateCauseOf.of(searched = true, sources = listOf(blocked, cachedUnrelated))
+        )
+    }
 }

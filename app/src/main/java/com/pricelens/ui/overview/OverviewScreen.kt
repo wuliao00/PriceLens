@@ -64,7 +64,6 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
     val judgment by searchViewModel.judgment.collectAsStateWithLifecycle()
     val couponsAsync by searchViewModel.coupons.collectAsStateWithLifecycle()
     val postsAsync by searchViewModel.posts.collectAsStateWithLifecycle()
-    val videosAsync by searchViewModel.videos.collectAsStateWithLifecycle()
     val shihuoAsync by searchViewModel.shihuo.collectAsStateWithLifecycle()
     val livePrice by searchViewModel.livePrice.collectAsStateWithLifecycle()
     val realtimeSource by searchViewModel.realtimeSource.collectAsStateWithLifecycle()
@@ -94,7 +93,12 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
             val searched = keyword.isNotBlank()
             val emptyCause = EmptyStateCauseOf.of(
                 searched,
-                listOf(postsAsync, videosAsync, couponsAsync, shihuoAsync, historyAsync)
+                // 只传"这一屏的商品候选真正依赖的源"：当当 → 值得买（两者合并进 posts 状态）→ 识货。
+                // 不能顺手把 videosAsync / couponsAsync / historyAsync 也塞进来：B站、券、历史价是
+                // 各自独立的通道，它们的 L1/L2 缓存命中时依然报 Success，于是"B站上一轮的缓存还在"
+                // 会把"当当/值得买本轮根本没够着"判成 NO_MATCH —— 又渲染回
+                // 「未匹配到与「关键词」直接相关的商品」那句谎话（F4 的同一类塌缩，只是换了层）。
+                listOf(postsAsync, shihuoAsync)
             )
             item(key = "empty_title") {
                 Spacer(Modifier.height(Dims.SpacingL))

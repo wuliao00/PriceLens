@@ -30,6 +30,10 @@ object EmptyStateCauseOf {
      * [sources] 传本轮被查询过的源状态（爆料/当当、优惠券、B站、识货、历史价…）。
      * 只有当**至少一个是 [AsyncValue.Success]** 时才允许把空结果归因到关键词上：
      * 仓储层已保证"空表 = 够着了且 0 条"、"没够着 = Error"（见 `PriceRepository` 的 F4 说明）。
+     *
+     * **调用方必须只传"这一屏空态真正依赖的源"**：多传一个不相干通道就可能让它仍停在
+     * Success（B站/券的 L1/L2 缓存在断网时照样命中），NO_MATCH 就会盖掉 UNREACHABLE，
+     * 谎话又回到"关键词写错了"。概览页因此只传 爆料/当当 + 识货，见 `OverviewScreen` 的注释。
      */
     fun of(searched: Boolean, sources: List<AsyncValue<*>>): EmptyStateCause {
         if (!searched) return EmptyStateCause.NOT_SEARCHED

@@ -54,8 +54,10 @@ class CrawlerOutcomeMappingTest {
         if (failure == null) {
             fail("B站 code=-412 必须冒泡为失败，实际静默返回 ${outcome.getOrNull()}")
         }
-        assertTrue("实际=${failure.javaClass.name}", failure is CrawlerBlockedException)
-        assertTrue("原因要带业务码：${failure.message}", failure!!.message!!.contains("-412"))
+        // fail() 返回 void，判空后取非空局部量，后续成员访问才合法（也让断言消息带上真实类型）
+        val bubbled = failure!!
+        assertTrue("实际=${bubbled.javaClass.name}", bubbled is CrawlerBlockedException)
+        assertTrue("原因要带业务码：${bubbled.message}", bubbled.message!!.contains("-412"))
     }
 
     @Test
