@@ -1,0 +1,62 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<!--
+  jd_detail_presale_20260929.xml —— 结构参照 2026-09-29 真机 dumpsys activity top + 截图实测
+  （vivo V2156A / 京东 App 商详页「茅台飞天 53%vol 500ml」**需预约**，主价 ¥1759，
+  底栏是「立即预约」「等待抢购」，**没有**「加入购物车/立即购买」），
+  按以下实测事实**手工构造**（不是 dump 原文；属性只保留了测试侧转换器真正读取的字段）：
+    1) resource-id 一律是混淆短名，无任何 price/title/goods 语义 ID → 已知主价 ID 白名单恒不命中；
+    2) 顶部 tab 是「商品 / 大家评 / 详情 / 推荐」，整棵树没有「商品详情/宝贝详情/图文详情/商品评价」字样；
+    3) 主价「¥1759」整数单节点；
+    4) 底栏动作节点为「立即预约」+「等待抢购」——预约/抢购型商品在真机上就是这一组文案，
+       而首页信息流里的同类字样是「抢先预约」「等待抢购」（见 jd_home_20260929.xml），
+       词表只能收「立即预约」，收「预约」「抢购」这类子串会把首页放进来。
+-->
+<hierarchy rotation="0">
+  <node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,0][1080,2342]">
+    <node index="0" text="" resource-id="" class="android.widget.LinearLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,0][1080,2342]">
+      <node index="0" text="" resource-id="android:id/content" class="android.widget.FrameLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,0][1080,2342]">
+        <node index="0" text="" resource-id="com.jingdong.app.mall:id/nn" class="android.widget.RelativeLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,0][1080,2342]">
+          <node index="0" text="" resource-id="com.jingdong.app.mall:id/tk" class="android.widget.FrameLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,0][1080,2342]">
+            <node index="0" text="" resource-id="com.jingdong.app.mall:id/a8e" class="android.widget.RelativeLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,0][1080,2342]">
+
+              <node index="0" text="" resource-id="com.jingdong.app.mall:id/dl1" class="androidx.recyclerview.widget.RecyclerView" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,0][1080,2180]">
+                <node index="0" text="" resource-id="com.jingdong.app.mall:id/cap" class="android.widget.LinearLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,110][1080,200]">
+                  <node index="0" text="商品" resource-id="com.jingdong.app.mall:id/f1k" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="true" bounds="[40,120][140,190]" />
+                  <node index="1" text="大家评" resource-id="com.jingdong.app.mall:id/f2m" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="true" bounds="[160,120][300,190]" />
+                  <node index="2" text="详情" resource-id="com.jingdong.app.mall:id/f3p" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="true" bounds="[320,120][420,190]" />
+                  <node index="3" text="推荐" resource-id="com.jingdong.app.mall:id/f4r" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="true" bounds="[440,120][540,190]" />
+                </node>
+
+                <node index="1" text="" resource-id="com.jingdong.app.mall:id/dme" class="android.widget.FrameLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,200][1080,360]">
+                  <node index="0" text="" resource-id="com.jingdong.app.mall:id/by2" class="android.widget.LinearLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[30,220][1050,330]">
+                    <node index="0" text="¥1759" resource-id="com.jingdong.app.mall:id/dn6" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[30,230][220,320]" />
+                    <node index="1" text="需预约 每日09:00开放" resource-id="com.jingdong.app.mall:id/cq1" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[240,245][520,315]" />
+                  </node>
+                  <node index="1" text="预约人数2.3万 评价好评率98%" resource-id="com.jingdong.app.mall:id/dl7" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[30,330][560,358]" />
+                </node>
+
+                <node index="2" text="贵州茅台 飞天茅台 53%vol 酱香型白酒 500ml 需预约" resource-id="com.jingdong.app.mall:id/c_s" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="true" bounds="[30,370][1050,470]" />
+                <node index="3" text="香型：酱香型 产地：贵州" resource-id="com.jingdong.app.mall:id/gq3" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[30,480][1050,540]" />
+                <node index="4" text="预售规则见活动页面 不支持货到付款" resource-id="com.jingdong.app.mall:id/hz5" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[30,540][1050,600]" />
+
+                <node index="5" text="" resource-id="com.jingdong.app.mall:id/kf8" class="android.widget.LinearLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,670][1080,1100]">
+                  <node index="0" text="" resource-id="com.jingdong.app.mall:id/mw1" class="android.widget.FrameLayout" package="com.jingdong.app.mall" content-desc="" clickable="true" bounds="[30,690][360,1080]">
+                    <node index="0" text="¥1099" resource-id="com.jingdong.app.mall:id/eo1" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[40,980][200,1040]" />
+                    <node index="1" text="五粮液 第八代 52度 浓香型白酒 500ml" resource-id="com.jingdong.app.mall:id/nb4" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[40,1040][350,1078]" />
+                  </node>
+                </node>
+              </node>
+
+              <node index="1" text="" resource-id="com.jingdong.app.mall:id/b7n" class="android.widget.LinearLayout" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[0,2180][1080,2342]">
+                <node index="0" text="" resource-id="com.jingdong.app.mall:id/pq1" class="android.widget.TextView" package="com.jingdong.app.mall" content-desc="收藏" clickable="true" bounds="[40,2200][140,2320]" />
+                <node index="1" text="等待抢购" resource-id="com.jingdong.app.mall:id/pq3" class="android.widget.Button" package="com.jingdong.app.mall" content-desc="" clickable="false" bounds="[180,2200][560,2320]" />
+                <node index="2" text="立即预约" resource-id="com.jingdong.app.mall:id/pq4" class="android.widget.Button" package="com.jingdong.app.mall" content-desc="" clickable="true" bounds="[580,2200][1040,2320]" />
+              </node>
+
+            </node>
+          </node>
+        </node>
+      </node>
+    </node>
+  </node>
+</hierarchy>

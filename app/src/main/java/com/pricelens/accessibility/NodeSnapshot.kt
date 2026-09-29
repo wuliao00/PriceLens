@@ -88,7 +88,13 @@ data class PriceHit(
     val value: Double,
     val rawText: String,
     val basis: PriceBasis,
-    /** 是否命中已知主价 resource-id（高置信） */
+    /**
+     * 是否命中已知主价 resource-id —— **置信加分项，不是必要条件**。
+     * 2026-09-29 真机取证：现版京东商详页的 resource-id 全是混淆短名，
+     * [PriceNodeMatcher.isKnownPriceId] 在这棵树上恒不命中，所以商详门控 [isProductPage]
+     * 已不再依赖它（历史上曾把它当兜底的必要条件，直接导致真机商详页浮窗不弹）。
+     * 保留字段的用途：旧版 App / 其他宿主仍能命中，可用于埋点与置信排序。
+     */
     val viaKnownId: Boolean
 )
 
@@ -217,7 +223,8 @@ fun extractTitle(root: NodeSnapshot, platform: ShopPlatform): TitleHit? {
  *     商详主价在页面上部，先出现；分期数/券面额/存储容量等裸数字不再被当价格
  *     （旧规则"任意 viewId + ≤10 位纯数字即判价"是缺陷根因）；
  *  3. 兜底：裸数字仅当其最近祖先（≤2 层卡片）文本里另有 ¥ 符号时才采信，
- *     并用数值范围 + ID 排除词（installment/coupon 等）二次过滤。
+ *     并用数值范围 + ID 排除词（installment/coupon 等）二次过滤；
+ *  4. 三条出口共用 [priceHitOf]：把真机上被拆成独立节点的**小数位**（「¥1838」+「.9」）拼回主价。
  * 输出带口径标签的 [PriceHit]（页面价/券后价/到手价）。
  */
 fun extractPriceHit(root: NodeSnapshot, platform: ShopPlatform): PriceHit? {
@@ -229,7 +236,7 @@ fun extractPriceHit(root: NodeSnapshot, platform: ShopPlatform): PriceHit? {
         if (PriceNodeMatcher.isPriceExcludedText(text)) continue
         val value = PriceNodeMatcher.extractPrice(text) ?: continue
         if (!PriceNodeMatcher.isPlausiblePriceValue(value)) continue
-        return PriceHit(value, text, PriceBasis.detect(text), viaKnownId = true)
+        return priceHitOf(root, n, text, value, viaKnownId = true)
     }
     // 二级：带 ¥/￥ 符号文本，BFS 第一个通过排除规则者
     for (n in bfs(root)) {
@@ -239,7 +246,7 @@ fun extractPriceHit(root: NodeSnapshot, platform: ShopPlatform): PriceHit? {
             if (!text.contains('¥') && !text.contains('￥')) continue
             val value = PriceNodeMatcher.extractPrice(text) ?: continue
             if (!PriceNodeMatcher.isPlausiblePriceValue(value)) continue
-            return PriceHit(value, text, PriceBasis.detect(text), viaKnownId = false)
+            return priceHitOf(root, n, text, value, viaKnownId = false)
         }
     }
     // 三级：裸数字 + 同一祖先卡片（≤3 层）内有 ¥ 语境
@@ -253,8 +260,50 @@ fun extractPriceHit(root: NodeSnapshot, platform: ShopPlatform): PriceHit? {
         val value = PriceNodeMatcher.extractPrice(text) ?: continue
         if (!PriceNodeMatcher.isPlausiblePriceValue(value)) continue
         if (cardHasCurrency(root, n)) {
-            return PriceHit(value, text, PriceBasis.PAGE, viaKnownId = false)
+            return priceHitOf(root, n, text, value, viaKnownId = false)
         }
+    }
+    return null
+}
+
+/**
+ * 一次价格读出的收口：拼回被单独成节点的小数位，再打口径标签。
+ *
+ * 真机（2026-09-29 商详页「茅台 2026年 飞天 500ml」¥1838.9）把主价渲染成
+ * 「¥1838」+「.9」两个紧邻兄弟节点（整数大号字、小数小号字），只读前者会把 1838.9 报成 1838，
+ * 属于用户抱怨的"浮窗显示不准确"的一种。见 `RealDetailShapeGateTest` 与
+ * `PriceExtractionTest."split decimal tail is glued onto the integer part"`。
+ */
+private fun priceHitOf(
+    root: NodeSnapshot,
+    node: NodeSnapshot,
+    text: String,
+    value: Double,
+    viaKnownId: Boolean
+): PriceHit {
+    val joined = joinDecimalTail(root, node, text)
+        ?: return PriceHit(value, text, PriceBasis.detect(text), viaKnownId)
+    return PriceHit(joined.second, joined.first, PriceBasis.detect(joined.first), viaKnownId)
+}
+
+/** 独立成节点的小数尾巴：只有 `.9` / `.90` 这种形态才认 */
+private val DECIMAL_TAIL = Regex("^\\.\\d{1,2}$")
+
+/** 把同一父节点内紧随价格节点之后的 `.dd` 尾巴并回主价文本；没有可拼的尾巴返回 null */
+private fun joinDecimalTail(root: NodeSnapshot, node: NodeSnapshot, text: String): Pair<String, Double>? {
+    if (text.contains('.')) return null // 主价文本自带小数，不需要拼
+    val chain = ancestorChain(root, node)
+    val parent = chain.getOrNull(chain.size - 2) ?: return null
+    val idx = parent.children.indexOfFirst { it === node }
+    if (idx < 0) return null
+    for (sib in parent.children.asSequence().drop(idx + 1).take(2)) {
+        val tail = firstUsable(sib.text, sib.contentDescription)?.trim()?.takeIf { DECIMAL_TAIL.matches(it) }
+            ?: continue
+        val joined = text + tail
+        val joinedValue = PriceNodeMatcher.extractPrice(joined)
+            ?.takeIf { PriceNodeMatcher.isPlausiblePriceValue(it) }
+            ?: return null
+        return joined to joinedValue
     }
     return null
 }
@@ -291,11 +340,20 @@ fun extractItemId(root: NodeSnapshot): String? {
 /**
  * 商详页门控（A2 P1-5）：非商详（首页/搜索列表/购物车/确认订单）不 emit、并收窗。
  * 判定基于结构特征而非包名：
- *  - 购买动作信号：加入购物车/立即购买/领券购买（京东、淘宝）
+ *  - 购买动作信号：加入购物车/立即购买/领券购买/立即预约（京东、淘宝）
  *    或 单独购买+发起拼单 成对按钮（PDD 商详底栏；列表卡片只有"去拼单"不会成对出现）；
  *  - 购物车/确认订单特征（去结算/提交订单/立即支付/合计）一票否决；
- *  - 还需"商品详情/宝贝详情"等商详分区标记，或命中已知主价 ID（高置信兜底）；
+ *  - 还需"商品详情/宝贝详情"等商详分区标记，**或**底栏"立即购买/立即预约"这类商详专属动作；
  *  - 必须同时能解析出价格与标题。
+ *
+ * 2026-09-29 真机修正（"商详页浮窗不弹"的根因）：兜底原本是 `hasBuyNow && priceHit.viaKnownId`，
+ *  但现版京东商详页 76 个 distinct resource-id 全是混淆短名（dme/c_s/by2…），主价 ID 白名单
+ *  一个都命中不了 → `viaKnownId` 恒 false；同时首屏顶部 tab 是「商品/大家评/详情/推荐」，
+ *  没有 [PriceNodeMatcher] 的商详分区字样 → `hasDetailSection` 恒 false。两条兜底同时死掉，
+ *  真机商详页首屏必被拒（滚到详情区后标题/主价节点又被 RecyclerView 回收出树，仍然拒）。
+ *  现在兜底只看底栏动作信号：[PriceNodeMatcher.isBuyNowAction] 收的是**商详底栏专属**按钮文案，
+ *  真机首页信息流卡片只有"加入购物车"图标（`RealDumpGatingTest` 里 buyNow=false 的实测钉子），
+ *  且首页的"抢先预约/等待抢购"字样不在词表内，故首页/搜索页两棵真树仍不过门控。
  * 注：各 App 改版可能挪动按钮文案，词表集中在 [PriceNodeMatcher]，真机回归时按版本校准。
  */
 fun isProductPage(root: NodeSnapshot, platform: ShopPlatform): Boolean {
@@ -306,15 +364,15 @@ fun isProductPage(root: NodeSnapshot, platform: ShopPlatform): Boolean {
     val pddPair = texts.any { PriceNodeMatcher.hasPddSingleBuy(it) } &&
         texts.any { PriceNodeMatcher.hasPddGroupBuy(it) }
     if (!hasBuyAction && !pddPair) return false
-    val priceHit = extractPriceHit(root, platform) ?: return false
+    // 读不出价就不是"有当前价的商品页"，标题也一样：门控要的是"这一页有可展示的单一商品"
+    extractPriceHit(root, platform) ?: return false
     if (extractTitle(root, platform) == null) return false
-    // 商详分区标记是最稳的信号；页面刚渲染、"商品详情"尚未挂载时，退而要求
-    // "立即购买/领券购买/马上抢"这类**商详底栏专属**动作 + 已知主价 ID 双重背书
-    // （列表卡片只有"加入购物车"图标，不带这些词，不会误判成商详）
+    // 商详分区标记是最稳的信号；新版商详首屏没有该字样（真机实测），退而要求
+    // "立即购买/领券购买/马上抢/立即预约"这类**商详底栏专属**动作。
+    // viaKnownId 在这里只作为加分项参与置信（见 PriceHit），不再当必要条件：真机 id 全是混淆短名。
     val hasDetailSection = texts.any { PriceNodeMatcher.isDetailSection(it) }
     if (hasDetailSection) return true
-    val hasBuyNow = texts.any { PriceNodeMatcher.isBuyNowAction(it) }
-    return hasBuyNow && priceHit.viaKnownId
+    return texts.any { PriceNodeMatcher.isBuyNowAction(it) }
 }
 
 /**

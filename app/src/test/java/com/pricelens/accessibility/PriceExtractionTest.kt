@@ -64,6 +64,48 @@ class PriceExtractionTest {
     }
 
     @Test
+    fun `split decimal tail is glued onto the integer part`() {
+        // 真机商详主价渲染成「¥1838」+「.9」两个紧邻兄弟节点（小数分体，见
+        // fixtures/jd_detail_instock_20260929.xml）：只读「¥1838」会把 1838.9 报成 1838。
+        val page = container(
+            kids = arrayOf(
+                container(kids = arrayOf(leaf(text = "¥1838"), leaf(text = ".9"), leaf(text = "12期免息"))),
+                container(kids = arrayOf(leaf(text = "¥1099")))
+            )
+        )
+        val hit = extractPriceHit(page, ShopPlatform.JD)
+        assertNotNull(hit)
+        assertEquals(1838.9, hit!!.value, 0.001)
+        assertEquals("¥1838.9", hit.rawText)
+        assertEquals(PriceBasis.PAGE, hit.basis)
+    }
+
+    @Test
+    fun `currency symbol integer and decimal split across three sibling nodes`() {
+        // 「¥」「1838」「.9」三段式渲染（走三级裸数字兜底）同样要读出 1838.9
+        val page = container(
+            kids = arrayOf(leaf(text = "¥"), leaf(text = "1838"), leaf(text = ".9"))
+        )
+        val hit = extractPriceHit(page, ShopPlatform.UNKNOWN)
+        assertNotNull(hit)
+        assertEquals(1838.9, hit!!.value, 0.001)
+    }
+
+    @Test
+    fun `a decimal tail in a different container is not glued on`() {
+        // 只有**同一父节点的紧邻兄弟**才是同一段价格的小数位；隔了容器的 .99 不能拼
+        val page = container(
+            kids = arrayOf(
+                container(kids = arrayOf(leaf(text = "¥1299"))),
+                container(kids = arrayOf(leaf(text = ".99"), leaf(text = "¥1299")))
+            )
+        )
+        val hit = extractPriceHit(page, ShopPlatform.JD)
+        assertNotNull(hit)
+        assertEquals(1299.0, hit!!.value, 0.001)
+    }
+
+    @Test
     fun `price basis labels parsed from context text`() {
         val net = extractPriceHit(container(kids = arrayOf(leaf(text = "到手价￥129"))), ShopPlatform.UNKNOWN)
         assertEquals(129.0, net!!.value, 0.001)

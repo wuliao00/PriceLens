@@ -34,6 +34,28 @@ class PageGatingTest {
     }
 
     @Test
+    fun `detail page with obfuscated ids passes on the bottom-bar action alone`() {
+        // 2026-09-29 真机形态：主价/标题节点的 resource-id 全是混淆短名（viaKnownId=false），
+        // 首屏没有"商品详情"字样，底栏「加入购物车」+「立即购买」→ 兜底只认底栏动作信号。
+        // 旧实现这里还要求已知主价 ID，真机上该条件恒 false → 商详页浮窗不弹。
+        // 同一结构的真机参照夹具：fixtures/jd_detail_instock_20260929.xml（[RealDetailShapeGateTest]）。
+        val obfuscated = container(
+            kids = arrayOf(
+                leaf(text = "¥1838", res = "com.jingdong.app.mall:id/dn6"),
+                leaf(text = ".9", res = "com.jingdong.app.mall:id/cq1"),
+                leaf(text = "贵州茅台 飞天茅台 53%vol 酱香型白酒 500ml 2026年", res = "com.jingdong.app.mall:id/c_s"),
+                leaf(desc = "加入购物车", clickable = true),
+                leaf(text = "立即购买", clickable = true)
+            )
+        )
+        val price = extractPriceHit(obfuscated, ShopPlatform.JD)
+        assertNotNull(price)
+        assertFalse("混淆短名不该被判成已知主价 ID", price!!.viaKnownId)
+        assertEquals(1838.9, price.value, 0.001)
+        assertTrue(isProductPage(obfuscated, ShopPlatform.JD))
+    }
+
+    @Test
     fun `search list page never passes even when cards carry buy icons`() {
         // 列表卡片：带 ¥ + 标题 + "加入购物车"图标，但没有"立即购买"类立购动作 → 拒
         assertFalse(isProductPage(jdSearchListPage(), ShopPlatform.JD))

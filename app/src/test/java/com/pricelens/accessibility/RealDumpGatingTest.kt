@@ -75,6 +75,44 @@ class RealDumpGatingTest {
     }
 
     /**
+     * 预约/抢购词表的假阳性哨兵（加词前 grep 过这棵树，加词后由这条复验）。
+     *
+     * 真机首页信息流里有「**抢先预约**」（iQOO 16 福袋卡片的 content-desc）和「**等待抢购**」
+     * （京东秒杀位）两类字样。给 `BUY_ACTION_WORDS`/`BUY_NOW_WORDS` 收「立即预约」这类
+     * **完整底栏按钮文案**是安全的；收「预约」「抢购」这种短子串，首页立刻会变成假商详
+     * —— 而首页没有"当前商品的单一价格"（见 [home page price is readable but belongs to no single product so the overlay stays closed]）。
+     */
+    @Test
+    fun `home feed reservation wording never reads as a bottom-bar buy action`() {
+        val texts = dumpTexts(home.root)
+        val reservationish = texts.filter { it.contains("预约") || it.contains("抢购") }
+        assertTrue("真机首页应带预约/抢购类字样（没了就说明夹具被换过，本哨兵失去意义）", reservationish.isNotEmpty())
+        assertTrue(reservationish.any { it.contains("抢先预约") })
+        assertTrue(reservationish.any { it.contains("等待抢购") })
+        for (t in reservationish) {
+            assertFalse("首页文案『$t』被判成底栏立购动作 → 首页会误弹窗", PriceNodeMatcher.isBuyNowAction(t))
+            assertFalse("首页文案『$t』被判成底栏购买动作 → 首页会误弹窗", PriceNodeMatcher.isBuyAction(t))
+        }
+    }
+
+    /**
+     * 「去掉 viaKnownId 兜底后，只看 hasBuyNow 会不会把首页放进来」的正面验证：
+     * 首页 buyAction / 价格 / 标题三项全有（旧兜底靠 viaKnownId=false 拦住它，而真机商详页同样
+     * viaKnownId=false，那条兜底是死条件），唯一还拦住首页的就是「底栏立购动作」这一关为 false。
+     */
+    @Test
+    fun `home is held out by the bottom-bar buy-now signal alone`() {
+        val texts = dumpTexts(home.root)
+        assertTrue(texts.any { PriceNodeMatcher.isBuyAction(it) })
+        assertNotNull(extractPriceHit(home.root, ShopPlatform.JD))
+        assertNotNull(extractTitle(home.root, ShopPlatform.JD))
+        assertFalse("首页没有商详分区标记", texts.any { PriceNodeMatcher.isDetailSection(it) })
+        assertFalse("首页没有底栏立购/预约动作", texts.any { PriceNodeMatcher.isBuyNowAction(it) })
+        assertFalse("仅凭 hasBuyAction+有价+有标题 就把首页当商详 = 用户看到的浮窗内容必错",
+            isProductPage(home.root, ShopPlatform.JD))
+    }
+
+    /**
      * 配对用例（门控为 false 时浮窗链路根本不会被调用）：
      * 真机首页**读得出价也读得出标题**——`¥9998` 是信息流里"iQOO 16 预约福袋"卡片的价格文案，
      * 属于另一张卡片，且整页 `extractItemId` 为空（没有确定性 SKU）→ 这一页**没有"当前商品的单一价格"**。
