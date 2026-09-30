@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # 完整历史用于版本号生成
       
@@ -120,7 +120,7 @@ jobs:
 
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # 默认 fetch-depth: 1 是浅克隆，推 Gitee 会被拒（shallow update not allowed），
           # 而且校验清单也不需要历史——但为了让镜像步可用，这里取完整历史。
@@ -220,7 +220,7 @@ jobs:
     
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       
@@ -265,7 +265,7 @@ jobs:
     
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       
       - name: 设置 Pages
         uses: actions/configure-pages@v6
@@ -291,7 +291,7 @@ jobs:
     
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       
@@ -328,7 +328,7 @@ jobs:
     
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       
       - name: 设置 JDK
         uses: actions/setup-java@v5
