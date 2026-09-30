@@ -214,12 +214,28 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
                     )
                 }
                 Spacer(Modifier.height(Dims.SpacingM))
-                PriceChartCanvas(
-                    history = history,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                )
+                if (history.points.size < 2) {
+                    // 只有 1 个采样日时不画那块 200dp 的空白：空框看起来像"又显示错了"，
+                    // 而实情是点还没攒够 —— 折线至少要两个日点。把已有的那一点如实说出来。
+                    val only = history.points.firstOrNull()
+                    val singleDayText: String = if (only == null) {
+                        stringResource(R.string.watch_curve_source_none)
+                    } else {
+                        stringResource(R.string.watch_curve_one_point, only.date, PriceFormatter.format(only.price))
+                    }
+                    Text(
+                        singleDayText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    PriceChartCanvas(
+                        history = history,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                    )
+                }
                 Spacer(Modifier.height(Dims.SpacingM))
                 Row {
                     Text(

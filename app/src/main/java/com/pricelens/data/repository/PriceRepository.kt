@@ -103,8 +103,8 @@ class PriceRepository @Inject constructor(
      *  3. 星罗好货：按京东 SKU 命中榜单时补点——但只有**在售价**（goods_list_money）够格；
      *     券后历史低价（real_money）是历史位置，写进曲线等于自己造历史（F1，2026-09-29），
      *     资格判定在 `domain/PriceSampling.curveWorthy`。
-     * 任一有数据即返回，并把结果写回自建曲线库（只在外源真给了点的时候回写，
-     * 并带上这批点的实际出处 —— 见 [persistHistory] 的 source 参数）。
+     * 任一有数据即返回：画出去的线 = 外源点 + 本机自采补齐的缺口（[CurveMerge]，同一天外源优先），
+     * 而**只把外源那批点**写回自建曲线库，并带上它们的实际出处 —— 见 [persistHistory] 的 source 参数。
      *
      * 读 Room 侧一律先过 [DayCurve.collapse]：一天一个点，收盘点画线、当日至低算历史最低。
      */
@@ -118,9 +118,6 @@ class PriceRepository @Inject constructor(
         val selfDays = if (sku != null) DayCurve.collapse(db.priceHistoryDao().getByProduct("jd:$sku")) else emptyList()
         val points = mutableListOf<ManmanbuyApi.PricePoint>()
         mmb?.points?.let { points += it }
-        if (points.isEmpty()) {
-            points += selfDays.map { ManmanbuyApi.PricePoint(it.date, it.close) }
-        }
         // 这批点的实际出处：慢慢买给了点就标 MANMANBUY，只有星罗补点就标 LINKSTARS_LIST。
         // 全是本机自采回流时不回写 —— 写回去只会把「来源未记录」的老行编成自采的功劳。
         var writeSource: PriceSource? = if (mmb != null && mmb.points.isNotEmpty()) PriceSource.MANMANBUY else null
@@ -141,8 +138,11 @@ class PriceRepository @Inject constructor(
                 }
             }
         }
-        if (points.isEmpty()) return null
-        val merged = points.sortedBy { it.date }
+        // 要画的那条线 = 外源点 + 本机自采补齐外源没覆盖的日子（同一天外源优先，见 CurveMerge）。
+        // 这一步决定脚注是不是真话：脚注按库里的 source 统计"自采几天/慢慢买几天"，
+        // 若只画外源点，脚注列出的自采日在图上根本不存在。
+        val merged = CurveMerge.fillMissingDays(points, selfDays)
+        if (merged.isEmpty()) return null
         val prices = merged.map { it.price }
         // 「历史最低」看**当日至低**（dayLow）：自采行带着盘中真见过的低点，
         // 收盘点不能冒充它；外部源只给一个日值，那就只有它自己。
@@ -153,10 +153,19 @@ class PriceRepository @Inject constructor(
             highest = maxOf(mmb?.highest ?: prices.max(), prices.max()),
             points = merged
         )
-        // 自建曲线积累：只在真拿到外源点时落库（每天 1 点，靠 (productId, date) 唯一索引按日覆盖）
+        // 自建曲线积累：只回写外源给的那批点（每天 1 点，靠 (productId, date) 唯一索引按日覆盖）。
+        // 自采回流不走这里：把那几天的出处改成"慢慢买"就是把本机观测算成外源的功劳。
         val source = writeSource
-        if (sku != null && source != null) {
-            runCatching { persistHistory("jd:$sku", history, source) }
+        if (sku != null && source != null && points.isNotEmpty()) {
+            val external = points.sortedBy { it.date }
+            val externalPrices = external.map { it.price }
+            val toStore = ManmanbuyApi.History(
+                current = mmb?.current ?: externalPrices.last(),
+                lowest = minOf(mmb?.lowest ?: externalPrices.min(), externalPrices.min()),
+                highest = maxOf(mmb?.highest ?: externalPrices.max(), externalPrices.max()),
+                points = external
+            )
+            runCatching { persistHistory("jd:$sku", toStore, source) }
                 .onFailure { e -> LogT.w("历史曲线回写失败（不影响展示）：${e.javaClass.simpleName} ${e.message}") }
         }
         return history

@@ -12,6 +12,8 @@ captures/
 !debug.keystore
 
 # 本地验证截图、工具缓存与临时文件（保留本机，不入库）
+__pycache__/
+*.pyc
 s*.png
 .qoder-credits/
 _del*.tmp

@@ -4,6 +4,7 @@ import com.pricelens.data.local.entity.PriceHistoryEntity
 import com.pricelens.domain.PriceSample
 import com.pricelens.domain.PriceSource
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,7 +16,9 @@ import org.junit.Test
  *  1. 一天一个点，这个点是**当日最后一个 live 样本**（收盘语义），不是第一个、也不是最大的；
  *  2. 「当日至低」单开一列：算历史最低看它，不看收盘点 —— 收盘点不能冒充盘中低点；
  *  3. 只有够格的样本才产点：`referenceOnly`（星罗券后历史低价）与 0/负价一律不写，
- *     闸门是 [com.pricelens.domain.PriceSampling.curveWorthy]，这里不许另起一套判定。
+ *     闸门是 [com.pricelens.domain.PriceSampling.curveWorthy]，这里不许另起一套判定；
+ *  4. 存进库的**出处是"谁写的这一行"**（本机盯价轮次 = SELF_WATCH），不是"这个数字来自哪个接口"
+ *     —— 脚注要回答的是"这条线是谁攒出来的"（见 [the stored provenance is the write channel] 那条）。
  *
  * 全部纯 JVM 用例：本模块没有 Robolectric / room-testing，所以迁移后的语义（老行
  * `dayLow` = 0 表示"未知"）也必须是纯函数能覆盖的（见 [low fallback] 那条）。
@@ -175,7 +178,28 @@ class DayCurveTest {
         )
         assertEquals(150.0, point.price, 0.001)
         assertEquals(150.0, point.dayLow, 0.001)
-        assertEquals("出处跟着本轮样本走", PriceSource.LINKSTARS_LIST.name, point.source)
+    }
+
+    @Test
+    fun `the stored provenance is the write channel not the price origin`() {
+        // 盯价轮次从京东查价接口拿到的现价，这一行仍然是"本机自采"的：脚注要回答的是
+        // "这条线谁攒出来的"，不是"这个数字来自哪个接口"。
+        // 若写成 JD_P3CN，CurveProvenance 认不出这个出处，脚注会把手机自己攒的点说成「来源未记录」。
+        val point = requireNotNull(
+            DayCurve.upsertFor("jd:$sku", null, PriceSample(199.0, PriceSource.JD_P3CN), "2026-10-05", 1_000L)
+        )
+        assertEquals(PriceSource.SELF_WATCH.name, point.source)
+        assertNotNull(
+            "存进去的出处必须是 CurveProvenance 认得的枚举名，否则统计里只会剩「来源未记录」",
+            PriceSource.fromName(point.source)
+        )
+        assertEquals(
+            "同一轮无论价格来自哪个接口，写入通道都是盯价自采",
+            point.source,
+            requireNotNull(
+                DayCurve.upsertFor("jd:$sku", null, PriceSample(199.0, PriceSource.LINKSTARS_LIST), "2026-10-05", 1_000L)
+            ).source
+        )
     }
 
     @Test

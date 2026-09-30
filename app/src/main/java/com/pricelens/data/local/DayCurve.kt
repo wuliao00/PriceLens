@@ -3,6 +3,7 @@ package com.pricelens.data.local
 import com.pricelens.data.local.entity.PriceHistoryEntity
 import com.pricelens.domain.PriceSample
 import com.pricelens.domain.PriceSampling
+import com.pricelens.domain.PriceSource
 
 /**
  * 价格历史「每天一点」的折叠规则。全部纯函数：不碰 Room、不碰 Context，可直接 JVM 单测
@@ -80,6 +81,12 @@ object DayCurve {
      * 资格判定**只能**走 [PriceSampling.curveWorthy]（星罗券后历史低价这类 `referenceOnly`
      * 来源与 0/负价都在那里被挡住），这里不再自己另写一套 if。
      *
+     * 存进库的出处是**写入通道**（[PriceSource.SELF_WATCH]），不是这个数字来自哪个接口：
+     * 脚注要回答的是"这条线是本机一轮轮攒出来的，还是慢慢买给的"。
+     * 若写样本自己的来源名（JD_P3CN 等），[com.pricelens.data.repository.CurveProvenance]
+     * 认不出它，本机攒的点会被统计成「来源未记录」。
+     * 价格来自哪个接口仍然有迹可循 —— 它决定了这条样本够不够格进来（[PriceSampling.curveWorthy]）。
+     *
      * @param productId 曲线表的 key，直接用 `PriceTargetEntity.productId`（已是 `jd:<sku>` 形态）
      * @param existing 当日已存的点（null = 今天还没有点）
      * @return null = 本轮这个样本没有资格写曲线
@@ -105,7 +112,7 @@ object DayCurve {
             // 读侧的「历史最低」一律按 dayLow 现算，这两个标记只剩展示意义
             isLowest = false,
             isHighest = false,
-            source = worthy.source.name,
+            source = PriceSource.SELF_WATCH.name,
             // 当日至低只降不升：外部/上一轮的点不能被本轮的更高价"抬"上去
             dayLow = storedLow?.let { minOf(close, it) } ?: close,
             recordedAt = recordedAt

@@ -84,4 +84,7 @@
     <string name="watch_curve_source_footnote">曲线出处：%1$s</string>
     <string name="watch_curve_source_self_hint">本机自采的点按天存：一天一个，取当天最后一个现价（收盘价口径），另存当天已见最低价，「历史最低」用的是后者。没配慢慢买 Cookie 时，只要盯价能拿到现价，曲线就会一天天长出来。</string>
     <string name="watch_curve_source_none">还没有任何采样日：盯价每 30 分钟一轮，从某一轮真拿到现价的那天起，曲线才会开始出现点。</string>
+
+    <!-- 只有 1 个日点时不画 200dp 空白折线区（空框看起来像显示错误），改成把那一点说出来。 -->
+    <string name="watch_curve_one_point">目前只有 %1$s 这一个采样日（¥%2$s）。折线至少要两个日点才画得出来 —— 盯价每 30 分钟一轮，攒到第二个点后这里就会出现曲线。</string>
 </resources>
