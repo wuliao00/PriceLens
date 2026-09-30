@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-29T10:40:13Z",
+  "generatedAt": "2026-09-30T00:12:06Z",
   "channel": "stable",
   "latest": {
-    "versionCode": 17,
-    "versionName": "2.6.3",
-    "releaseDate": "2026-09-29"
+    "versionCode": 18,
+    "versionName": "2.6.4",
+    "releaseDate": "2026-09-30"
   },
   "minSupportedVersionCode": 14,
   "forceBelow": 13,
@@ -14,12 +14,12 @@
     {
       "label": "Gitee（国内直连）",
       "kind": "apk",
-      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.3.apk"
+      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.4.apk"
     },
     {
       "label": "GitHub Release",
       "kind": "apk",
-      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.6.3/PriceLens-2.6.3.apk"
+      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.6.4/PriceLens-2.6.4.apk"
     },
     {
       "label": "Gitee 发行版页",
@@ -29,18 +29,20 @@
     {
       "label": "GitHub Release 页",
       "kind": "page",
-      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.6.3"
+      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.6.4"
     }
   ],
-  "sha256": "833e214e4de47d8ea17c3f3546e1b82df26b62a7d5e29bf60df0dcc9466e1378",
+  "sha256": "79176fa90f4badce48a5177ae25396260fec5c30580dbe39c0eeb11bf8f19f37",
   "sizeBytes": 2228416,
   "notes": [
+    "修复：真实京东商详页比价浮窗不弹 —— 门控不再依赖恒为假的「已知主价 ID」（现版京东 view id 全是混淆短名）",
+    "修复：预约/抢购型商品（底栏「立即预约」）也识别为商详页，浮窗会弹了",
+    "修复：主价被拆成「¥1838」+「.9」两个节点时不再报成 1838，小数位拼回",
+    "修复：清洗商品标题里的零宽空格（京东防爬填充），否则 CTA 搜索词与缓存 key 全部错位",
     "修复：浮窗「90 天最低」不再拿 90 天窗口外的老曲线冒充，改说「历史最低（90 天窗口外）」",
     "修复：浮窗脚注显示数据自己的抓取时刻，命中几天前缓存时不再说「刚刚」；问不到就明说未知",
-    "加固：浮窗「该不该弹」的守门测试改用真机实采的京东页面节点树（个人文本已脱敏）",
     "新增新手引导：首启四步（价值说明 → 无障碍 → 悬浮窗 → 可选凭据），设置页可重看",
     "新增应用内更新：更新源 Gitee，低于最低支持版本时阻断式提示，下载包做 sha256 校验",
-    "比价浮窗重做：只在商详页出窗、标题与价格同卡片配对、标注价格口径与来源时间",
     "搜索准确性：修复 oppo x8s / mate 80 一类带空格机型词被误杀导致全源无结果",
     "跨源候选改为打分选取，不再取「过滤后第一条带价」（渠道价/二手混卖/纸品会被选中）",
     "盯价链路按平台分发并如实上报跳过原因，不再硬编码京东",
