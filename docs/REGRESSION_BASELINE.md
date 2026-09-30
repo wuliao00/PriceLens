@@ -62,3 +62,82 @@
 |------|----------|-------------|-----------|------|
 | 阶段0（本基线） | 2026-08-25 | 见阶段0报告 | — | 建立基线 |
 | | | | | |
+
+## 5. 追加：2026-09-30 全量清单与两条基线修正（不改上文条目）
+
+**全量单测清单**（v2.6.4 / versionCode 18，main `0a442b0`；命令
+`gradle :app:testDebugUnitTest --offline`，在纯 ASCII 副本里跑 —— 仓库路径含中文时
+`test` 任务必报 `ClassNotFoundException`）：
+
+**36 个测试类 / 292 个用例 / 0 failures / 0 errors / 0 skipped**，ktlint 两个 check 退出码 0。
+下表由本次运行的 `test-results/testDebugUnitTest/TEST-*.xml` 逐个求和生成，不是手抄：
+
+| 测试类 | 用例 | 失败/错误 |
+|---|---|---|
+| `accessibility/InvisibleTextSanitizingTest` | 5 | 0 |
+| `accessibility/PageGatingTest` | 8 | 0 |
+| `accessibility/PriceExtractionTest` | 12 | 0 |
+| `accessibility/RealDetailShapeGateTest` | 4 | 0 |
+| `accessibility/RealDumpGatingTest` | 8 | 0 |
+| `accessibility/TitleExtractionTest` | 6 | 0 |
+| `data.cache/TLRUCacheTest` | 10 | 0 |
+| `data.remote/CrawlerOutcomeMappingTest` | 8 | 0 |
+| `data.remote/DangdangParserTest` | 4 | 0 |
+| `data.remote/GwdangCouponTest` | 4 | 0 |
+| `data.remote/JdItemPageTest` | 3 | 0 |
+| `data.remote/ManmanbuyHistoryPageTest` | 5 | 0 |
+| `data.remote/ShihuoParserTest` | 5 | 0 |
+| `data.remote/SmzdmParserTest` | 3 | 0 |
+| `data.remote/SourceUnreachableTest` | 6 | 0 |
+| `data.repository/CachedSourceTest` | 8 | 0 |
+| `data.repository/OverlayBundleDataAgeTest` | 6 | 0 |
+| `data.repository/SourceHealthTest` | 5 | 0 |
+| `data.repository/SourceUnreachableCacheTest` | 4 | 0 |
+| `domain/CandidateRankingTest` | 13 | 0 |
+| `domain/WatchPriceSourceTest` | 3 | 0 |
+| `domain/WatchTargetPolicyTest` | 36 | 0 |
+| `ui.common/EmptyStateCauseTest` | 7 | 0 |
+| `ui.components/OverlayHistoryLineHonestyTest` | 8 | 0 |
+| `ui.components/SourceChipStateTest` | 7 | 0 |
+| `ui.onboarding/OnboardingLogicTest` | 5 | 0 |
+| `ui.settings/ManmanbuyProbeCopyTest` | 3 | 0 |
+| `update/UpdateEvaluatorTest` | 21 | 0 |
+| `update/UpdateManifestTest` | 15 | 0 |
+| `util/ContentRiskTest` | 7 | 0 |
+| `util/PriceFormatterTest` | 5 | 0 |
+| `util/PriceJudgmentTest` | 7 | 0 |
+| `util/QueryRelevanceTest` | 22 | 0 |
+| `util/RateLimiterTest` | 7 | 0 |
+| `util/SearchQueryCleanerTest` | 9 | 0 |
+| `util/TimeAgoTest` | 3 | 0 |
+
+### 修正一：回归项 1、2 的"基线已通过"曾被证伪
+
+第 1 节把「无障碍浮窗自动弹出」「浮窗交互」记为 v2.4.4 已通过。2026-09-29/30 真机取证证明：
+A2 改造后浮窗门控的兜底写成 `hasBuyNow && priceHit.viaKnownId`，而**现版京东商详页
+385 个节点里 127 个带 `resource-id`、语义命名的 id 为 0 个**（全是混淆短名），
+`viaKnownId` 恒假 → 真机商详页**浮窗根本不弹**。也就是说这两项在 v2.5.x / v2.6.0~2.6.3 期间
+是"基线记着通过、实际不可用"的状态。
+
+直到 v2.6.4（`43e16d9` 去掉死条件 + `ac374be` 清洗零宽字符）才第一次拿到窗口级证据：
+焦点在 `com.jd.lib.productdetail.ProductDetailActivity` 的同时存在
+`Window{com.pricelens:712ca01 u0 com.pricelens}`，画面为「页面价 ¥1,759」气泡，
+展开后含标题、券、「来源 什么值得买 · 刚刚 · 非实时」。
+
+**教训**：真机项写"已通过"必须同时留下**可复验的判据**（一条命令 + 期望输出），
+否则一个假通过能跟着基线活好几个月。
+
+### 修正二：浮窗与无障碍取证的两条判据（此前一直用错）
+
+- 查浮窗在不在：`adb shell dumpsys window windows | grep -oE 'Window\{com\.pricelens:[0-9a-f]+ u0 com\.pricelens'`。
+  浮窗窗口名是 `com.pricelens:HASH u0 com.pricelens`，**不带 activity 名**；
+  用 `grep 'com.pricelens/'`（"包名/活动名"那种形状）会 100% 漏掉，
+  本轮就是因此把已经弹出来的浮窗反复判成"没弹"。
+- 无障碍服务运行时 `uiautomator dump` **必失败**（`IllegalStateException: UiAutomationService
+  already registered!`）；而京东商详页即使关掉无障碍也 dump 不出来（秒跳倒计时 + 直播浮窗
+  使窗口永不 idle）。要看服务实际看到的节点树，只能给它自己加 `BuildConfig.DEBUG` 门控的
+  自 dump（写 `files/a11y_dump/`，`run-as` 取回；**取证完必须删除代码与设备文件**）。
+- 覆盖安装（`adb install -r`）会重置无障碍授权；重新授权时 `settings put secure
+  enabled_accessibility_services` 必须写**全限定组件名**
+  `com.pricelens/com.pricelens.accessibility.PriceMonitorService`，
+  写 `com.pricelens/.accessibility.X` 这种短名会被系统约 10 秒后收回（真机对照实测）。
