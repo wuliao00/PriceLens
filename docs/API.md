@@ -550,6 +550,7 @@ class RateLimiter {
 | v1 | 2.3.0 | 2.0.0 | 初始版本 |
 | v1.1 | 2.5.0 | 2.0.0 | 错误模型对齐 `CrawlerResult` 四态；爬虫接口章节修正为解析器 + ApiClient 管线 + PriceRepository 编排（删除不存在的统一 `Crawler` 接口描述） |
 | v1.2 | 2.5.1 | 2.1.0 | 数据源准确性专项：京东改 m 站 `_itemInfo` 解析、查价不可用时如实置空；识货改 m 站 `type=goods` 接口；找券只认显式券文案；新增 `QueryRelevance` 相关性过滤（两端同规则）与数据源实况表 |
+| v1.3 | 2.6.4 | 2.1.0（修复在 main，未随包发布） | 浮窗门控与读数：商详门控不再依赖 `viaKnownId`（现版京东 view id 全为混淆短名，该条件恒假 → 真机商详页浮窗不弹）；词表收「立即预约」（预约型商品底栏无「立即购买」）；主价「¥1838」+「.9」分体渲染时拼回小数位；节点文本清洗零宽/双向控制字符（京东用 U+200B 填充标题，会污染 CTA 搜索词与缓存 key）。**两端差异记录**：桌面端无当当/识货爬虫；`product.originalPrice` 桌面端旧实现写成等于现价，已改为 0=未知（与 Android `ProductCandidate.originalPrice = null` 同口径，见 `desktop/_unit_check.js` 的 `productFromCandidate` 两条用例） |
 
 > 遵循语义化版本：Breaking Change 升主版本号，新增功能升次版本号，Bug 修复升修订号。
 

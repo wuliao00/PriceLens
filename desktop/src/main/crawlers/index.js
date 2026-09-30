@@ -54,6 +54,29 @@ function parseInput(text) {
  * @param {string} q
  * @returns {Promise<{type:string, product:object, deals:Array, url:string, keyword:string}>}
  */
+/**
+ * 把"跨源打分选出的候选"装配成商品头（抽成纯函数便于单测，与 Android 端
+ * domain/ProductCandidateResolver 的可测要求一致）。
+ *
+ * originalPrice 一律 0 = "未知"：爆料源只带一个价格（smzdm deal 结构 =
+ * {title, price, url, …}，没有原价字段）。旧实现写 `originalPrice: candidate.price`
+ * 等于凭空造出一个和现价相等的"原价"，也与 Android 端口径不一致
+ * （那边 ProductCandidate.originalPrice 可空，爆料/当当/识货构造处一律传 null）。
+ */
+function productFromCandidate(keyword, candidate) {
+  if (!candidate) {
+    return { title: keyword, price: 0, originalPrice: 0, image: '', url: '', mall: '' };
+  }
+  return {
+    title: candidate.title,
+    price: candidate.price,
+    originalPrice: 0,
+    image: candidate.image,
+    url: candidate.url,
+    mall: candidate.mall,
+  };
+}
+
 async function searchProducts(q) {
   const parsed = parseInput(q);
 
@@ -103,16 +126,7 @@ async function searchProducts(q) {
   const { deals } = await smzdm.searchDeals(parsed.keyword);
   const pool = deals.filter((d) => d.price && /^https?:\/\//.test(d.url));
   const candidate = bestCandidate(parsed.keyword, pool);
-  const product = candidate
-    ? {
-        title: candidate.title,
-        price: candidate.price,
-        originalPrice: candidate.price,
-        image: candidate.image,
-        url: candidate.url,
-        mall: candidate.mall,
-      }
-    : { title: parsed.keyword, price: 0, originalPrice: 0, image: '', url: '', mall: '' };
+  const product = productFromCandidate(parsed.keyword, candidate);
 
   return {
     type: parsed.type,
@@ -186,6 +200,7 @@ async function getHistoryMerged(url, creds = {}) {
 module.exports = {
   parseInput,
   searchProducts,
+  productFromCandidate,
   getBiliVideos: (kw) => bilibili.searchVideos(kw),
   getHistory: (url) => manmanbuy.getHistory(url),
   getHistoryMerged,

@@ -22,6 +22,7 @@ const { isRelevant, querySegments, matchesSegments } = require('./src/main/utils
 const ranking = require('./src/main/utils/ranking');
 const { extractCoupon } = require('./src/main/crawlers/gwdang');
 const { parseItemPage } = require('./src/main/crawlers/jd');
+const { productFromCandidate } = require('./src/main/crawlers/index');
 const linkstars = require('./src/main/crawlers/linkstars');
 
 const FIXTURES = path.join(__dirname, '..', 'app', 'src', 'test', 'resources', 'fixtures');
@@ -257,6 +258,23 @@ check('只有在售价缺失才退到券后历史低价，且只作参考', () =
 check('榜单两个字段都没有 → 本轮没有价格', () => {
   assert.strictEqual(linkstars.toPriceSample({ listPrice: 0, couponPrice: 0 }), null);
   assert.strictEqual(linkstars.toPriceSample(null), null);
+});
+
+console.log('== productFromCandidate（原价语义与 Android ProductCandidateResolver 对齐） ==');
+check('爆料候选只带一个价格时，原价必须是"未知"(0)，不得等于现价', () => {
+  const p = productFromCandidate('mate 80', {
+    title: 'HUAWEI Mate 80 12GB+256GB', price: 4099, image: '', url: 'https://a', mall: '京东',
+  });
+  assert.strictEqual(p.price, 4099);
+  assert.strictEqual(p.originalPrice, 0, '源里没有原价字段 → 造一个等于现价的"原价"就是假数据');
+  assert.notStrictEqual(p.originalPrice, p.price);
+});
+check('没有候选时给出全零占位，不抛异常', () => {
+  const p = productFromCandidate('mate 80', null);
+  assert.strictEqual(p.title, 'mate 80');
+  assert.strictEqual(p.price, 0);
+  assert.strictEqual(p.originalPrice, 0);
+  assert.strictEqual(p.url, '');
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项${process.exitCode ? '（存在失败项）' : '，全部通过'}`);
