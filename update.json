@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-30T00:12:06Z",
+  "generatedAt": "2026-09-30T08:27:50Z",
   "channel": "stable",
   "latest": {
-    "versionCode": 18,
-    "versionName": "2.6.4",
+    "versionCode": 19,
+    "versionName": "2.6.5",
     "releaseDate": "2026-09-30"
   },
   "minSupportedVersionCode": 14,
@@ -14,12 +14,12 @@
     {
       "label": "Gitee（国内直连）",
       "kind": "apk",
-      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.4.apk"
+      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.5.apk"
     },
     {
       "label": "GitHub Release",
       "kind": "apk",
-      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.6.4/PriceLens-2.6.4.apk"
+      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.6.5/PriceLens-2.6.5.apk"
     },
     {
       "label": "Gitee 发行版页",
@@ -29,27 +29,20 @@
     {
       "label": "GitHub Release 页",
       "kind": "page",
-      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.6.4"
+      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.6.5"
     }
   ],
-  "sha256": "79176fa90f4badce48a5177ae25396260fec5c30580dbe39c0eeb11bf8f19f37",
-  "sizeBytes": 2228416,
+  "sha256": "3c6e03dbce2ed083210d1645c0e8950f7c0c089c1b59254e77ae8fee20fceaad",
+  "sizeBytes": 2248896,
   "notes": [
-    "修复：真实京东商详页比价浮窗不弹 —— 门控不再依赖恒为假的「已知主价 ID」（现版京东 view id 全是混淆短名）",
-    "修复：预约/抢购型商品（底栏「立即预约」）也识别为商详页，浮窗会弹了",
-    "修复：主价被拆成「¥1838」+「.9」两个节点时不再报成 1838，小数位拼回",
-    "修复：清洗商品标题里的零宽空格（京东防爬填充），否则 CTA 搜索词与缓存 key 全部错位",
-    "修复：浮窗「90 天最低」不再拿 90 天窗口外的老曲线冒充，改说「历史最低（90 天窗口外）」",
-    "修复：浮窗脚注显示数据自己的抓取时刻，命中几天前缓存时不再说「刚刚」；问不到就明说未知",
-    "新增新手引导：首启四步（价值说明 → 无障碍 → 悬浮窗 → 可选凭据），设置页可重看",
-    "新增应用内更新：更新源 Gitee，低于最低支持版本时阻断式提示，下载包做 sha256 校验",
-    "搜索准确性：修复 oppo x8s / mate 80 一类带空格机型词被误杀导致全源无结果",
-    "跨源候选改为打分选取，不再取「过滤后第一条带价」（渠道价/二手混卖/纸品会被选中）",
-    "盯价链路按平台分发并如实上报跳过原因，不再硬编码京东",
-    "修复：社区「值不值」不再恒显示 0（列表页 SSR 就带票数），改为整行可读文案",
-    "修复：星罗「券后历史低价」不再冒充现价 —— 价格没降也会发降价通知、入手建议恒判「可入」",
-    "修复：当当候选商品主图不再恒为灰色占位图（懒加载真图在 data-original）",
-    "修复：取不到数据时不再谎报「正常」和「关键词不匹配」——没网/被反爬挡时如实说明源不可达"
+    "新增：粘贴慢慢买 Cookie 后「检测 Cookie」给出明确结论 —— 登录已失效 / 被验证码拦住 / 商品链接不匹配 / 正常，不再三种结局都只显示「无曲线」",
+    "新增：盯价自建曲线 —— 每轮真拿到的现价按天存成「今日点」（当日最后一个现价 + 当日至低），没配慢慢买 Cookie 时曲线也能自己长出来",
+    "新增：曲线下方标注出处（本机盯价自采 / 慢慢买 / 星罗 / 来源未记录 各多少天），「历史最低」用的是当日至低而不是收盘点",
+    "修复：数据库 v2→v3 迁移没登记进依赖注入的建库点 —— 真机装上 2.6.5 冷启动即崩（A migration from 2 to 3 was required but not found），已修并加静态守卫",
+    "修复：「每天 1 个采样点」的约束此前从未真的生效（自增主键让 REPLACE 永不冲突），同日多行会把曲线画乱；现补 (商品,日期) 唯一索引并在迁移里清掉既有重复",
+    "修复：曲线出处不再把本机自采的点写成「来源未记录」；脚注列出的天数一定在图上画得出来",
+    "优化：只有 1 个采样日时不再留一块 200dp 的空白折线区，改成直说「目前只有这一天（¥X），折线至少要两个日点」",
+    "说明：京东公开查价 p.3.cn 与 m 站商详页价格实测都取不到可读现价（后者服务端把数字打码成 1??9），未配置凭据时曲线不会有点 —— 取不到价的目标不写 0、也不拿上一轮的旧价冒充今天"
   ],
   "cooldownHours": 24
 }

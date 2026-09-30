@@ -141,3 +141,77 @@ A2 改造后浮窗门控的兜底写成 `hasBuyNow && priceHit.viaKnownId`，而
   enabled_accessibility_services` 必须写**全限定组件名**
   `com.pricelens/com.pricelens.accessibility.PriceMonitorService`，
   写 `com.pricelens/.accessibility.X` 这种短名会被系统约 10 秒后收回（真机对照实测）。
+
+## 6. 追加：2026-09-30 下午（盯价自建曲线 + v2→v3 迁移的真机取证）
+
+上文第 5 节的 36 类 / 292 条基线之后，`feat/self-curve`（194fc14）与随后的两处口径修正、
+一条 DI 修复合入 main，全量门禁变成 **40 类 / 322 条 / 0 失败**：
+
+| 新增测试类 | 用例 | 守的是什么 |
+|---|---|---|
+| `data.local/DayCurveTest` | 14 | 收盘点=当日最后一个观测、当日至低只降不升、0 价与 referenceOnly 不产点、**出处记写入通道** |
+| `data.repository/CurveMergeTest` | 6 | 外源点为骨架 + 自采点补缺、同日外源优先、0 价不进线、升序且每日一点 |
+| `data.repository/CurveProvenanceTest` | 6 | 脚注的出处统计：认不出的来源只能写「来源未记录」，不许猜 |
+| `data.local/DatabaseMigrationWiringTest` | 4 | **迁移有没有真被接上进运行时**（见下） |
+
+计数核对：292（第 5 节）+ 19（曲线）+ 6（CurveMerge）+ 4（迁移接线）+ 1（DayCurve 补的一条）= 322。
+
+### 这一轮最重要的一条：量具全绿，真机一开库就崩
+
+`194fc14` 的交付说明自己标了"未验证：Room 运行时 identityHash 校验、真机盯价一轮"。
+把那条补上之后立刻兑现 —— 装完 2.6.5 冷启动即 FATAL：
+
+```
+java.lang.IllegalStateException: A migration from 2 to 3 was required but not found.
+    at androidx.room.BaseRoomConnectionManager.onMigrate(RoomConnectionManager.kt:224)
+```
+
+仓库里有两处 `Room.databaseBuilder`：Hilt 用的 `di/AppModule.provideDatabase()`（运行时真建库）
+和 `AppDatabase.getInstance()`（**没有任何调用方**）。新迁移登记在了后者上。
+离线量具抓不到是结构性的：迁移 SQL 在 sqlite3 上 25 项断言全过、Room 导出的 v3 schema
+与迁移后的库逐列逐索引对过、JVM 单测 318 条全绿 —— 没有一条会走"运行时开库"这条路。
+本模块没有 Robolectric / room-testing，所以这条只能真机验，而强制更新会把这条崩溃
+原样推给每一个老用户（v2 库 + v3 包 = 必崩）。
+
+修法不是"两处都补一行"，而是消掉重复建库点：`AppDatabase.MIGRATIONS` 唯一清单 +
+DI 从它取 + 删掉死 builder + `DatabaseMigrationWiringTest` 四条静态守卫
+（迁移链从 1 起逐级连续且末端 == @Database 的 version；DI 必须引用 MIGRATIONS；
+全仓 `Room.databaseBuilder(` 只允许出现在 AppModule.kt；2→3 的 SQL 形状固定）。
+这条守卫自己也先红了两轮才钉准：Room 的 `@Database` 不是 RUNTIME retention（反射拿不到，
+只能读源码），而匹配 `Room.databaseBuilder` 会连注释一起命中（要带左括号）。
+
+### 真机迁移取证做法（可重跑）
+
+vivo V2156A，release 包不可 run-as ⇒ 先装 **v2 的 debug 包**（同一枚 debug.keystore，
+`install -r` 保数据）拿到 run-as 权限，再：
+
+1. `adb exec-out run-as com.pricelens cat databases/pricelens.db{,-wal}` 备份真实库
+   （**WAL 必须一起拉**：本机 WAL 有 515 KB 未回放，只拉 .db 会读成"空库"）；
+2. 本地用 `sqlite3` 从这份真库派生脏 v2 库：插 4 个盯价目标 + 同一日多行（含一行 0 价）；
+3. `push` 到 `/data/local/tmp` 再 `run-as … cat > databases/pricelens.db`（先删 -wal/-shm），
+   两侧 md5 复核；
+4. 装 v3 包 → 冷启动 → 再拉一次库，用 `tools_verify/read_device_db.py` 读。
+
+实测结果（修复后）：`user_version` 2→3、三列带默认值就位、
+`index_price_history_productId_date` unique=1、8 行脏数据清成 4 行且每天留的是 `MAX(id)`
+（268 / 262 / 271 / 249），老行 `source=UNRECORDED`、`dayLow=0` ⇒ 读侧回退到收盘点；
+盯价页曲线正常渲染，脚注显示「曲线出处：来源未记录 4 天」，「历史最低 ¥249 / 最高 ¥271」
+与库里逐值一致。最后把备份原样还原，再装**签名 release** 走一遍真实升级路径：无 FATAL、
+界面为空态（0 目标、未跑过检查），确认没有把测试数据留在用户库里。
+
+### 攒点率实测（不拿"功能已加"当结果）
+
+同一台机、同一轮：盯价检查状态显示 **4 个目标 · 查到价格 0 · 达标提醒 0**，
+落库 `SELF_WATCH` 行数 **0**。原因是价格通道本身不通，不是回写逻辑没跑：
+
+- `p.3.cn` 权威 DNS 返回 RFC1918 私网地址（第 5 节已记），手机 WiFi 亦不通；
+- `item.m.jd.com/product/<sku>.html` 的 `priceFloor.jdPrice` 实测 4 个 SKU 全是
+  `1??9` / `5?` / `1??0` / `2??`（除首末位外每一位都是字面 0x3F 问号），同页带
+  `priceLoginText:"登录查看价格"` ⇒ 服务端就没给数字，不是解析问题；
+- 同页 `realPriceExt.ORIGINAL.jdprice_amount` 4 个 SKU 只有 1 个有值（1041.0，且该商品是
+  "需预约购买"），字段语义无从确认 ⇒ 不写进曲线；
+- 慢慢买 Cookie 与星罗 apikey 均需用户凭证，本机 `shared_prefs` 里两者为空。
+
+⇒ 免凭证时曲线一天也不会涨。这不是 bug，但**交付时必须说清楚**，否则用户会以为
+"加了自建曲线"= "明天就有图"。要让它真的长出来，只有三条路：配凭据、
+或做"用户在浮窗上确认一次商品身份"的录入通道（产品决策，未拍板）。
