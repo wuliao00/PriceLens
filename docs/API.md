@@ -133,7 +133,7 @@ class Crawler {
 |----------|----------|------|
 | 京东 m 站搜索 `so.m.jd.com/ware/search.action?keyword=…` | 302 到 `cfe.m.jd.com/privatedomain/risk_handler/`，响应 2,704 字节风控页 | 服务端按标题搜 SKU 不可得 |
 | 什么值得买搜索页 HTML 找京东链接 | 242,362 字节、172 个站内链接，`item.jd.com` / `go.smp.smzdm.com` / `res_url=` **各 0 命中** | 列表页不承载目标链接 |
-| 什么值得买文章内页 → `go.smzdm.com/<hash>` 购买跳转 | 文章 425,341 字节里只有 1 条 `go.smzdm.com` 链接；跟随后返回 4,355 字节的**混淆 JS 页**（Dean Edwards packer + `probev3.js` 反爬探针），跳转目标由 cookie 在客户端拼装，HTTP 侧 0 个京东 URL | 需真实浏览器执行 JS 才拿得到，且每次识别要 3 跳 + 反爬风险 |
+| 什么值得买文章内页 → `go.smzdm.com/<hash>` 购买跳转 | 抽 3 篇（`/p/182840345/`、`/p/182244115/`、`post/p/a82xgx4q/`，425K/418K/159K 字节）：**直接京东 URL 命中 0 / 0 / 0**，`go.smzdm.com` 链接 1 / 2 / 0 条，三篇都挂 `probev3.js` 反爬探针；跟随后返回 4,355 字节的**混淆 JS 页**（Dean Edwards packer），跳转目标由 cookie 在客户端拼装 | 需真实浏览器执行 JS 才拿得到，且每次识别要 3 跳 + 反爬风险 |
 
 ⇒ **确定性 SKU 只能由用户提供**：粘贴商品链接（`ProductCandidateResolver.extractJdSku`），
 或在 App 内搜索后由用户选定同款。爬虫猜身份会把别的商品的历史价当成本商品的，
