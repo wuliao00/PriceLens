@@ -75,6 +75,7 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
     val loading by searchViewModel.loading.collectAsStateWithLifecycle()
     val historyAsync by searchViewModel.history.collectAsStateWithLifecycle()
     val judgment by searchViewModel.judgment.collectAsStateWithLifecycle()
+    val curveProvenance by searchViewModel.curveProvenance.collectAsStateWithLifecycle()
     val productAsync by searchViewModel.product.collectAsStateWithLifecycle()
     val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
     val targets by watchViewModel.watchTargets.collectAsStateWithLifecycle()
@@ -232,6 +233,30 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                Spacer(Modifier.height(Dims.SpacingS))
+                // 曲线出处脚注（2026-09-30 盯价自采）：这条线是本机一轮轮攒的还是慢慢买给的，
+                // 必须看得出来 —— 否则"历史最低"到底是谁的低点就没人说得清。
+                val curveDays = curveProvenance?.dayPairsText().orEmpty()
+                if (curveDays.isBlank()) {
+                    Text(
+                        stringResource(R.string.watch_curve_source_none),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        stringResource(R.string.watch_curve_source_footnote, curveDays),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (curveProvenance?.isSelfCollected == true) {
+                        Text(
+                            stringResource(R.string.watch_curve_source_self_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

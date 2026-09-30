@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.pricelens.R
 import com.pricelens.data.local.AppDatabase
+import com.pricelens.data.local.DayCurve
 import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.data.remote.JdApi
 import com.pricelens.domain.PriceSample
@@ -49,6 +50,11 @@ import kotlinx.coroutines.flow.StateFlow
  * 写成"今天的曲线点"污染历史表。现在每轮的现价是带来源的 [PriceSample]，取哪个字段、
  * 能不能通知、能不能进曲线一律收口在 [PriceSampling]；本轮只有参考值的目标计入
  * `skipped.noPrice`（并另记 [com.pricelens.domain.WatchSkipCounts.referenceOnly] 供盯价页脚注）。
+ *
+ * 2026-09-30 盯价自采进曲线：每轮的 live 价过去只是用来发通知，**从不落库**，
+ * 于是没有慢慢买 Cookie 的用户永远攒不出历史曲线。现在 [recordDailyCurvePoints]
+ * 在分类之后把"今日的曲线点"写进 `price_history`：一天一行、当日最后一个 live 样本作收盘点、
+ * 另存当日至低；资格判定依旧只在 [PriceSampling.curveWorthy]，取不到价的目标不写。
  */
 @Singleton
 class WatchCheckRunner @Inject constructor(
@@ -130,6 +136,10 @@ class WatchCheckRunner @Inject constructor(
             triggered++
         }
 
+        // 盯价轮次自采：本轮拿到 live 价的目标，把"今日的曲线点"写进历史表。
+        // 这是没有慢慢买 Cookie 时曲线唯一的来源；写失败只记日志，不参与通知与本轮统计。
+        recordDailyCurvePoints(entities, pricesByPlatform, System.currentTimeMillis())
+
         val outcome = Outcome(
             total = targets.size,
             checked = report.checked,
@@ -193,6 +203,53 @@ class WatchCheckRunner @Inject constructor(
     /** p.3.cn 的裸价表 → 带来源标记的样本表（京东在售价） */
     private fun p3cnSamples(base: Map<String, Double>?): Map<String, PriceSample> =
         base?.mapValues { (_, price) -> PriceSample(price, PriceSource.JD_P3CN) }.orEmpty()
+
+    /**
+     * 每轮把 live 样本落成「今日的曲线点」：让没有慢慢买 Cookie 时历史曲线也能自己长出来。
+     *
+     * 规则（全部收口在 [DayCurve]，这里只管取数与落库）：
+     *  - 只有过了 [PriceSampling.curveWorthy] 的样本才写：星罗「券后历史低价」这类
+     *    `referenceOnly` 来源一律不写（否则等于把 F1 那个 bug 放回来），0/负价也不写；
+     *  - 取不到价的目标**跳过**：不写 0，也不拿上一轮的旧价冒充今天；
+     *  - `productId` 直接用 [PriceTargetEntity.productId]（已是 `jd:<sku>` 形态，
+     *    与曲线读取侧 `getByProduct("jd:$sku")` 同一个 key 空间，不需要映射）；
+     *  - 写失败只记日志（不静默），既不影响降价通知，也不改动本轮统计。
+     *
+     * @return 本轮写入的目标数（仅用于日志）
+     */
+    private suspend fun recordDailyCurvePoints(
+        targets: List<PriceTargetEntity>,
+        pricesByPlatform: Map<String, Map<String, PriceSample>>,
+        nowMs: Long
+    ): Int {
+        val date = DAY_FORMAT.format(Date(nowMs))
+        var written = 0
+        var failed = 0
+        for (target in targets) {
+            if (!WatchTargetPolicy.isTrackableTarget(target.productId, target.platform)) continue
+            val sku = WatchTargetPolicy.externalIdOf(target.productId, target.platform) ?: continue
+            // 资格判定只有这一处闸门：不许在这里另写一套 if 去绕开 curveWorthy
+            val sample = PriceSampling.curveWorthy(pricesByPlatform[target.platform]?.get(sku)) ?: continue
+            val result = runCatching {
+                val existing = db.priceHistoryDao().getDayPoint(target.productId, date)
+                val point = DayCurve.upsertFor(target.productId, existing, sample, date, nowMs) ?: return@runCatching false
+                db.priceHistoryDao().upsertDay(point)
+                true
+            }
+            result.onSuccess { if (it) written++ }
+                .onFailure { e ->
+                    failed++
+                    // 用 e 级而不是 w：LogT.w 只在 DEBUG 输出，release 包里"不许静默"要求的就是这一条
+                    LogT.e(
+                        "盯价自采写曲线失败（不影响通知与本轮统计）：${target.productId} $date " +
+                            "${e.javaClass.simpleName} ${e.message}"
+                    )
+                }
+        }
+        if (written > 0) LogT.i("盯价自采：本轮为 $written 个目标写下 $date 的曲线点")
+        if (failed > 0) LogT.e("盯价自采：本轮有 $failed 个目标写曲线失败，历史曲线可能缺今天的点")
+        return written
+    }
 
     private fun entitiesOf(entities: List<PriceTargetEntity>, refs: List<WatchTargetRef>): List<PriceTargetEntity> {
         val ids = refs.map { it.productId }.toSet()
@@ -290,3 +347,6 @@ class WatchCheckRunner @Inject constructor(
 
 /** 轮次时间戳展示格式（HH:mm），供盯价页与通知复用 */
 private val TIME_FORMAT = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+/** 曲线点的日粒度 key（与 price_history.date、PriceRepository 的 today 同口径：yyyy-MM-dd + US locale） */
+private val DAY_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)

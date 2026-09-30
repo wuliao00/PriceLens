@@ -50,12 +50,40 @@ interface PriceHistoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(points: List<PriceHistoryEntity>)
 
+    /**
+     * 单条按日 upsert。
+     *
+     * v3 之前这条与 [insertAll] 一样是"假 REPLACE"：主键自增永不冲突。
+     * 现在 `(productId, date)` 上有唯一索引，冲突才真的发生 —— 一天一行、后写的覆盖先写的。
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertDay(point: PriceHistoryEntity): Long
+
+    /** 当日已存的那一点：写收盘点前要先读它，`dayLow` 必须与已存的至低比大小 */
+    @Query("SELECT * FROM price_history WHERE productId = :productId AND date = :date LIMIT 1")
+    suspend fun getDayPoint(productId: String, date: String): PriceHistoryEntity?
+
     @Query("SELECT * FROM price_history WHERE productId = :productId ORDER BY date")
     suspend fun getByProduct(productId: String): List<PriceHistoryEntity>
+
+    /**
+     * 曲线出处统计：每个来源各有几个「日」。
+     *
+     * `COUNT(DISTINCT date)` 而不是 `COUNT(*)`：既有脏库里同日多行时，
+     * 脚注说的"自采天数"必须是天数，不是行数。
+     */
+    @Query(
+        "SELECT source AS source, COUNT(DISTINCT date) AS days FROM price_history " +
+            "WHERE productId = :productId GROUP BY source"
+    )
+    suspend fun countDaysBySource(productId: String): List<SourceDayCount>
 
     @Query("DELETE FROM price_history WHERE date < :dateCutoff")
     suspend fun deleteOlderThan(dateCutoff: String)
 }
+
+/** [PriceHistoryDao.countDaysBySource] 的投影行（来源 → 该来源覆盖的天数） */
+data class SourceDayCount(val source: String, val days: Int)
 
 @Dao
 interface PriceTargetDao {

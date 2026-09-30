@@ -3,6 +3,8 @@ package com.pricelens.data.repository
 import com.pricelens.data.cache.TLRUCache
 import com.pricelens.data.local.AppDatabase
 import com.pricelens.data.local.CacheTTL
+import com.pricelens.data.local.DayCurve
+import com.pricelens.data.local.dao.SourceDayCount
 import com.pricelens.data.local.entity.PriceHistoryEntity
 import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.data.local.entity.ProductEntity
@@ -15,6 +17,8 @@ import com.pricelens.data.remote.ManmanbuyApi
 import com.pricelens.data.remote.ShihuoApi
 import com.pricelens.data.remote.SmzdmApi
 import com.pricelens.domain.PriceSampling
+import com.pricelens.domain.PriceSource
+import com.pricelens.util.LogT
 import com.pricelens.util.QueryRelevance
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -99,19 +103,27 @@ class PriceRepository @Inject constructor(
      *  3. 星罗好货：按京东 SKU 命中榜单时补点——但只有**在售价**（goods_list_money）够格；
      *     券后历史低价（real_money）是历史位置，写进曲线等于自己造历史（F1，2026-09-29），
      *     资格判定在 `domain/PriceSampling.curveWorthy`。
-     * 任一有数据即返回，并把结果写回自建曲线库。
+     * 任一有数据即返回，并把结果写回自建曲线库（只在外源真给了点的时候回写，
+     * 并带上这批点的实际出处 —— 见 [persistHistory] 的 source 参数）。
+     *
+     * 读 Room 侧一律先过 [DayCurve.collapse]：一天一个点，收盘点画线、当日至低算历史最低。
      */
     private suspend fun buildHistory(productUrl: String): ManmanbuyApi.History? {
         val sku = Regex("item(?:\\.m)?\\.jd\\.com/(?:product/)?(\\d{6,})").find(productUrl)?.groupValues?.get(1)
         val cookie = settingsRepository.manmanbuyCookie.ifBlank { null }
         val mmb = runCatching { manmanbuyApi.getHistory(productUrl, cookie) }.getOrNull()
 
+        // 自建曲线：Room 的点先按日去重再读 —— v2 的 REPLACE 是假的（自增主键永不冲突），
+        // 老库同一天有多行；同时把「当日至低」读出来，历史最低要用它，不用收盘点。
+        val selfDays = if (sku != null) DayCurve.collapse(db.priceHistoryDao().getByProduct("jd:$sku")) else emptyList()
         val points = mutableListOf<ManmanbuyApi.PricePoint>()
         mmb?.points?.let { points += it }
-        if (points.isEmpty() && sku != null) {
-            points += db.priceHistoryDao().getByProduct("jd:$sku")
-                .map { ManmanbuyApi.PricePoint(it.date, it.price) }
+        if (points.isEmpty()) {
+            points += selfDays.map { ManmanbuyApi.PricePoint(it.date, it.close) }
         }
+        // 这批点的实际出处：慢慢买给了点就标 MANMANBUY，只有星罗补点就标 LINKSTARS_LIST。
+        // 全是本机自采回流时不回写 —— 写回去只会把「来源未记录」的老行编成自采的功劳。
+        var writeSource: PriceSource? = if (mmb != null && mmb.points.isNotEmpty()) PriceSource.MANMANBUY else null
         if (sku != null && settingsRepository.linkstarsApiKey.isNotBlank()) {
             val deal = runCatching {
                 linkstarsApi.lookupSku(sku, settingsRepository.linkstarsApiKey)
@@ -123,20 +135,30 @@ class PriceRepository @Inject constructor(
             if (sample != null) {
                 val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
                     .format(java.util.Date())
-                if (points.none { it.date == today }) points += ManmanbuyApi.PricePoint(today, sample.price)
+                if (points.none { it.date == today }) {
+                    points += ManmanbuyApi.PricePoint(today, sample.price)
+                    if (writeSource == null) writeSource = PriceSource.LINKSTARS_LIST
+                }
             }
         }
         if (points.isEmpty()) return null
         val merged = points.sortedBy { it.date }
         val prices = merged.map { it.price }
+        // 「历史最低」看**当日至低**（dayLow）：自采行带着盘中真见过的低点，
+        // 收盘点不能冒充它；外部源只给一个日值，那就只有它自己。
+        val lowest = listOfNotNull(prices.min(), mmb?.lowest, selfDays.minOfOrNull { it.dayLow }).min()
         val history = ManmanbuyApi.History(
             current = prices.last(),
-            lowest = minOf(mmb?.lowest ?: prices.min(), prices.min()),
+            lowest = lowest,
             highest = maxOf(mmb?.highest ?: prices.max(), prices.max()),
             points = merged
         )
-        // 自建曲线积累：每次成功取数都落库（每天 1 点，Room 侧按日 REPLACE）
-        if (sku != null) runCatching { persistHistory("jd:$sku", history) }
+        // 自建曲线积累：只在真拿到外源点时落库（每天 1 点，靠 (productId, date) 唯一索引按日覆盖）
+        val source = writeSource
+        if (sku != null && source != null) {
+            runCatching { persistHistory("jd:$sku", history, source) }
+                .onFailure { e -> LogT.w("历史曲线回写失败（不影响展示）：${e.javaClass.simpleName} ${e.message}") }
+        }
         return history
     }
 
@@ -320,24 +342,50 @@ class PriceRepository @Inject constructor(
         db.cacheEntryDao().deleteAll()
     }
 
-    /** 价格历史采样点写入 Room（每天 1 点） */
-    suspend fun persistHistory(productId: String, history: ManmanbuyApi.History) {
+    /**
+     * 外部来源给的历史点写入 Room（每天 1 点：`(productId, date)` 唯一索引负责按日覆盖）。
+     *
+     * @param source 这批点的**实际出处**，由调用方按本轮真实拿到的东西传：
+     *  慢慢买给了点 → [PriceSource.MANMANBUY]；只有星罗补点 → [PriceSource.LINKSTARS_LIST]。
+     *  盯价轮次自采的点**不走这里**（收盘/至低语义在 [DayCurve.upsertFor]）。
+     *
+     * 同日已有本机自采行时**保留更低的 dayLow**：外部源一天只给一个数，
+     * 它没有资格把今天盘中真实见过的低点抬掉（收盘点按外源覆盖，这是既定的合并口径）。
+     */
+    suspend fun persistHistory(productId: String, history: ManmanbuyApi.History, source: PriceSource) {
         val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
             .format(java.util.Date())
-        val points = history.points.map {
-            PriceHistoryEntity(
-                productId = productId, date = it.date, price = it.price,
-                isLowest = it.price == history.lowest,
-                isHighest = it.price == history.highest
+        val now = System.currentTimeMillis()
+        val stored = DayCurve.collapse(db.priceHistoryDao().getByProduct(productId)).associateBy { it.date }
+
+        fun pointFor(date: String, price: Double): PriceHistoryEntity {
+            val day = stored[date]
+            val dayLow = minOf(price, day?.dayLow ?: price)
+            return PriceHistoryEntity(
+                id = day?.id ?: 0L,
+                productId = productId,
+                date = date,
+                price = price,
+                isLowest = dayLow <= history.lowest,
+                isHighest = price >= history.highest,
+                source = source.name,
+                dayLow = dayLow,
+                recordedAt = day?.recordedAt?.takeIf { it > 0L } ?: now
             )
-        }.filter { it.date < today } + PriceHistoryEntity(
-            productId = productId, date = today,
-            price = history.current,
-            isLowest = history.current <= history.lowest,
-            isHighest = history.current >= history.highest
-        )
+        }
+
+        val points = history.points.map { pointFor(it.date, it.price) }
+            .filter { it.date < today } + pointFor(today, history.current)
         db.priceHistoryDao().insertAll(points)
     }
+
+    /**
+     * 曲线出处统计（盯价页脚注）：这条线是本机盯价自采长出来的还是慢慢买给的、各自多少天。
+     *
+     * 读的是 `price_history` 的 `source` 列 —— 那是写入库时就定下的事实，
+     * 不做事后推断（事后也推不出来，见 [PriceSource.UNRECORDED_NAME]）。
+     */
+    suspend fun curveProvenance(productId: String): CurveProvenance = CurveProvenance.of(db.priceHistoryDao().countDaysBySource(productId))
 
     // ---------- 内部：通用 kv 源构造 / singleflight ----------
 
@@ -466,3 +514,72 @@ data class OverlayBundle(
 
 /** 多平台比价胶囊的一枚：平台名 + 报价 */
 data class PlatformQuote(val platform: String, val price: Double)
+
+/**
+ * 历史曲线的**出处统计**（盯价页脚注用；语义细节见 DayCurve 的 KDoc）。
+ *
+ * 盯价页据此说明这条线是**本机盯价自采**长出来的、还是**慢慢买**给的。
+ *
+ * 为什么单独一个结构而不塞进 `ManmanbuyApi.History`：那个类型是对外签名
+ * （[PriceRepository.getPriceHistory] / [overlayBundle] 都在用），改它会牵连编解码器。
+ */
+data class CurveProvenance(
+    val selfWatchDays: Int = 0,
+    val manmanbuyDays: Int = 0,
+    val linkstarsDays: Int = 0,
+    val unrecordedDays: Int = 0
+) {
+    /** 曲线上一共有几个采样日 */
+    val totalDays: Int get() = selfWatchDays + manmanbuyDays + linkstarsDays + unrecordedDays
+
+    /** 外部来源（慢慢买 + 星罗）给的采样日数 */
+    val externalDays: Int get() = manmanbuyDays + linkstarsDays
+
+    /**
+     * true = 这条线**完全**是盯价轮次本机自采长出来的。
+     *
+     * 只要还有外部点或出处未记录的老行就不算：有慢慢买数据却宣称"本机自采"是假话，
+     * 出处不明的老行也不能被算成自采的功劳。
+     */
+    val isSelfCollected: Boolean get() = selfWatchDays > 0 && externalDays == 0 && unrecordedDays == 0
+
+    /** 脚注要列的「出处 → 天数」：按天数降序，认不出的出处一律标成"来源未记录" */
+    fun dayPairs(): List<Pair<String, Int>> = buildList {
+        if (manmanbuyDays > 0) add(PriceSource.MANMANBUY.label to manmanbuyDays)
+        if (selfWatchDays > 0) add(PriceSource.SELF_WATCH.label to selfWatchDays)
+        if (linkstarsDays > 0) add(PriceSource.LINKSTARS_LIST.label to linkstarsDays)
+        if (unrecordedDays > 0) add(PriceSource.UNRECORDED_LABEL to unrecordedDays)
+    }.sortedByDescending { it.second }
+
+    /** 脚注正文（"本机盯价自采 4 天 · 慢慢买 12 天"）；没有点就是空串，UI 据此不渲染 */
+    fun dayPairsText(): String = dayPairs().joinToString(" · ") { "${it.first} ${it.second} 天" }
+
+    companion object {
+        /**
+         * DAO 投影 → 统计。
+         *
+         * 认不出的 source（含 [PriceSource.UNRECORDED_NAME] 与未来版本的枚举名）都进
+         * [unrecordedDays]：宁可说"不知道出处"，也不要猜一个出处给用户看。
+         */
+        fun of(counts: List<SourceDayCount>): CurveProvenance {
+            var self = 0
+            var mmb = 0
+            var linkstars = 0
+            var unknown = 0
+            for (row in counts) {
+                when (PriceSource.fromName(row.source)) {
+                    PriceSource.SELF_WATCH -> self += row.days
+                    PriceSource.MANMANBUY -> mmb += row.days
+                    PriceSource.LINKSTARS_LIST -> linkstars += row.days
+                    else -> unknown += row.days
+                }
+            }
+            return CurveProvenance(
+                selfWatchDays = self,
+                manmanbuyDays = mmb,
+                linkstarsDays = linkstars,
+                unrecordedDays = unknown
+            )
+        }
+    }
+}
