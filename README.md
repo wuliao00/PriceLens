@@ -68,12 +68,13 @@
 
 | 平台 | Gitee（国内直链，免登录） | GitHub Release | 蓝奏云 | 夸克网盘 |
 |------|--------|----------|--------|----------|
-| **Android v2.6.5** | [PriceLens-2.6.5.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.5.apk) | [Release v2.6.5](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.5)（待补传，本机到 GitHub 不通） | 待更新（当前 2.5.1） | 待更新（当前 2.5.1） |
+| **Android v2.6.5** | [PriceLens-2.6.5.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.5.apk) | [Release v2.6.5](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.5) | 待更新（当前 2.5.1） | 待更新（当前 2.5.1） |
 | **Windows** | — | [Release](https://github.com/wuliao00/PriceLens/releases) | [Setup-2.1.0.exe](https://www.ilanzou.com/s/hrqKVtJO?code=4455) | [Setup-2.1.0.exe](https://pan.quark.cn/s/33e192dc914d?pwd=WWnG) |
 
   ⚠️ **蓝奏云提取码：4455**（已含在链接参数中，打开即可下载）；夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
   网盘当前挂的还是 v2.5.1。**v2.6.5 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源，
-  已回读校验：从 raw 链接下载的文件与本机签名包 sha256 逐字节相同），包体 2,248,896 字节，
+  已回读校验：Gitee raw 与 GitHub Release 两处下载回来的文件与本机签名包 sha256 逐字节相同），
+  包体 2,248,896 字节，
   `sha256 = 3c6e03dbce2ed083210d1645c0e8950f7c0c089c1b59254e77ae8fee20fceaad`
   （这个值与 `update.json` 里的 `sha256` 必须一致；每次重新出包都三处同步：清单、
   `dist` 分支的包、GitHub Release 附件）。
