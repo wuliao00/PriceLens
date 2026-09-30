@@ -55,6 +55,8 @@ def main():
     cols = cur.execute("PRAGMA table_info(price_history)").fetchall()
     if not cols:
         raise SystemExit("没有 price_history 表")
+    names = [c[1] for c in cols]
+    v3 = "source" in names
     print("\n== price_history 列 ==")
     for cid, name, typ, notnull, dflt, pk in cols:
         print("  %-12s %-8s notnull=%d default=%s pk=%d" % (name, typ, notnull, dflt, pk))
@@ -63,6 +65,18 @@ def main():
         uniq = row[2]
         idx_cols = [r[2] for r in cur.execute("PRAGMA index_info(%s)" % repr(row[1])).fetchall()]
         print("  %-40s unique=%d cols=%s" % (row[1], uniq, idx_cols))
+    if not v3:
+        print("\n!! 这是 v2 库（没有 source/dayLow/recordedAt 三列，也没有 (productId,date) 唯一索引）")
+        print("!! 下面的按出处统计/明细只在 v3 库上有意义，跳过。")
+        rows = cur.execute("SELECT COUNT(*) FROM price_history").fetchone()[0]
+        print("price_history 行数 = %d" % rows)
+        for pid, date, price in cur.execute(
+            "SELECT productId, date, price FROM price_history ORDER BY productId, date, id LIMIT 20"
+        ).fetchall():
+            print("   %s %s %.2f" % (pid, date, price))
+        conn.close()
+        shutil.rmtree(work, ignore_errors=True)
+        return
 
     total = cur.execute("SELECT COUNT(*) FROM price_history").fetchone()[0]
     days = cur.execute("SELECT COUNT(*) FROM (SELECT productId, date FROM price_history GROUP BY 1,2)").fetchone()[0]

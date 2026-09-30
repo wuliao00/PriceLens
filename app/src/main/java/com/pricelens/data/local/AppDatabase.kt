@@ -1,7 +1,6 @@
 package com.pricelens.data.local
 
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -101,15 +100,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        @Volatile private var instance: AppDatabase? = null
-
-        fun getInstance(context: android.content.Context): AppDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(
-                context.applicationContext,
-                AppDatabase::class.java,
-                "pricelens.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
-        }
+        /**
+         * 全部显式迁移的**唯一清单**：DI 里的 `Room.databaseBuilder` 只认这一个列表。
+         *
+         * 为什么要有这条纪律：v2.6.5 的 2→3 迁移最初只登记在 `AppDatabase.getInstance()` 里，
+         * 而运行时真正建库的是 `di/AppModule.provideDatabase()`（Hilt），它只带了 1→2 ——
+         * 真机一装 2.6.5 就崩在 `A migration from 2 to 3 was required but not found`。
+         * 单测跑的是纯函数，摸不到这条线，只有真机开库才暴露。
+         * 现在两处都从本清单取，`getInstance()` 那份重复的 builder 已删除（它没有任何调用方）。
+         * 守卫见 `DatabaseMigrationWiringTest`。
+         */
+        val MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3)
     }
 }
 

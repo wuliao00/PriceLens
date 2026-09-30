@@ -28,12 +28,18 @@ object AppModule {
     @Singleton
     fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** 阶段3：显式 Migration（1→2 新增缓存条目表 + 熔断表），禁用破坏性回退 */
+    /**
+     * 阶段3：显式 Migration，禁用破坏性回退（用户收藏/盯价目标不可丢）。
+     *
+     * 迁移清单只认 [AppDatabase.MIGRATIONS] 这一处 —— 曾经这里手写 `MIGRATION_1_2` 单项，
+     * 新加的 2→3 没登记进来，真机升级直接崩在"required but not found"。
+     * 见 `DatabaseMigrationWiringTest` 的守卫。
+     */
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "pricelens.db")
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(*AppDatabase.MIGRATIONS.toTypedArray())
             .build()
 
     /** 阶段3：熔断状态持久化到 Room 小表，启动后经 withLimit 惰性恢复 */
