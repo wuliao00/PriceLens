@@ -1,0 +1,117 @@
+
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><meta property="og:title" content="历史价格查询--慢慢买比价网" /><meta property="og:image" content="https://tool.manmanbuy.com/images/logo.jpg" /><meta property="og:description" content="给你安利一个查价神器，复制链接就能看历史价格！" /><title>
+	历史价格查询--慢慢买比价网
+</title><meta charset="utf-8" /><meta name="data-spm" />
+<!-- 1. 在引入阿里云验证码JS脚本的位置之前，或者在html的head标签最前的位置添加一个script脚本，里面保存一个含有region和prefix参数的全局变量AliyunCaptchaConfig即可
+-->
+<script>
+    window.AliyunCaptchaConfig = {
+        // 必填，验证码示例所属地区，支持中国内地（cn）、新加坡（sgp）
+        region: "cn",
+        // 必填，身份标。开通阿里云验证码2.0后，您可以在控制台概览页面的实例基本信息卡片区域，获取身份标
+        prefix: "1sfr0c",
+    };
+</script>
+<!--2.集成主JS-->
+<script type="text/javascript" src="https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js">
+</script>
+<script type="text/javascript" src="//include.manmanbuy.com/wap/js/jquery.js"></script>
+<style>
+    #captcha-element {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+    #button {
+        visibility:hidden;
+    }
+</style>
+</head>
+<body>
+    <div id="captcha-element"></div>
+    <button id="button" class="login-btn">按钮</button>
+    <!--3.新建一个<script>标签，用于调用验证码初始化函数initAliyunCaptcha-->
+    <script type="text/javascript">
+        var captcha;
+        // 弹出式，除region和prefix以外的参数
+        window.initAliyunCaptcha({
+            // 场景ID。根据步骤二新建验证场景后，您可以在验证码场景列表，获取该场景的场景ID
+            SceneId: 'vollz84f',
+            // 验证码模式。popup表示要集成的验证码模式为弹出式。无需修改
+            mode: 'embed',
+            //页面上预留的渲染验证码的元素，与原代码中预留的页面元素保持一致。
+            element: '#captcha-element',
+            // 触发验证码弹窗的元素。button表示单击登录按钮后，触发captchaVerifyCallback函数。您可以根据实际使用的元素修改element的值
+            button: '#button',
+            // 业务请求(带验证码校验)回调函数，无需修改
+            captchaVerifyCallback: captchaVerifyCallback,
+            // 业务请求结果回调函数，无需修改
+            onBizResultCallback: onBizResultCallback,
+            // 绑定验证码实例函数，无需修改
+            getInstance: getInstance,
+            // 滑块验证码样式，支持自定义宽度和高度，单位为px。其中，width最小值为320 px
+            slideStyle: {
+                width: 360,
+                height: 40,
+            },
+            // 验证码语言类型，支持简体中文（cn）、繁体中文（tw）、英文（en）
+            language: 'cn',
+            // 完成验证后，是否立即发送验证请求（调用captchaVerifyCallback函数）
+            immediate: true,
+            //移动端放大倍数
+            rem:2.5
+        });
+        function getInstance(instance) {
+            captcha = instance
+        }
+        async
+        function captchaVerifyCallback(captchaVerifyParam) {
+            //alert(captchaVerifyParam);
+
+            return new Promise((resolve) => {
+                $.ajax({
+                    url: '/m/aliVal.aspx?method=slideAuth',
+                    type: 'POST',
+                    dataType: "json",
+                    data: {
+                        captchaVerifyParam: captchaVerifyParam
+                    },
+                    success: (result) => {
+                        resolve({
+                            captchaResult: result.captchaVerifyResult,
+                            bizResult: result.bizResult
+                        });
+                        console.log(result);
+                    },
+                });
+            });
+        }
+
+        function getUrlParam(name) {
+            var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)"); //构造一个含有目标参数的正则表达式对象
+            var r = window.location.search.substr(1).match(reg);  //匹配目标参数
+            if (r != null) return unescape(r[2]); return null; //返回参数值
+        }
+
+        // 业务请求验证结果回调函数
+        function onBizResultCallback(bizResult) {
+            if (bizResult === true) {
+                // 如果业务验证通过，跳转到对应页面。此处以跳转到https://www.aliyun.com/页面为例
+                //console.log('业务验证通过！');
+                location.href = "/m/disSitePro.aspx?c_from=m&url=&comeFrom=history_mobile_tool"
+            } else {
+                // 如果业务验证不通过，给出不通过提示。此处不通过提示为业务验证不通过！
+                alert('验证不通过！');
+            }
+        }
+
+
+    </script>
+</body>
+</html>
+
