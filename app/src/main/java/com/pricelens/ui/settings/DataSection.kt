@@ -19,15 +19,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
+import com.pricelens.data.remote.CookieProbe
 import com.pricelens.ui.components.SectionHeader
 import com.pricelens.ui.theme.Dims
 import com.pricelens.update.UpdateRepository
@@ -64,6 +67,11 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
     var apiKey by remember { mutableStateOf(settings.linkstarsApiKey) }
     var cookie by remember { mutableStateOf(settings.manmanbuyCookie) }
     var saved by remember { mutableStateOf(false) }
+    // 「检测 Cookie」用输入框当前值（不是已保存值）打探针，故状态与 ViewModel 都留在本区块
+    val probeVm: CookieProbeViewModel = hiltViewModel()
+    val probeUi by probeVm.ui.collectAsStateWithLifecycle()
+    // collectAsStateWithLifecycle 是委托属性，Kotlin 不能对它智能转换，故取一份局部快照
+    val probeState: CookieProbeViewModel.Ui = probeUi
 
     // 从内置登录页返回时自动回填抓取到的 Cookie（仅当存储值确实被外部更新）
     val context = LocalContext.current
@@ -118,7 +126,26 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
             }
         }
         Spacer(Modifier.height(Dims.SpacingS))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Dims.SpacingS, Alignment.End)
+        ) {
+            // 「检测 Cookie」：结论只有四种，且"没够着"绝不写成"没有"
+            Button(
+                enabled = cookie.isNotBlank() && probeUi !is CookieProbeViewModel.Ui.Running,
+                onClick = { probeVm.probe(cookie) },
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    stringResource(
+                        if (probeUi is CookieProbeViewModel.Ui.Running) {
+                            R.string.settings_mmb_probe_running
+                        } else {
+                            R.string.settings_mmb_probe_btn
+                        }
+                    )
+                )
+            }
             Button(
                 onClick = {
                     settings.setLinkstarsApiKey(apiKey)
@@ -130,6 +157,17 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
                 Text(stringResource(R.string.settings_credentials_save))
             }
         }
+        Text(
+            probeCopy(probeUi),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (probeState is CookieProbeViewModel.Ui.Result &&
+                probeState.probe is CookieProbe.Ok
+            ) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
         if (saved) {
             Text(
                 stringResource(R.string.settings_credentials_saved),
@@ -138,6 +176,30 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
             )
         }
     }
+}
+
+/** 结论 → 文案资源 id（纯映射，无 Compose 依赖，可在 JVM 单测里直接断言） */
+internal fun mmbProbeStringRes(probe: CookieProbe): Int = when (probe) {
+    is CookieProbe.Ok -> R.string.settings_mmb_probe_ok
+    is CookieProbe.Captcha -> R.string.settings_mmb_probe_captcha
+    is CookieProbe.NoData -> R.string.settings_mmb_probe_no_data
+    is CookieProbe.Unreachable -> R.string.settings_mmb_probe_unreachable
+}
+
+/** 结论 → 填充参数：Ok 填价格点数（%1$d），其余填技术原因（%1$s） */
+internal fun mmbProbeArg(probe: CookieProbe): Any = when (probe) {
+    is CookieProbe.Ok -> probe.points.size
+    is CookieProbe.Captcha -> probe.reason
+    is CookieProbe.NoData -> probe.reason
+    is CookieProbe.Unreachable -> probe.reason
+}
+
+/** 检测 Cookie 的一行结果文案：Idle 显示引导，Running 显示"检测中…" */
+@Composable
+private fun probeCopy(ui: CookieProbeViewModel.Ui): String = when (ui) {
+    is CookieProbeViewModel.Ui.Idle -> stringResource(R.string.settings_mmb_probe_idle)
+    is CookieProbeViewModel.Ui.Running -> stringResource(R.string.settings_mmb_probe_running)
+    is CookieProbeViewModel.Ui.Result -> stringResource(mmbProbeStringRes(ui.probe), mmbProbeArg(ui.probe))
 }
 
 /**

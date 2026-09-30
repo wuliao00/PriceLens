@@ -55,26 +55,48 @@ class ManmanbuyApi @Inject constructor(private val client: ApiClient) {
         return finalize(points)
     }
 
-    /** 移动端历史价页 SSR：内嵌 flot 序列 [Date.UTC(y,m,d),price] */
-    private suspend fun fetchViaCookie(productUrl: String, cookie: String): List<PricePoint> {
-        val url = "https://tool.manmanbuy.com/m/history.aspx?type=history_mobile_tool&url=" +
-            java.net.URLEncoder.encode(productUrl, "UTF-8")
-        val html = client.getHtml(
-            url,
-            referer = "https://tool.manmanbuy.com/HistoryLowest.aspx",
-            cookie = cookie
-        ) ?: return emptyList()
-        val result = mutableListOf<PricePoint>()
-        val re = Regex("\\[Date\\.UTC\\((\\d+),(\\d+),(\\d+)\\),(\\d+(?:\\.\\d+)?)\\]")
-        for (m in re.findAll(html)) {
-            val price = m.groupValues[4].toDoubleOrNull() ?: continue
-            if (price <= 0) continue
-            val date = "%04d-%02d-%02d".format(
-                m.groupValues[1].toInt(), m.groupValues[2].toInt() + 1, m.groupValues[3].toInt()
-            )
-            result += PricePoint(date, price)
+    /**
+     * 移动端历史价页 SSR 通道：内嵌 flot 序列 `[Date.UTC(y,m,d),price]`。
+     *
+     * 改造前这里走 `client.getHtml`（`CrawlerResult` → `String?` 的兼容桥），于是
+     * 「网络不可达」「Cookie 失效被 302 弹到人机验证页」「该商品真的没有历史数据」
+     * 三种结局全被压成同一个空列表，用户粘完 Cookie 只能看到"无曲线"。
+     * 现在改用 [ApiClient.getHtmlResult] 并把结局交给 [classifyHistoryPage] 分：
+     * 本方法只取价格点（[getHistory] 对外的 `History?` 语义因此不变），
+     * 要给用户交代"为什么没曲线"时走 [probeCookie]。
+     */
+    private suspend fun fetchViaCookie(productUrl: String, cookie: String): List<PricePoint> =
+        (probeHistory(productUrl, cookie) as? CookieProbe.Ok)?.points ?: emptyList()
+
+    /** 设置页「检测 Cookie」：同一个请求，但把四种结局原样交出去 */
+    suspend fun probeCookie(productUrl: String, cookie: String): CookieProbe =
+        if (cookie.isBlank()) CookieProbe.Unreachable("empty-cookie") else probeHistory(productUrl, cookie)
+
+    private suspend fun probeHistory(productUrl: String, cookie: String): CookieProbe {
+        val url = HISTORY_URL_PREFIX + java.net.URLEncoder.encode(productUrl, "UTF-8")
+        return when (val result = client.getHtmlResult(url, referer = HISTORY_REFERER, cookie = cookie)) {
+            is CrawlerResult.Success ->
+                when (val page = classifyHistoryPage(result.data)) {
+                    is HistoryPage.Points -> CookieProbe.Ok(page.points)
+                    is HistoryPage.Captcha ->
+                        CookieProbe.Captcha("aliVal/AliyunCaptcha markers, body=${result.data.length}")
+                    is HistoryPage.NoData ->
+                        CookieProbe.NoData("no Date.UTC series, body=${result.data.length}")
+                }
+            is CrawlerResult.Blocked -> CookieProbe.Unreachable("blocked: ${result.reason}")
+            is CrawlerResult.Empty -> CookieProbe.Unreachable("empty body")
+            is CrawlerResult.Network ->
+                CookieProbe.Unreachable("network: ${result.cause.javaClass.simpleName}")
         }
-        return result
+    }
+
+    companion object {
+        /** 2026-09-30 真机验证过能打开的京东商品页；探针 URL 固定，两次检测的结论才可比 */
+        const val PROBE_PRODUCT_URL: String = "https://item.jd.com/100012043978.html"
+
+        private const val HISTORY_URL_PREFIX =
+            "https://tool.manmanbuy.com/m/history.aspx?type=history_mobile_tool&url="
+        private const val HISTORY_REFERER = "https://tool.manmanbuy.com/HistoryLowest.aspx"
     }
 
     private fun finalize(points: List<PricePoint>): History {

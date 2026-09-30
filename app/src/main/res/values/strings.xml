@@ -112,6 +112,13 @@
     <string name="settings_mmb_login_save">保存 Cookie</string>
     <string name="settings_mmb_login_saved">Cookie 已保存 · 仅存本机</string>
     <string name="settings_mmb_login_empty">未抓到 Cookie，请先在页面内完成登录</string>
+    <string name="settings_mmb_probe_btn">检测 Cookie</string>
+    <string name="settings_mmb_probe_running">检测中…</string>
+    <string name="settings_mmb_probe_idle">点「检测 Cookie」验证粘贴的 Cookie 能否换到历史数据（探针：京东 100012043978）</string>
+    <string name="settings_mmb_probe_ok">Cookie 有效：探针商品拿到 %1$d 个历史价格点</string>
+    <string name="settings_mmb_probe_captcha">Cookie 没换到数据：被弹到慢慢买的人机验证页（登录态无效或已过期）· %1$s</string>
+    <string name="settings_mmb_probe_no_data">连上了慢慢买、Cookie 也在，但探针商品自己没有历史价格数据，据此还不能判定 Cookie · %1$s</string>
+    <string name="settings_mmb_probe_unreachable">没能连上慢慢买，这条结论不作数（不等于「该商品没有历史数据」）· %1$s</string>
 
     <!-- 找券页 -->
     <string name="coupon_empty_title">未发现优惠券</string>
