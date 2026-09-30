@@ -77,7 +77,13 @@ enum class DetectionBasis {
 /** 标题提取结果 */
 data class TitleHit(
     val text: String,
-    /** 一级：命中商详已知标题 resource-id 白名单 */
+    /**
+     * 是否命中已知标题 resource-id。
+     * 2026-09-30 真机取证：现版京东商详页 385 个节点里 127 个带 id，**语义命名的 id 为 0**
+     * （全是混淆短名），所以本字段在京东上恒为 false；且**全仓无任何消费方**，
+     * 保留只为旧版 App / 其他宿主仍能表达置信。不要把它当必要条件用
+     * （`PriceHit.viaKnownId` 曾这么用，直接造成真机商详页浮窗不弹，见 v1.3）。
+     */
     val viaKnownId: Boolean,
     /** 文本取自 contentDescription 而非 text */
     val viaContentDescription: Boolean
@@ -179,7 +185,9 @@ private fun nodeTitleCandidates(node: NodeSnapshot): List<Pair<String, Boolean>>
 fun extractTitle(root: NodeSnapshot, platform: ShopPlatform): TitleHit? {
     val nodes = bfs(root)
 
-    // 一级：已知标题 resource-id（容器自身无文本时允许直接子节点供文本）
+    // 一级：已知标题 resource-id（容器自身无文本时允许直接子节点供文本）。
+    // 注意：现版京东的 id 全是混淆短名，这一级在京东上不会命中（真机取证见 TitleHit.viaKnownId
+    // 的注释）；它仍对旧版与其他宿主有效，不要误读成"标题主要来自这里"。
     for (n in nodes) {
         if (!PriceNodeMatcher.isKnownTitleId(n.resourceName, platform)) continue
         for ((text, fromCd) in nodeTitleCandidates(n)) {

@@ -113,6 +113,32 @@ class Crawler {
 | B站 搜索 | wbi 签名 + 未登录态常被 `code=-412` 拒 | **读业务码**：`code != 0` 视为反爬失败（与桌面端 `crawlers/bilibili.js:114-116` 同规则），不再与"零结果"混为一谈 |
 | 全部搜索源 | 结果常混入配件/图书/其它品牌/热榜 | `QueryRelevance` 统一过滤（两端同规则） |
 
+#### 浮窗为什么常常只能到 TITLE_ONLY（2026-09-29/30 真机取证，含三条否证）
+
+浮窗的确定性商品身份来自 `extractItemId` —— 它在节点文本里找 `item.jd.com/<sku>` 或
+`?sku=<digits>`。**真机京东商详页的树里没有这种文本**，所以 `itemId=null`，浮窗走降级态
+（UI 明示「仅识别到标题 · 不显示历史价/多平台比价」）。这是**如实降级**，不是漏显示。
+
+同一棵真机树（服务自 dump，取证后已删除）：385 个节点、最大深度 30、127 个带 `resource-id`，
+其中**语义命名的 id 为 0 个**（全是 `dme`/`c_s`/`by2` 这类混淆短名）。所以：
+
+- `PriceNodeMatcher.isKnownPriceId` / `JD_PRICE_ID_NAMES` 在现版京东恒不命中 →
+  `PriceHit.viaKnownId` 只是加分项（曾当必要条件，直接导致浮窗不弹，见 v1.3）；
+- `extractTitle` 的"一级：已知标题 resource-id（高置信）"同样恒不命中 →
+  标题实际全部来自三级"最长文本"启发式；`TitleHit.viaKnownId` 无任何消费方，仅冗余字段。
+
+曾考虑用可达的公开源把"标题 → 确定性 SKU"补上，**三条路全部实测否证**：
+
+| 候选路径 | 实测结果 | 结论 |
+|----------|----------|------|
+| 京东 m 站搜索 `so.m.jd.com/ware/search.action?keyword=…` | 302 到 `cfe.m.jd.com/privatedomain/risk_handler/`，响应 2,704 字节风控页 | 服务端按标题搜 SKU 不可得 |
+| 什么值得买搜索页 HTML 找京东链接 | 242,362 字节、172 个站内链接，`item.jd.com` / `go.smp.smzdm.com` / `res_url=` **各 0 命中** | 列表页不承载目标链接 |
+| 什么值得买文章内页 → `go.smzdm.com/<hash>` 购买跳转 | 文章 425,341 字节里只有 1 条 `go.smzdm.com` 链接；跟随后返回 4,355 字节的**混淆 JS 页**（Dean Edwards packer + `probev3.js` 反爬探针），跳转目标由 cookie 在客户端拼装，HTTP 侧 0 个京东 URL | 需真实浏览器执行 JS 才拿得到，且每次识别要 3 跳 + 反爬风险 |
+
+⇒ **确定性 SKU 只能由用户提供**：粘贴商品链接（`ProductCandidateResolver.extractJdSku`），
+或在 App 内搜索后由用户选定同款。爬虫猜身份会把别的商品的历史价当成本商品的，
+正是本项目要消灭的那类错误（见"宁可如实降级"原则与防错配硬规则）。
+
 #### 关键词搜索通道的三态契约（F4，2026-09-29）
 
 **"没够着数据源"与"够着了但确实没有"是两件事，全链路不得压成同一个值。**
