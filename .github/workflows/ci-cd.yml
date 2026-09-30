@@ -20,7 +20,13 @@ jobs:
     name: Android Build & Test
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    
+    env:
+      # 只暴露"密钥在不在"这个布尔值，不暴露密钥本身（密钥仍只注入到需要它的那一步）。
+      # Actions 的**步骤级 if 里用不了 secrets 上下文**（会报 Unrecognized named-value: 'secrets'，
+      # 整条流水线 0 秒失败），所以存在性判定必须经 job 级 env 中转 —— 与 update-manifest job
+      # 处理 GITEE_MIRROR_TOKEN 的同一套路。
+      HAS_RELEASE_KEYS: ${{ secrets.PRICLENS_STORE_FILE != '' }}
+
     steps:
       - name: Checkout 代码
         uses: actions/checkout@v4
@@ -68,7 +74,7 @@ jobs:
           retention-days: 7
       
       - name: 构建 Release APK (仅 Release 事件)
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && env.HAS_RELEASE_KEYS == 'true'
         env:
           PRICLENS_STORE_FILE: ${{ secrets.PRICLENS_STORE_FILE }}
           PRICLENS_STORE_PASSWORD: ${{ secrets.PRICLENS_STORE_PASSWORD }}
@@ -81,8 +87,15 @@ jobs:
           echo "PRICLENS_KEY_PASSWORD=$PRICLENS_KEY_PASSWORD" >> local.properties
           ./gradlew :app:assembleRelease --no-daemon
       
+      - name: 说明：Release APK 由本机出包（CI 无签名密钥）
+        if: github.event_name == 'release' && env.HAS_RELEASE_KEYS != 'true'
+        run: |
+          echo "::notice::仓库未配置 PRICLENS_STORE_FILE 等签名密钥，CI 不产出 release 包。"
+          echo "正式包由本机 assembleRelease + debug.keystore 签名后放到 dist 孤儿分支与 GitHub Release；"
+          echo "流程见 docs/DEVELOPMENT.md 的「本机构建环境」与 5.1/5.2 节。"
+
       - name: 上传 Release APK (仅 Release 事件)
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && env.HAS_RELEASE_KEYS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
