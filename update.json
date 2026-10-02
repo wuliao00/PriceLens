@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-30T08:27:50Z",
+  "generatedAt": "2026-10-01T15:05:18Z",
   "channel": "stable",
   "latest": {
-    "versionCode": 19,
-    "versionName": "2.6.5",
-    "releaseDate": "2026-09-30"
+    "versionCode": 20,
+    "versionName": "2.7.0",
+    "releaseDate": "2026-10-01"
   },
   "minSupportedVersionCode": 14,
   "forceBelow": 13,
@@ -14,12 +14,12 @@
     {
       "label": "Gitee（国内直连）",
       "kind": "apk",
-      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.6.5.apk"
+      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.7.0.apk"
     },
     {
       "label": "GitHub Release",
       "kind": "apk",
-      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.6.5/PriceLens-2.6.5.apk"
+      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.7.0/PriceLens-2.7.0.apk"
     },
     {
       "label": "Gitee 发行版页",
@@ -29,20 +29,20 @@
     {
       "label": "GitHub Release 页",
       "kind": "page",
-      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.6.5"
+      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.7.0"
     }
   ],
-  "sha256": "3c6e03dbce2ed083210d1645c0e8950f7c0c089c1b59254e77ae8fee20fceaad",
-  "sizeBytes": 2248896,
+  "sha256": "13f50396131933cd81c8277c571678998495f38b82af74fbc313a2c2440a5d34",
+  "sizeBytes": 2263441,
   "notes": [
-    "新增：粘贴慢慢买 Cookie 后「检测 Cookie」给出明确结论 —— 登录已失效 / 被验证码拦住 / 商品链接不匹配 / 正常，不再三种结局都只显示「无曲线」",
-    "新增：盯价自建曲线 —— 每轮真拿到的现价按天存成「今日点」（当日最后一个现价 + 当日至低），没配慢慢买 Cookie 时曲线也能自己长出来",
-    "新增：曲线下方标注出处（本机盯价自采 / 慢慢买 / 星罗 / 来源未记录 各多少天），「历史最低」用的是当日至低而不是收盘点",
-    "修复：数据库 v2→v3 迁移没登记进依赖注入的建库点 —— 真机装上 2.6.5 冷启动即崩（A migration from 2 to 3 was required but not found），已修并加静态守卫",
-    "修复：「每天 1 个采样点」的约束此前从未真的生效（自增主键让 REPLACE 永不冲突），同日多行会把曲线画乱；现补 (商品,日期) 唯一索引并在迁移里清掉既有重复",
-    "修复：曲线出处不再把本机自采的点写成「来源未记录」；脚注列出的天数一定在图上画得出来",
-    "优化：只有 1 个采样日时不再留一块 200dp 的空白折线区，改成直说「目前只有这一天（¥X），折线至少要两个日点」",
-    "说明：京东公开查价 p.3.cn 与 m 站商详页价格实测都取不到可读现价（后者服务端把数字打码成 1??9），未配置凭据时曲线不会有点 —— 取不到价的目标不写 0、也不拿上一轮的旧价冒充今天"
+    "⚠️ 签名密钥更换：从 ≤2.6.5 升级需卸载重装一次，本机数据会清空",
+    "新增：免凭证盯价曲线 —— 浏览京东/淘宝/拼多多商详页时，浮窗底部点一次「就是这个商品」确认身份，之后每次无障碍读到的页面价都记成该商品的今日点（收盘语义 + 当日至低，出处「本机盯价自采」），没配慢慢买 Cookie 曲线也能自己长出来",
+    "新增：盯价页「浮窗确认的本机身份」管理区 —— 取消确认会连带删掉它的日点、不留孤儿数据；券后价/到手价不写日点，防「历史最低」假摔",
+    "修复：盯价前台服务不再每次表变动都新起一条 30 分钟循环（此前 N 个目标 = N 条并发轮次）",
+    "修复：singleflight 落败方不再把「被反爬/断网」吞成合法的空白（失败塌缩成假空态的老旁路）",
+    "修复：旋转/分屏后浮窗不再被拖出屏幕找不回；浮窗 ComposeView 不再以无障碍 Service 作 Context（改用 ContextThemeWrapper）；盯价页补上滚动容器，小屏/大字号内容不再画到屏幕外",
+    "修复：数据库 v3→v4 迁移（新增 watch_identity 表）受迁移守卫覆盖 —— 守卫升级为遍历全部已登记迁移、用只记录不执行的假库跑 migrate() 校验语句形态",
+    "发布：正式包改用 release keystore 签名（此前对外发布实为 debug 密钥），CI 与本机出包都走正式密钥；build-apk.ps1 版本号改为只读（唯一真源 app/build.gradle.kts）"
   ],
   "cooldownHours": 24
 }

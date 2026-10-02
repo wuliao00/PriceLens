@@ -1,6 +1,7 @@
 package com.pricelens.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.content.res.Configuration
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.pricelens.R
@@ -35,6 +36,15 @@ class PriceMonitorService : AccessibilityService() {
         super.onServiceConnected()
         // 服务就绪后开始订阅价格事件并管理浮窗
         OverlayManager.start(this, serviceScope)
+    }
+
+    /**
+     * B2：旋转 / 分屏 / 折叠屏展开后，浮窗的拖动边界必须作废。
+     * 旧实现只在进程内首算一次，横屏后仍按竖屏尺寸 clamp，胶囊会被拖到屏幕外。
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        OverlayManager.onConfigurationChanged()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {

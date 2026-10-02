@@ -120,3 +120,36 @@ data class DomainPenaltyEntity(
     // 解封时间戳（epoch millis）
     val untilMs: Long
 )
+
+/**
+ * §免凭证曲线：浮窗上被用户按下「就是这个商品」确认过的商品身份（一行 = 一件商品）。
+ * productId 走 `ovl:<摘要>` 命名空间，与 `jd:<sku>` 分家；它的日点照样进
+ * [PriceHistoryEntity]（(productId,date) 唯一索引天然按 productId 分空间）。
+ *
+ * 为什么不塞进 price_targets：无 SKU 的确认身份没有查价通道，
+ * `WatchTargetPolicy.channelOf`→NONE → 会被 `PriceWatchViewModel.untrackableTargets`
+ * 当`历史遗留的坏目标`报警，还白白拉起 30 分钟轮次（设计附录 B 反例一）。
+ */
+
+@Entity(
+    tableName = "watch_identity",
+    indices = [Index("platform"), Index("normalizedTitle")]
+)
+data class WatchIdentityEntity(
+    // ovl:<base36(platform|规范化标题)>，键一经生成不可变（标题后续变化不改键）
+    @PrimaryKey val productId: String,
+    // 商城平台小写名（jd/taobao/pdd），与 ShopPlatform.name.lowercase() 对齐
+    val platform: String,
+    // 用户当场看到并确认的那串标题（浮窗①行的原文）
+    val title: String,
+    val normalizedTitle: String,
+    val confirmedAt: Long,
+    // 最近一次匹配上这行身份的 detection 时刻；0 = 确认后还没再遇到过
+    @ColumnInfo(defaultValue = "0")
+    val lastSeenAt: Long = 0,
+    @ColumnInfo(defaultValue = "0.0")
+    val lastPrice: Double = 0.0,
+    // PriceBasis.name：最近读到的价格口径，UI 据此解释"为什么今天没记上"
+    @ColumnInfo(defaultValue = "'PAGE'")
+    val lastBasis: String = "PAGE"
+)

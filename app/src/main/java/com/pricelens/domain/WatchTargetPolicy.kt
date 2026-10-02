@@ -426,7 +426,7 @@ object WatchTargetPolicy {
     }
 
     /** 去掉空白/标点/【自营】等装饰，只留字母数字再比对 */
-    private fun normalizeTitle(title: String): String = title.lowercase().filter { it.isLetterOrDigit() }
+    internal fun normalizeTitle(title: String): String = title.lowercase().filter { it.isLetterOrDigit() }
 
     /** 字符二元组 Dice 系数：中文标题没有空格，按词切分会退化成整串不等 */
     private fun bigramSimilarity(a: String, b: String): Double {

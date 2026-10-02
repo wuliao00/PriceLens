@@ -1,138 +1,76 @@
 ﻿# ============================================================
-#  PriceLens-Android 本地构建脚本
-#  作者：wuliao00（由 Hermes 编排生成）
-#  用途：在本机从 GitHub 拉源码 → 升级版本号 → 编译 release → 签名 → 输出 APK 到桌面
+#  PriceLens-Android 本地出包脚本（v2.7.0 起：正式 release 签名，不再用 debug keystore）
 #
-#  使用方法：
-#    1. 双击运行（PowerShell 5.1 兼容）
-#    2. 或在终端：powershell -ExecutionPolicy Bypass -File build-apk.ps1
+#  为什么弃用 debug 签名：debug.keystore 是公开常识口令，拿它签的"正式包"等于
+#  任何人若能改 GitHub Release 资产就能给所有设备推合法升级；而且换正式密钥后，
+#  老 debug 签名包的用户无法覆盖安装 —— 发布说明必须写清"卸载重装一次"。
 #
-#  环境要求：
-#    - JDK 17 或 21（优先用已导出的 JAVA_HOME；否则查 C:\Program Files\Java\jdk-21*）
-#    - Android SDK（本机：E:\dev\android-sdk，含 build-tools 34/35）
-#    - 直装 Gradle（本机：E:\dev\gradle-home\wrapper\dists\gradle-8.11-bin\*\gradle-8.11\bin\gradle.bat，
-#      不要用 ./gradlew——本机走代理下载 wrapper 会 PKIX 失败）
-#    - Debug keystore（默认查找 %USERPROFILE%\.android\debug.keystore）
+#  前置条件：
+#    1. 本机 local.properties（被 .gitignore 排除）配好四项：
+#       PRICLENS_STORE_FILE / PRICLENS_STORE_PASSWORD / PRICLENS_KEY_ALIAS / PRICLENS_KEY_PASSWORD
+#    2. 版本号唯一真源 = app/build.gradle.kts（先提交版本变更，再跑本脚本；本脚本不改源码）
 #
-#  国内网络注意：仓库里的 settings.gradle.kts 只写 google()/mavenCentral()（正式仓库，
-#  CI 也用它），而 maven.google.com 在墙内经常连不通。本脚本从 GitHub 克隆后会在
-#  $WORK_DIR 里构建，若依赖解析报 "Could not resolve" / 连接超时，请按
-#  docs/DEVELOPMENT.md「本机构建环境」用 Aliyun 镜像的副本，或临时导出
-#  GRADLE_OPTS 指向你自己的镜像 init script——不要把镜像写进仓库配置。
-#
-#  退出码：
-#    0 = 成功；非 0 = 失败（请查看最后 30 行日志）
+#  用法：powershell -ExecutionPolicy Bypass -File build-apk.ps1
+#  退出码：0 = 成功；非 0 = 失败
 # ============================================================
-
 $ErrorActionPreference = 'Stop'
+$WORK_DIR   = 'C:\PriceLens-Android-build'
+$OUTPUT_DIR = 'C:\Users\Administrator\Desktop'
+$REPO       = 'https://github.com/wuliao00/PriceLens.git'
 
-# ----- 路径配置（可按本机实际改）-----
-$GH_REPO         = 'https://github.com/wuliao00/PriceLens.git'
-$WORK_DIR        = 'C:\PriceLens-Android-build'   # 纯英文路径（中文路径会让 AGP 报错）
-$OUTPUT_DIR      = 'C:\Users\Administrator\Desktop'
-$GRADLE_BIN      = 'E:\dev\gradle-home\wrapper\dists\gradle-8.11-bin\2eu93z43d2ii82czw0cxl9we6\gradle-8.11\bin\gradle.bat'
-$SDK_BASE        = 'E:\dev\android-sdk'
-$DEBUG_KEYSTORE  = $env:USERPROFILE + '\.android\debug.keystore'
-$DEBUG_KEY_ALIAS = 'androiddebugkey'
-$DEBUG_KEY_PASS  = 'android'
-
-# ----- 升级版本号（每次发布前改这两行；必须与 app/build.gradle.kts 的目标一致）-----
-$NEW_VERSION_NAME = '2.6.0'
-$NEW_VERSION_CODE = 14
-
-# ============================================================
-#  以下逻辑通常无需改动
-# ============================================================
-
+# ----- 1. 环境与签名前置检查 -----
 function Find-Jdk {
-    # 1) 已导出的 JAVA_HOME 且确实是 JDK 17/21 → 直接采用
-    if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\javac.exe'))) {
-        return (Get-Item $env:JAVA_HOME)
-    }
-    # 2) 常见安装位置
+    if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\javac.exe'))) { return (Get-Item $env:JAVA_HOME) }
     Get-ChildItem 'C:\Program Files\Java' -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '^jdk-(17|21)' } |
-        Sort-Object Name -Descending |
-        Select-Object -First 1
+        Where-Object { $_.Name -match '^jdk-(17|21)' } | Sort-Object Name -Descending | Select-Object -First 1
 }
-
 function Write-Step($msg) { Write-Host "`n===> $msg" -ForegroundColor Cyan }
 
-# 1. 找 JDK
-Write-Step "查找 JDK"
+Write-Step '检查 JDK'
 $jdk = Find-Jdk
-if (-not $jdk) { Write-Error "未找到 JDK（需 jdk-17 或 jdk-21）"; exit 1 }
+if (-not $jdk) { Write-Error '未找到 JDK（需 17/21）'; exit 1 }
 $env:JAVA_HOME = $jdk.FullName
-Write-Host "JAVA_HOME = $env:JAVA_HOME"
+Write-Host 'JAVA_HOME = ' $env:JAVA_HOME
 
-# 2. 设置 SDK
-if (-not (Test-Path $SDK_BASE)) {
-    Write-Error "Android SDK 不存在：$SDK_BASE"; exit 1
+Write-Step '检查签名配置（缺任何一项都拒绝出包——绝不用 debug 签名冒充正式包）'
+if (-not (Test-Path 'local.properties')) { Write-Error '仓库根缺 local.properties；按 docs/DEVELOPMENT.md 配置 PRICLENS_STORE_FILE 四项'; exit 1 }
+$props = @{}
+Get-Content 'local.properties' | ForEach-Object { if ($_ -match '^([A-Z_]+)=(.*)$') { $props[$Matches[1]] = $Matches[2] } }
+foreach ($k in 'PRICLENS_STORE_FILE','PRICLENS_STORE_PASSWORD','PRICLENS_KEY_ALIAS','PRICLENS_KEY_PASSWORD') {
+    if (-not $props[$k]) { Write-Error "local.properties 缺 $k"; exit 1 }
 }
-$env:ANDROID_HOME = $SDK_BASE
-Remove-Item Env:ANDROID_SDK_ROOT -ErrorAction SilentlyContinue
-Write-Host "ANDROID_HOME = $env:ANDROID_HOME"
+if (-not (Test-Path $props['PRICLENS_STORE_FILE'])) { Write-Error "keystore 不存在: $($props['PRICLENS_STORE_FILE'])"; exit 1 }
 
-# 3. 检查 Gradle
-if (-not (Test-Path $GRADLE_BIN)) { Write-Error "Gradle 不存在：$GRADLE_BIN"; exit 1 }
+Write-Step '读版本号（唯一真源 app/build.gradle.kts，本脚本不改源码）'
+$gk = Get-Content (Join-Path $PSScriptRoot 'app\build.gradle.kts') -Raw
+$NEW_VERSION_NAME = [regex]::Match($gk, 'versionName\s*=\s*"([^"]+)"').Groups[1].Value
+$NEW_VERSION_CODE = [regex]::Match($gk, 'versionCode\s*=\s*(\d+)').Groups[1].Value
+if (-not $NEW_VERSION_NAME -or -not $NEW_VERSION_CODE) { Write-Error '版本号解析失败——build.gradle.kts 写法变了要同步改本脚本'; exit 1 }
+Write-Host "versionName=$NEW_VERSION_NAME versionCode=$NEW_VERSION_CODE"
 
-# 4. 检查 debug keystore
-if (-not (Test-Path $DEBUG_KEYSTORE)) { Write-Error "debug.keystore 不存在：$DEBUG_KEYSTORE"; exit 1 }
+# 直接在本仓库目录构建（路径纯英文，且保证出的是工作区最新代码；
+# 先提交并推送版本号变更，再跑本脚本）。若克隆全新环境，先手动 git clone 再进目录运行。
+Write-Step '在本仓库构建'
 
-# 5. 克隆或更新代码
-Write-Step "拉取最新代码到 $WORK_DIR"
-if (Test-Path $WORK_DIR) {
-    Set-Location $WORK_DIR
-    git pull --rebase origin main
-} else {
-    git clone $GH_REPO $WORK_DIR
-    Set-Location $WORK_DIR
-}
-git config user.email 'wuliao00@example.com'
-git config user.name  'wuliao00'
+Write-Step 'assembleRelease（gradle 依 local.properties 自动正式签名；首次约 6 分钟）'
+.\gradlew.bat :app:assembleRelease --console=plain 2>&1 | Tee-Object -FilePath "$PSScriptRoot\build-apk.log" | Select-Object -Last 6
+if ($LASTEXITCODE -ne 0) { Write-Error '构建失败，看 build-apk.log'; exit $LASTEXITCODE }
 
-# 6. 升级版本号
-Write-Step "升级版本号到 $NEW_VERSION_NAME (code $NEW_VERSION_CODE)"
-$gradlePath = Join-Path $WORK_DIR 'app\build.gradle.kts'
-$content = Get-Content $gradlePath -Raw
-$content = $content -replace 'versionCode\s*=\s*\d+',    "versionCode = $NEW_VERSION_CODE"
-$content = $content -replace 'versionName\s*=\s*"[^"]*"', "versionName = `"$NEW_VERSION_NAME`""
-[System.IO.File]::WriteAllText($gradlePath, $content, [System.Text.UTF8Encoding]::new($false))
+Write-Step '分发产物到桌面'
+if (-not $NEW_VERSION_NAME) { Write-Error '版本号变量丢失'; exit 1 }
+$signed = Join-Path $PSScriptRoot 'app\build\outputs\apk\release\app-release.apk'
+if (-not (Test-Path $signed)) { Write-Error "未找到已签名 APK：$signed（gradle 未配签名时产出的是 unsigned，脚本已在前置检查拦截）"; exit 1 }
+$outName = "PriceLens-$NEW_VERSION_NAME.apk"
+Remove-Item (Join-Path $OUTPUT_DIR $outName) -Force -ErrorAction SilentlyContinue
+Copy-Item $signed (Join-Path $OUTPUT_DIR $outName) -Force
+Remove-Item "$outName.idsig" -Force -ErrorAction SilentlyContinue
 
-# 7. 编译 release（输出中文路径会崩，所以工作区必须在纯英文路径）
-Write-Step "Gradle assembleRelease（首次约 6 分钟，增量约 1 分钟）"
-& $GRADLE_BIN assembleRelease 2>&1 | Tee-Object -FilePath "$WORK_DIR\build.log" | Select-Object -Last 5
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Gradle 构建失败，请查看 $WORK_DIR\build.log 的最后 50 行"
-    Get-Content "$WORK_DIR\build.log" -Tail 50
-    exit $LASTEXITCODE
-}
+Write-Step '验证签名与摘要（sha256 回填 update.json / README）'
+$bt = Get-ChildItem "$env:ANDROID_HOME\build-tools\*\apksigner.bat" -ErrorAction SilentlyContinue | Sort-Object { $_.Directory.Name } -Descending | Select-Object -First 1
+if (-not $bt) { $bt = Get-ChildItem 'C:\Android\Sdk\build-tools\*\apksigner.bat' | Sort-Object { $_.Directory.Name } -Descending | Select-Object -First 1 }
+if ($bt) { & $bt.FullName verify --print-certs (Join-Path $OUTPUT_DIR $outName) | Select-Object -First 4 }
+Get-FileHash (Join-Path $OUTPUT_DIR $outName) -Algorithm SHA256 | Format-List Hash, Path
+Get-Item (Join-Path $OUTPUT_DIR $outName) | Select-Object Name, Length, LastWriteTime | Format-List
 
-# 8. 签名
-Write-Step "用 debug.keystore 签名 APK"
-$unsigned = "$WORK_DIR\app\build\outputs\apk\release\app-release-unsigned.apk"
-if (-not (Test-Path $unsigned)) { Write-Error "未找到未签名 APK：$unsigned"; exit 1 }
-$apksigner = Get-ChildItem "$SDK_BASE\build-tools\*\apksigner.bat" | Sort-Object { $_.Directory.Name } -Descending | Select-Object -First 1
-if (-not $apksigner) { Write-Error "未找到 apksigner.bat"; exit 1 }
-$outName   = "PriceLens-$NEW_VERSION_NAME.apk"
-$outPath   = Join-Path $OUTPUT_DIR $outName
-# 替换同名旧版本
-Remove-Item (Join-Path $OUTPUT_DIR "PriceLens-$NEW_VERSION_NAME.apk") -Force -ErrorAction SilentlyContinue
-& $apksigner.FullName sign `
-    --ks $DEBUG_KEYSTORE `
-    --ks-pass "pass:$DEBUG_KEY_PASS" `
-    --key-pass "pass:$DEBUG_KEY_PASS" `
-    --ks-key-alias $DEBUG_KEY_ALIAS `
-    --out $outPath `
-    $unsigned
-if ($LASTEXITCODE -ne 0) { Write-Error "签名失败"; exit $LASTEXITCODE }
-# 清理可能的 .idsig 副产物
-Remove-Item "$outPath.idsig" -Force -ErrorAction SilentlyContinue
-
-# 9. 验证
-Write-Step "验证签名"
-& $apksigner.FullName verify --print-certs $outPath | Select-Object -First 2
-
-Write-Step "✅ 完成"
-Write-Host "APK 已输出到：$outPath" -ForegroundColor Green
-Get-Item $outPath | Select-Object Name, Length, LastWriteTime | Format-List
+Write-Step '完成'
+Write-Host "APK：$OUTPUT_DIR\$outName" -ForegroundColor Green

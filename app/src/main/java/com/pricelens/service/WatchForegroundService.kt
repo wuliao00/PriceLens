@@ -19,6 +19,7 @@ import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -44,28 +45,37 @@ class WatchForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
+    /** 30 分钟检查循环的唯一句柄（A4：服务被反复 start 也只跑一条循环） */
+    private var loopJob: Job? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForegroundNotification("—", 0)
-        serviceScope.launch {
-            while (isActive) {
-                val outcome = runCatching { runner.runOnce(this@WatchForegroundService) }
-                    .onFailure { com.pricelens.util.LogT.w("盯价循环失败：${it.message}") }
-                    .getOrNull()
-                if (outcome != null && outcome.total == 0) {
-                    // 目标全部移除：自我停止（控制器也会停，双保险）
-                    stopSelf()
-                    return@launch
+        // A4：控制器侧每次 observeActive() emission、以及 START_STICKY 重启都会走这里。
+        // 无条件 launch 会攒出「与目标数成正比」的并行循环：同一轮重复问不同源、
+        // 重复降价通知、重复写日点，还会并发读写 WatchCheckRunner 的轮次状态。
+        if (loopJob?.isActive != true) {
+            loopJob = serviceScope.launch {
+                while (isActive) {
+                    val outcome = runCatching { runner.runOnce(this@WatchForegroundService) }
+                        .onFailure { com.pricelens.util.LogT.w("盯价循环失败：${it.message}") }
+                        .getOrNull()
+                    if (outcome != null && outcome.total == 0) {
+                        // 目标全部移除：自我停止（控制器也会停，双保险）
+                        stopSelf()
+                        return@launch
+                    }
+                    updateNotification(outcome?.total ?: 0)
+                    delay(CHECK_INTERVAL_MS)
                 }
-                updateNotification(outcome?.total ?: 0)
-                delay(CHECK_INTERVAL_MS)
             }
         }
         return START_STICKY
     }
 
     override fun onDestroy() {
+        loopJob = null
         serviceScope.cancel()
         super.onDestroy()
     }

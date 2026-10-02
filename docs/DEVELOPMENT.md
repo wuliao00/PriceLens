@@ -318,17 +318,20 @@ npm test                          # Jest 单元测试
 # app/build.gradle.kts: versionCode, versionName
 # RELEASE_NOTES_vX.Y.Z.md
 
-# 2. 签名（两条路，任选其一）
-#   2a. CI/正式签名：仓库根 local.properties（已被 .gitignore 排除）写四行
-PRICLENS_STORE_FILE=app/pricelens.keystore
+# 2. 签名：release 包一律走正式密钥库（2.7.0 起，不再用 debug.keystore 出正式包）
+#   2a. 本机出包：仓库根 local.properties（已被 .gitignore 排除，keystore 绝不入库）写四行，
+#       指向本机 ~/.android/PriceLens-release.keystore：
+PRICLENS_STORE_FILE=<你的用户目录>\.android\PriceLens-release.keystore
 PRICLENS_STORE_PASSWORD=****
 PRICLENS_KEY_ALIAS=pricelens
 PRICLENS_KEY_PASSWORD=****
-#   2b. 本机出包（build-apk.ps1 一直在用的方式）：先 assembleRelease 出未签名包，
-#       再用 Android SDK 的 apksigner 签 %USERPROFILE%\.android\debug.keystore
-#       （alias=androiddebugkey / password=android）。本机没有 PRICLENS 密钥库，
-#       GitHub 也没配 PRICLENS_* secrets，所以 2a 目前只对配置过密钥的人可用。
-#       ⚠ 签名身份必须长期固定：换 key 后老设备无法覆盖安装，只能先卸载（丢本地数据）。
+#       build-apk.ps1 读这四行签名，且不再回写版本号——版本唯一真源是 app/build.gradle.kts。
+#   2b. CI 出包：GitHub Actions 用 secret PRICLENS_STORE_B64（正式密钥库的 base64），
+#       在流水线里 base64 -d 落成文件后签名；本地没有该密钥也不影响构建，release 门控才需要它。
+#   ⚠ 签名身份必须长期固定：换 key 后老设备无法覆盖安装，只能先卸载（丢本地数据）。
+#   📜 历史注记：2.6.5 及更早的对外包其实是用 %USERPROFILE%\.android\debug.keystore（公开常识口令）
+#       签的，无法作为可信更新通道；自 v2.7.0 起改用上面的正式 release 密钥。因此 ≤2.6.5（debug 签名）
+#       覆盖安装 2.7.0（正式签名）会失败，用户需卸载重装一次。
 
 # 3. 构建 Release（本机实测约束，见下方"本机构建环境"）
 ./gradlew :app:assembleRelease
@@ -392,10 +395,12 @@ curl -sI "https://gitee.com/wuliao11541/PriceLens/raw/main/update.json?v=13&t=1"
   `maven.aliyun.com/repository/{google,central,gradle-plugin}`（该文件用 `/XF` 排除在同步之外，
   所以本地 patch 不会污染仓库）。
 
-签名与产物实测尺寸（v2.6.0）：`assembleDebug` ≈ 19.7 MB；`assembleRelease`（R8 混淆 + 资源收缩）
-未签名 ≈ 2.2 MB，用 debug.keystore 签完即最终交付包。**发布用 release 包，不要用 debug 包**——
-debug 包带 `android:debuggable`，而且 CI 每轮 runner 的 debug keystore 是随机生成的，
-彼此签名不同，用户侧永远只能卸载重装，应用内更新也装不上。
+签名与产物实测尺寸：`assembleDebug` ≈ 19.7 MB；`assembleRelease`（R8 混淆 + 资源收缩）
+未签名 ≈ 2.2 MB，用正式 release 密钥库（`~/.android/PriceLens-release.keystore`）签完即最终交付包
+（v2.7.0 交付包 2,262,413 字节）。**发布用 release 包，绝不再用 debug.keystore 出正式包**——debug 包带
+`android:debuggable`，而且 CI 每轮 runner 的 debug keystore 是随机生成的，彼此签名不同，用户侧永远只能
+卸载重装、应用内更新也装不上；v2.7.0 起改用固定的正式密钥签名，此后各版本可互相覆盖安装（≤2.6.5 因签名不
+同需先卸载重装一次，见上方“历史注记”）。
 
 #### 强制更新开关（update.json 语义）
 

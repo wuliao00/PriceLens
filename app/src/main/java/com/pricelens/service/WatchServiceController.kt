@@ -6,6 +6,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -20,13 +22,19 @@ class WatchServiceController @Inject constructor(
 ) {
     fun bind(scope: CoroutineScope) {
         scope.launch {
-            db.priceTargetDao().observeActive().collect { targets ->
-                if (targets.isEmpty()) {
-                    WatchForegroundService.stop(context)
-                } else {
-                    WatchForegroundService.start(context)
+            // A4：Room 的表级失效意味着新增/停用/改名任何一个目标都会重发 emission，
+            // 逐条 emission 调 start() 会让服务侧攒出多条并行检查循环。
+            // 服务只需要知道「有没有目标」，所以先压成布尔再只跟跳变。
+            db.priceTargetDao().observeActive()
+                .map { it.isEmpty() }
+                .distinctUntilChanged()
+                .collect { empty ->
+                    if (empty) {
+                        WatchForegroundService.stop(context)
+                    } else {
+                        WatchForegroundService.start(context)
+                    }
                 }
-            }
         }
     }
 }

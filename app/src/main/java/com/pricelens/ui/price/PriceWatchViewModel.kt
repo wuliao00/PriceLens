@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pricelens.data.local.entity.PriceTargetEntity
+import com.pricelens.data.local.entity.WatchIdentityEntity
 import com.pricelens.data.repository.PriceRepository
 import com.pricelens.data.repository.SettingsRepository
 import com.pricelens.domain.ExistingTarget
@@ -49,10 +50,36 @@ class PriceWatchViewModel @Inject constructor(
      */
     val watchTargets: StateFlow<List<PriceTargetEntity>> = targets
 
+    private val _identities = MutableStateFlow<List<WatchIdentityEntity>>(emptyList())
+
+    /** §免凭证曲线：浮窗「就是这个商品」确认过的身份列表（盯价页管理入口） */
+    val identities: StateFlow<List<WatchIdentityEntity>> = _identities
+
+    private val _identityDays = MutableStateFlow<Map<String, Int>>(emptyMap())
+
+    /** productId → 已记天数；随身份表变更重算（小表，本机查询） */
+    val identityDays: StateFlow<Map<String, Int>> = _identityDays
+
     init {
         viewModelScope.launch {
             repository.observeTargets().collect { targets.value = it }
         }
+        // C1：两个订阅必须是两条独立协程。observeTargets() 是 Room 的实时流，collect 永不返回，
+        // 与它串在同一条协程里的 observeIdentities().collect{} 因此是死代码 ——
+        // 后果：盯价页的「浮窗确认的本机身份」区永远不出现（身份表其实有数据）。
+        // 声明也必须挪到 init 之前：ViewModel 的属性按顺序初始化，init 里启动的协程
+        // 可能先于 _identities 赋值就被调度到。
+        viewModelScope.launch {
+            repository.observeIdentities().collect { list ->
+                _identities.value = list
+                _identityDays.value = list.associate { it.productId to repository.identityDays(it.productId) }
+            }
+        }
+    }
+
+    /** 取消确认：删身份连带删它的日点（口径见 OverlayCurveRecorder.cancel） */
+    fun cancelIdentity(productId: String) {
+        viewModelScope.launch { repository.deleteIdentity(productId) }
     }
 
     /** 最近一轮盯价检查（total / checked / 达标 / 各类跳过数） */

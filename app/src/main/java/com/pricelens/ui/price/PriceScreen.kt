@@ -11,13 +11,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -30,10 +33,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
@@ -84,6 +89,8 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
     val feedback by watchViewModel.feedback.collectAsStateWithLifecycle()
     val pendingOverwrite by watchViewModel.pendingOverwrite.collectAsStateWithLifecycle()
     val checking by watchViewModel.checking.collectAsStateWithLifecycle()
+    val identities by watchViewModel.identities.collectAsStateWithLifecycle()
+    val identityDays by watchViewModel.identityDays.collectAsStateWithLifecycle()
     val history = historyAsync.valueOrNull()
     val product = productAsync.valueOrNull()
     var showSheet by remember { mutableStateOf(false) }
@@ -155,7 +162,15 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
         return
     }
 
-    Column(Modifier.fillMaxSize().padding(Dims.SpacingXL)) {
+    // B9：盯价页卡片最多（曲线卡 + 盯价入口 + 检查状态卡），小屏/大字号下旧实现会直接画到屏幕外，
+    // 且没滚动事件 → MainActivity 的 enterAlways 顶栏在这一 tab 永不收起。
+    // 卡片数量有限，不必改 LazyColumn；图表面定高 200dp、无自定义手势，不与此纵向滚动争抢。
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(Dims.SpacingXL)
+    ) {
         // 失败但持有旧数据：顶部提示，曲线照常展示
         if (historyAsync is AsyncValue.Error<*>) {
             EmptyState(
@@ -320,6 +335,45 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
         }
 
         Spacer(Modifier.height(Dims.SpacingM))
+        // §免凭证曲线：浮窗确认过的身份（本机自采曲线的管理入口；列表为空整节不出现，不留空占位）
+        if (identities.isNotEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(Dims.SpacingM)) {
+                    Text(
+                        stringResource(R.string.watch_identity_section_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    identities.forEach { identity ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = Dims.SpacingS)
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+
+                                    identity.title,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    stringResource(R.string.watch_identity_days, identityDays[identity.productId] ?: 0),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = { watchViewModel.cancelIdentity(identity.productId) }) {
+                                Text(
+                                    stringResource(R.string.watch_identity_cancel),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(Dims.SpacingM))
+        }
         WatchStatusCard(
             summary = lastRound,
             untrackableCount = untrackable.size,

@@ -1,5 +1,6 @@
 package com.pricelens.data.repository
 
+import androidx.room.withTransaction
 import com.pricelens.data.cache.TLRUCache
 import com.pricelens.data.local.AppDatabase
 import com.pricelens.data.local.CacheTTL
@@ -20,12 +21,9 @@ import com.pricelens.domain.PriceSampling
 import com.pricelens.domain.PriceSource
 import com.pricelens.util.LogT
 import com.pricelens.util.QueryRelevance
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -64,8 +62,8 @@ class PriceRepository @Inject constructor(
     /** 降级返回旧数据的缓存 key 集合（站点改版/断网时先展示旧数据的标记） */
     val staleKeys: StateFlow<Set<String>> get() = tracker.stale
 
-    /** 仓储层 singleflight：同 key 并发取数合并为一次网络请求 */
-    private val inflight = ConcurrentHashMap<String, Deferred<Any?>>()
+    /** 仓储层 singleflight：同 key 并发取数合并为一次网络请求（行为契约见 [Singleflight]） */
+    private val inflight = Singleflight(applicationScope)
 
     // ---------- 商品（L1 → L2 结构化表 → L3，写回） ----------
 
@@ -334,6 +332,43 @@ class PriceRepository @Inject constructor(
 
     fun observeTargets() = db.priceTargetDao().observeActive()
 
+    /** 免凭证曲线：浮窗确认的身份列表（盯价页管理入口） */
+    fun observeIdentities() = db.watchIdentityDao().observeAll()
+
+    suspend fun identityDays(productId: String): Int = db.priceHistoryDao().countDays(productId)
+
+    /**
+     * 取消确认：身份行与它的日点必须同删（孤儿点会把脚注出处虚报成「本机自采」）。
+     *
+     * M5：仓储层拿得到 [db]，所以用 `RoomDatabase.withTransaction`（Room 2.8 自带，
+     * 无需新依赖）把两步删包成真事务 —— 不存在"删了一半就崩"的中间态。
+     * 事务内顺序与 [com.pricelens.worker.OverlayCurveRecorder.cancel] 一致（先身份后日点）：
+     * Recorder 那边只有两个 DAO、拿不到 db，靠的是"顺序 + 写前复核"。
+     */
+    suspend fun deleteIdentity(productId: String) {
+        db.withTransaction {
+            db.watchIdentityDao().delete(productId)
+            db.priceHistoryDao().deleteByProduct(productId)
+        }
+    }
+
+    /**
+     * 已确认身份的本机曲线（``ovl:`` 命名空间）：只有自采点，没有外源。
+     * buildHistory 读不了它 —— 那条链路按 URL 现取 jd SKU（sku==null 时自采点被置空），
+     * 所以确认过的商品必须走这条按 productId 的窄接口，否则``点入库了、曲线还是空的``。
+     */
+    suspend fun identityCurve(productId: String): ManmanbuyApi.History? {
+        val days = DayCurve.collapse(db.priceHistoryDao().getByProduct(productId))
+        if (days.isEmpty()) return null
+        val closes = days.map { it.close }
+        return ManmanbuyApi.History(
+            current = closes.last(),
+            lowest = days.minOf { it.dayLow },
+            highest = closes.max(),
+            points = days.map { ManmanbuyApi.PricePoint(it.date, it.close) }
+        )
+    }
+
     suspend fun setTarget(target: PriceTargetEntity) {
         db.priceTargetDao().upsert(target)
     }
@@ -429,24 +464,8 @@ class PriceRepository @Inject constructor(
         cacheable = cacheable
     )
 
-    /** 同 key 并发取数合并：胜者执行、败者 await；结束即撤槽 */
-    private suspend fun <T> singleflight(key: String, block: suspend () -> T?): T? {
-        while (true) {
-            inflight[key]?.let { existing ->
-                @Suppress("UNCHECKED_CAST")
-                return runCatching { existing.await() as T? }.getOrNull()
-            }
-            val deferred = applicationScope.async { block() }
-            if (inflight.putIfAbsent(key, deferred) == null) {
-                return try {
-                    deferred.await()
-                } finally {
-                    inflight.remove(key, deferred)
-                }
-            }
-            deferred.cancel() // 竞态落败：已有在途航班，取消自建重试循环
-        }
-    }
+    /** 同 key 并发取数合并：胜者执行、败者 await；结束即撤槽。实现与 A5 的行为说明见 [Singleflight] */
+    private suspend fun <T> singleflight(key: String, block: suspend () -> T?): T? = inflight.call(key, block)
 
     private fun productEntity(skuId: String, p: JdApi.JdProduct): ProductEntity {
         val now = System.currentTimeMillis()

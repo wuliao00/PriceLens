@@ -46,4 +46,20 @@
     <string name="ovl_platform_taobao">淘宝</string>
     <string name="ovl_platform_pdd">拼多多</string>
 
+
+    <!-- 免凭证曲线：浮窗身份确认闸门（用户拍板的唯一免凭证攒点通道） -->
+    <string name="ovl_confirm_cta">就是这个商品 · 开始记录本机价</string>
+    <!-- M7：已确认行把本机曲线真的读回来（天数 + 本机最低）；最低价由 PriceFormatter 格式化好传入 -->
+    <string name="ovl_confirmed_line">已确认身份 · 已记 %1$d 天 · 本机最低 %2$s</string>
+    <!-- 一个可用日点都没有（刚确认、今日还不够格写点）：只说天数，绝不拿 0 冒充最低价 -->
+    <string name="ovl_confirmed_line_days">已确认身份 · 已记 %1$d 天 · 之后每次读到页面价都会记成当天一点</string>
+    <string name="ovl_confirmed_cancel">取消确认</string>
+    <string name="ovl_confirm_full_toast">已确认的身份太多（上限 %1$d 个），先到盯价页清理一个</string>
+    <!-- M6：确认被拒不再静默——没标题或平台认不出来时连身份键都构不出来，必须说给用户听 -->
+    <string name="ovl_confirm_noteligible_toast">商品信息不足，无法确认身份</string>
+
+    <!-- 盯价页身份管理区（浮窗确认的入口在浮窗，管理/取消在这一节） -->
+    <string name="watch_identity_section_title">浮窗确认的本机身份</string>
+    <string name="watch_identity_days">已记录 %1$d 天 · 只记页面价，随本机浏览增长</string>
+    <string name="watch_identity_cancel">取消并删除记录</string>
 </resources>

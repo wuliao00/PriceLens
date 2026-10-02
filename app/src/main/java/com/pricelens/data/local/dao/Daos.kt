@@ -10,6 +10,7 @@ import com.pricelens.data.local.entity.PriceHistoryEntity
 import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.data.local.entity.ProductEntity
 import com.pricelens.data.local.entity.SearchRecordEntity
+import com.pricelens.data.local.entity.WatchIdentityEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -77,6 +78,14 @@ interface PriceHistoryDao {
             "WHERE productId = :productId GROUP BY source"
     )
     suspend fun countDaysBySource(productId: String): List<SourceDayCount>
+
+    /** 该 productId 的已记日数（浮窗「已记 N 天」）：数的是天不是行数，与 countDaysBySource 同口径 */
+    @Query("SELECT COUNT(DISTINCT date) FROM price_history WHERE productId = :productId")
+    suspend fun countDays(productId: String): Int
+
+    /** 取消确认时连带删掉这条身份的全部日点：只删身份不删点 = 库里的点无处显示，脚注还把它算成「本机自采」 */
+    @Query("DELETE FROM price_history WHERE productId = :productId")
+    suspend fun deleteByProduct(productId: String)
 
     @Query("DELETE FROM price_history WHERE date < :dateCutoff")
     suspend fun deleteOlderThan(dateCutoff: String)
@@ -146,4 +155,26 @@ interface DomainPenaltyDao {
     /** 访问时清过期条目，避免小表无界增长 */
     @Query("DELETE FROM domain_penalties WHERE untilMs <= :now")
     suspend fun deleteExpired(now: Long)
+}
+
+/** §免凭证曲线：浮窗确认的商品身份读写。小表，行数上限由 OverlayIdentityPolicy.MAX_IDENTITIES 钉住 */
+@Dao
+interface WatchIdentityDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(identity: WatchIdentityEntity)
+
+    @Query("SELECT * FROM watch_identity ORDER BY confirmedAt")
+    suspend fun getAllOnce(): List<WatchIdentityEntity>
+
+    @Query("SELECT * FROM watch_identity ORDER BY confirmedAt")
+    fun observeAll(): Flow<List<WatchIdentityEntity>>
+
+    @Query("SELECT * FROM watch_identity WHERE productId = :productId LIMIT 1")
+    suspend fun getByProduct(productId: String): WatchIdentityEntity?
+
+    @Query("UPDATE watch_identity SET lastSeenAt = :now, lastPrice = :price, lastBasis = :basis WHERE productId = :productId")
+    suspend fun touchLastSeen(productId: String, now: Long, price: Double, basis: String)
+
+    @Query("DELETE FROM watch_identity WHERE productId = :productId")
+    suspend fun delete(productId: String)
 }

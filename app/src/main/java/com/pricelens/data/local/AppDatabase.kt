@@ -10,12 +10,14 @@ import com.pricelens.data.local.dao.PriceHistoryDao
 import com.pricelens.data.local.dao.PriceTargetDao
 import com.pricelens.data.local.dao.ProductDao
 import com.pricelens.data.local.dao.SearchRecordDao
+import com.pricelens.data.local.dao.WatchIdentityDao
 import com.pricelens.data.local.entity.CacheEntryEntity
 import com.pricelens.data.local.entity.DomainPenaltyEntity
 import com.pricelens.data.local.entity.PriceHistoryEntity
 import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.data.local.entity.ProductEntity
 import com.pricelens.data.local.entity.SearchRecordEntity
+import com.pricelens.data.local.entity.WatchIdentityEntity
 
 /** §4.1 L2 层：Room 结构化缓存（预算 10MB，§4.6） */
 @Database(
@@ -25,9 +27,10 @@ import com.pricelens.data.local.entity.SearchRecordEntity
         PriceTargetEntity::class,
         SearchRecordEntity::class,
         CacheEntryEntity::class,
-        DomainPenaltyEntity::class
+        DomainPenaltyEntity::class,
+        WatchIdentityEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -37,6 +40,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun searchRecordDao(): SearchRecordDao
     abstract fun cacheEntryDao(): CacheEntryDao
     abstract fun domainPenaltyDao(): DomainPenaltyDao
+    abstract fun watchIdentityDao(): WatchIdentityDao
 
     companion object {
         /**
@@ -101,6 +105,29 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
+         * §免凭证曲线 v3→v4：新增身份表 watch_identity（浮窗「就是这个商品」确认过的商品）。
+         * 列序与 DEFAULT 必须和 WatchIdentityEntity 推导出的 schema 逐字对上——Room 的 TableInfo 校验比的就是这个。
+         * 与 2→3 同一纪律：SQL 抽成常量清单，迁移守卫与 tools_verify 验的是真要执行的语句。
+         */
+        val MIGRATION_3_4_SQL: List<String> = listOf(
+            "CREATE TABLE IF NOT EXISTS `watch_identity` (" +
+                "`productId` TEXT NOT NULL, `platform` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+                "`normalizedTitle` TEXT NOT NULL, `confirmedAt` INTEGER NOT NULL, " +
+                "`lastSeenAt` INTEGER NOT NULL DEFAULT 0, `lastPrice` REAL NOT NULL DEFAULT 0.0, " +
+                "`lastBasis` TEXT NOT NULL DEFAULT 'PAGE', PRIMARY KEY(`productId`))",
+            "CREATE INDEX IF NOT EXISTS `index_watch_identity_platform` " +
+                "ON `watch_identity` (`platform`)",
+            "CREATE INDEX IF NOT EXISTS `index_watch_identity_normalizedTitle` " +
+                "ON `watch_identity` (`normalizedTitle`)"
+        )
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_3_4_SQL.forEach { db.execSQL(it) }
+            }
+        }
+
+        /**
          * 全部显式迁移的**唯一清单**：DI 里的 `Room.databaseBuilder` 只认这一个列表。
          *
          * 为什么要有这条纪律：v2.6.5 的 2→3 迁移最初只登记在 `AppDatabase.getInstance()` 里，
@@ -110,7 +137,7 @@ abstract class AppDatabase : RoomDatabase() {
          * 现在两处都从本清单取，`getInstance()` 那份重复的 builder 已删除（它没有任何调用方）。
          * 守卫见 `DatabaseMigrationWiringTest`。
          */
-        val MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3)
+        val MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
     }
 }
 

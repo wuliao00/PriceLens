@@ -42,6 +42,13 @@ object AppModule {
             .addMigrations(*AppDatabase.MIGRATIONS.toTypedArray())
             .build()
 
+    /** 免凭证曲线：OverlayCurveRecorder 只吃 DAO（JVM 可单测），DAO 从唯一建库点暴露 */
+    @Provides
+    fun provideWatchIdentityDao(db: AppDatabase): com.pricelens.data.local.dao.WatchIdentityDao = db.watchIdentityDao()
+
+    @Provides
+    fun providePriceHistoryDao(db: AppDatabase): com.pricelens.data.local.dao.PriceHistoryDao = db.priceHistoryDao()
+
     /** 阶段3：熔断状态持久化到 Room 小表，启动后经 withLimit 惰性恢复 */
     @Provides
     @Singleton

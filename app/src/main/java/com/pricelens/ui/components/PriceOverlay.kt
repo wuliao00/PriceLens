@@ -29,8 +29,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,8 +54,10 @@ import com.pricelens.R
 import com.pricelens.accessibility.PriceBasis
 import com.pricelens.accessibility.PriceEvents
 import com.pricelens.accessibility.ShopPlatform
+import com.pricelens.data.local.entity.WatchIdentityEntity
 import com.pricelens.data.remote.ManmanbuyApi
 import com.pricelens.data.repository.OverlayBundle
+import com.pricelens.domain.OverlayIdentityPolicy
 import com.pricelens.ui.theme.Dims
 import com.pricelens.util.PriceFormatter
 import com.pricelens.util.TimeAgo
@@ -73,14 +78,22 @@ import kotlin.math.roundToInt
  * setOnTouchListener，与内部 AndroidComposeView 抢 ACTION_DOWN，拖动与点击不可兼得）。
  * 面板/胶囊不透明：窗口 alpha 保持 1.0、不加 FLAG_NOT_TOUCHABLE，规避 Android 12+
  * Untrusted touch（半透明遮挡会丢弃穿越到下层的触摸）。
+ *
+ * [identityLowest] = 已确认身份的 `ovl:` 本机曲线最低日点（null = 还没有可用点）；
+ * M7 它是这条窄接口的唯一消费者——库里积了点却读不回 UI，等于把用户"白看了"。
  */
 @Composable
 fun PriceOverlay(
     detected: PriceEvents.Detected,
     bundle: OverlayBundle?,
+    identity: WatchIdentityEntity?,
+    identityDays: Int,
+    identityLowest: Double?,
     onDrag: (Float, Float) -> Unit,
     onToggleExpanded: (Boolean) -> Unit,
     onCompare: () -> Unit,
+    onConfirmIdentity: () -> Unit,
+    onCancelIdentity: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var visible by remember { mutableStateOf(false) }
@@ -116,6 +129,27 @@ fun PriceOverlay(
 
     Column(
         modifier = Modifier
+            // 命中区必须铺满整块窗口：WindowManager 给本窗口的可触摸范围是整个 frame
+            // （折叠态实测 mFrame=[544,284][1048,500]），而可见胶囊只有 Surface 那一圈
+            // （[580,320][1012,464]）。手势只挂 Surface 时，外面这 12dp 阴影留白被窗口
+            // 吃掉却没有任何处理者——真机表现就是「点胶囊没反应」（点 y=295 正落在这圈里）。
+            // 手势必须在 padding 之前，节点尺寸才含这 12dp。
+            .pointerInput(Unit) {
+                detectDragGestures { change, drag ->
+                    change.consume()
+                    onDrag(drag.x, drag.y)
+                }
+            }
+            .pointerInput(Unit) {
+                val capsuleBandPx = (12.dp + 48.dp).toPx()
+                detectTapGestures(onTap = { offset ->
+                    // 只认胶囊那一条（含 12dp 外圈）；面板区域的点击仍归面板内控件
+                    if (offset.y <= capsuleBandPx) {
+                        expanded = !expanded
+                        onToggleExpanded(expanded)
+                    }
+                })
+            }
             .padding(12.dp)
             .graphicsLayer {
                 alpha = progress
@@ -127,19 +161,7 @@ fun PriceOverlay(
         Surface(
             modifier = Modifier
                 .widthIn(max = capsuleMaxWidth)
-                .heightIn(max = 48.dp)
-                .pointerInput(Unit) {
-                    detectDragGestures { change, drag ->
-                        change.consume()
-                        onDrag(drag.x, drag.y)
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(onTap = {
-                        expanded = !expanded
-                        onToggleExpanded(expanded)
-                    })
-                },
+                .heightIn(max = 48.dp),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 4.dp,
@@ -158,7 +180,7 @@ fun PriceOverlay(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.width(2.dp))
-                IconButton(onClick = onDismiss, modifier = Modifier.size(22.dp)) {
+                IconButton(onClick = onDismiss, modifier = Modifier.minimumInteractiveComponentSize()) {
                     Icon(
                         Icons.Filled.Close,
                         contentDescription = stringResource(R.string.ovl_cd_close),
@@ -307,19 +329,54 @@ fun PriceOverlay(
                     Spacer(Modifier.height(8.dp))
 
                     // CTA：确定性 ID → 查历史价；仅标题命中 → 降级为"在 App 内搜索"
-                    Button(
-                        onClick = onCompare,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(Dims.ButtonCorner)
-                    ) {
-                        Text(
-                            text = if (detected.itemId != null) {
-                                stringResource(R.string.overlay_cta)
-                            } else {
-                                stringResource(R.string.ovl_title_only_cta)
-                            },
-                            style = MaterialTheme.typography.labelLarge
-                        )
+                    when (overlayActionFor(detected, identity, OverlayIdentityPolicy.canConfirm(detected.title, detected.platform))) {
+                        OverlayAction.VIEW_HISTORY -> PrimaryCta(stringResource(R.string.overlay_cta), onCompare)
+                        OverlayAction.COMPARE_ONLY -> PrimaryCta(stringResource(R.string.ovl_title_only_cta), onCompare)
+                        OverlayAction.CONFIRM_AND_COMPARE -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(
+                                onClick = onCompare,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(Dims.ButtonCorner)
+                            ) {
+                                Text(stringResource(R.string.ovl_title_only_cta), style = MaterialTheme.typography.labelSmall, maxLines = 2)
+                            }
+                            Button(
+                                onClick = onConfirmIdentity,
+                                modifier = Modifier.weight(1.4f),
+                                shape = RoundedCornerShape(Dims.ButtonCorner)
+                            ) {
+                                Text(stringResource(R.string.ovl_confirm_cta), style = MaterialTheme.typography.labelSmall, maxLines = 2)
+                            }
+                        }
+                        OverlayAction.CONFIRMED -> Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    // 有可用日点才说"本机最低"，没有就退化到只报天数（绝不把 0 或空白当价格）
+                                    text = if (identityLowest != null && identityLowest > 0.0) {
+                                        stringResource(
+                                            R.string.ovl_confirmed_line,
+                                            identityDays,
+                                            PriceFormatter.format(identityLowest)
+                                        )
+                                    } else {
+                                        stringResource(R.string.ovl_confirmed_line_days, identityDays)
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(onClick = onCancelIdentity) {
+                                    Text(stringResource(R.string.ovl_confirmed_cancel), style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = onCompare,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(Dims.ButtonCorner)
+                            ) {
+                                Text(stringResource(R.string.ovl_title_only_cta), style = MaterialTheme.typography.labelSmall, maxLines = 2)
+                            }
+                        }
                     }
                 }
             }
@@ -401,4 +458,32 @@ internal fun historyLineStringRes(line: HistoryLine): Int = when (line) {
     HistoryLine.OLDER_HIGH -> R.string.ovl_history_high_older
     HistoryLine.OLDER_NEAR_LOW -> R.string.ovl_history_near_low_older
     HistoryLine.NONE -> R.string.ovl_history_near_low // 不被消费：NONE 时整行不渲染
+}
+
+/** 主 CTA（蓝底白字整行按钮）：文案由调用方决定，行为统一是 [onCompare] */
+@Composable
+private fun PrimaryCta(text: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(Dims.ButtonCorner)
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+/**
+ * CTA 区应出现哪组按钮（纯函数，分支判定不许写在 Composable 嵌套里，单测直接钉）：
+ *  - VIEW_HISTORY：拿到确定性 ID → 只有"查历史价"，问"是不是这个商品"是噪声；
+ *  - CONFIRMED：无 ID 但用户确认过本机身份 → 灰字"已记 N 天"+ 取消；
+ *  - CONFIRM_AND_COMPARE：无 ID 且素材够格（有标题、平台已知）→ 双按钮，确认是主行动；
+ *  - COMPARE_ONLY：连确认素材都没有 → 保持旧降级行为（App 内搜索）。
+ */
+internal enum class OverlayAction { VIEW_HISTORY, COMPARE_ONLY, CONFIRM_AND_COMPARE, CONFIRMED }
+
+internal fun overlayActionFor(detected: PriceEvents.Detected, identity: Any?, canConfirm: Boolean): OverlayAction = when {
+    detected.itemId != null -> OverlayAction.VIEW_HISTORY
+    identity != null -> OverlayAction.CONFIRMED
+    canConfirm -> OverlayAction.CONFIRM_AND_COMPARE
+    else -> OverlayAction.COMPARE_ONLY
 }
