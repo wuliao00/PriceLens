@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-01T15:05:18Z",
+  "generatedAt": "2026-10-02T11:30:00Z",
   "channel": "stable",
   "latest": {
-    "versionCode": 20,
-    "versionName": "2.7.0",
-    "releaseDate": "2026-10-01"
+    "versionCode": 21,
+    "versionName": "2.8.0",
+    "releaseDate": "2026-10-02"
   },
   "minSupportedVersionCode": 14,
   "forceBelow": 13,
@@ -14,12 +14,12 @@
     {
       "label": "Gitee（国内直连）",
       "kind": "apk",
-      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.7.0.apk"
+      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.apk"
     },
     {
       "label": "GitHub Release",
       "kind": "apk",
-      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.7.0/PriceLens-2.7.0.apk"
+      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.8.0/PriceLens-2.8.0.apk"
     },
     {
       "label": "Gitee 发行版页",
@@ -29,20 +29,20 @@
     {
       "label": "GitHub Release 页",
       "kind": "page",
-      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.7.0"
+      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0"
     }
   ],
-  "sha256": "13f50396131933cd81c8277c571678998495f38b82af74fbc313a2c2440a5d34",
-  "sizeBytes": 2263441,
+  "sha256": "a635e873ac2dbcdf370c2a34e9295834519c4b593a267d5b4e94c755c53995ee",
+  "sizeBytes": 2336587,
   "notes": [
-    "⚠️ 签名密钥更换：从 ≤2.6.5 升级需卸载重装一次，本机数据会清空",
-    "新增：免凭证盯价曲线 —— 浏览京东/淘宝/拼多多商详页时，浮窗底部点一次「就是这个商品」确认身份，之后每次无障碍读到的页面价都记成该商品的今日点（收盘语义 + 当日至低，出处「本机盯价自采」），没配慢慢买 Cookie 曲线也能自己长出来",
-    "新增：盯价页「浮窗确认的本机身份」管理区 —— 取消确认会连带删掉它的日点、不留孤儿数据；券后价/到手价不写日点，防「历史最低」假摔",
-    "修复：盯价前台服务不再每次表变动都新起一条 30 分钟循环（此前 N 个目标 = N 条并发轮次）",
-    "修复：singleflight 落败方不再把「被反爬/断网」吞成合法的空白（失败塌缩成假空态的老旁路）",
-    "修复：旋转/分屏后浮窗不再被拖出屏幕找不回；浮窗 ComposeView 不再以无障碍 Service 作 Context（改用 ContextThemeWrapper）；盯价页补上滚动容器，小屏/大字号内容不再画到屏幕外",
-    "修复：数据库 v3→v4 迁移（新增 watch_identity 表）受迁移守卫覆盖 —— 守卫升级为遍历全部已登记迁移、用只记录不执行的假库跑 migrate() 校验语句形态",
-    "发布：正式包改用 release keystore 签名（此前对外发布实为 debug 密钥），CI 与本机出包都走正式密钥；build-apk.ps1 版本号改为只读（唯一真源 app/build.gradle.kts）"
+    "⚠️ 签名密钥：从 ≤2.6.5 升级需卸载重装一次（应用内数据会清空）；2.7.0 及以上可直接覆盖升级",
+    "新增：选择器规则远程订阅（GKD 式热更）—— 商详页「哪里是标题、哪里是价格、怎么确认是商品页」改为 JSON 规则、可从远端热更，京东改版不再等发版；规则不可用时自动回落原启发式（行为与旧版一致）",
+    "新增：纯本地崩溃日志 —— 设置页「诊断」区可导出/清空；只写本机、绝不上传，导出文本自动对 Cookie/Authorization 等敏感串打码",
+    "新增：国产 ROM 保活引导页（设置 → 权限）—— 能自动判定的替你判定（通知、电池优化白名单），判不了的如实写「系统不给查」；含分品牌设置步骤与安全跳转",
+    "新增：慢慢买「京东授权」三态判定 + 应用内网页取历史价；凭证改为 Keystore 加密存储 + 设置页默认掩码显示",
+    "新增：系统分享 / 浏览器 / 剪贴板三条入口直达搜索；盯价购买建议（按历史分位给一句话结论）",
+    "修复：值得买带括号说明的价格被拼成天文数字（284元（淘金币可抵37.14元起）→ ¥28,437.14）；慢慢买回写不再凭空造「今天」的观测，秒级时间戳不再折成 1970 年",
+    "修复：设置页「检测 Cookie」归因修正 —— 未授权京东 ≠ 登录失效；人机验证页对任何人都成立，不再被当成账号问题"
   ],
   "cooldownHours": 24
 }
