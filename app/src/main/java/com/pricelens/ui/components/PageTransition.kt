@@ -1,7 +1,6 @@
 package com.pricelens.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.VerticalDirection
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -63,8 +62,9 @@ fun StripReveal(visible: Boolean, modifier: Modifier = Modifier, content: @Compo
         visible = visible,
         modifier = modifier,
         enter = expandVertically(
-            animationSpec = tween(MotionDurations.Standard, easing = PriceLensEasing),
-            expandFrom = VerticalDirection.Top
+            // 不传 expandFrom：默认 VerticalDirection.Bottom = 顶边钉住、下缘往外展开，
+            // 正是"横条从上往下掀开"的观感；传 Top 会变成从下往上顶，把上面的内容推来推去
+            animationSpec = tween(MotionDurations.Standard, easing = PriceLensEasing)
         ) + fadeIn(animationSpec = tween(MotionDurations.Standard, easing = PriceLensEasing)),
         exit = shrinkVertically(animationSpec = tween(MotionDurations.Fast, easing = PriceLensEasing)) +
             fadeOut(animationSpec = tween(MotionDurations.Fast, easing = PriceLensEasing)),

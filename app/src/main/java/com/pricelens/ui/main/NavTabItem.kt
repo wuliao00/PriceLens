@@ -4,6 +4,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
@@ -27,9 +28,16 @@ import com.pricelens.ui.theme.PriceLensEasing
  *
  * 时长取 [MotionDurations.Fast]（150ms）：导航是高频重复动作，比页面转场更快一档，
  * 与 `Motion.kt` 的"快速反馈"定义一致。禁用弹跳缓动（同铁律）。
+ *
+ * **必须是 `RowScope` 扩展**：Material3 1.3.1 里 `NavigationBarItem` 只有一个签名，
+ * 首参是 `RowScope`（`javap androidx.compose.material3.NavigationBarKt` 实测），
+ * 也就是它只能在 `NavigationBar { … }` 的内容 lambda 里调。
+ * 包装函数不接 RowScope 会报 `Unresolved reference 'NavigationBarItem'`，
+ * 并且**同一文件里再级联出两条 `@Composable invocations can only happen from the context of a @Composable function`**
+ * ——那两条是假错，别照着它们改代码（本仓库为此白跑了两轮构建）。
  */
 @Composable
-fun NavTabItem(
+fun RowScope.NavTabItem(
     selected: Boolean,
     label: String,
     iconSelected: ImageVector,
