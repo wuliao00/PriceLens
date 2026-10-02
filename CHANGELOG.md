@@ -9,6 +9,9 @@
 
 ### 新增
 - **纯本地崩溃日志**（文档 §十三；用户拍板不上传，因此不引入 ACRA、也没有「发送报告」开关——根本没有上传通道）：`CrashHandler` 在 `attachBaseContext` 里尽早安装，未捕获异常连同版本/机型/系统写入 `files/crashlogs/`（最多保留 20 条，只清理自己的 `crash-*.log`，不碰目录里别的文件）；设置页新增「诊断」区：导出（SAF 存文件；导出文本整体脱敏——Cookie / Authorization / apikey / pt_key 等键后的值一律 `***`，logcat 一节同样过筛）与清空；调试包附「测试崩溃」按钮，用于验证崩溃→落盘→导出链路。
+- **选择器规则远程订阅（GKD 式热更，文档 §三）**：商详页"哪里是标题、哪里是价格、怎么确认是商品页"从硬编码判定抽出为 JSON 规则，可从远端热更，京东改版不再等发版。仓库侧新增 `rules/jd.json` + `rules/manifest.json`（sha256 清单）+ `tools/gen_rules_manifest.py`（内容变化自动递增版本并重算 sha256）+ `rules-regen` Actions；App 侧冷启动装载 + 每 6 小时同步（ETag + sha256 校验 + 原子替换，失败保留旧规则，全失败回落内置 `assets/rules/jd.json`）。
+- 提取引擎支持 `text` / `textRegex`（含捕获组）/ `desc` / `descRegex` / `viewId` 五种选择器与 `allOf`/`anyOf`/`noneOf` 确认条件；规则优先、启发式兜底（规则未命中行为与改造前完全一致，日志写明是谁命中的）。
+- 规则侧信任模型与 `update.json` 完全一致（Gitee raw + HTTPS + sha256），详见 `docs/API.md`「选择器规则远程订阅」。
 - **国产 ROM 保活引导页**（文档 §12；设置 → 权限 → 后台保活设置）：把「盯价被杀 → 降价提醒不会来」的因果讲清楚，再逐项给出路——
   - 能自动判定的替你判定：通知权限（`areNotificationsEnabled`）、电池优化白名单（`isIgnoringBatteryOptimizations`；查询被 ROM 拒绝时显示「系统不给查」，不猜一个值糊弄）；
   - 没有公开接口的绝不假装能判：「自启动」「后台弹出界面」直接写「系统不给查」；「前台服务 / 定时任务是否在跑」同理，只如实显示本进程最近一轮盯价时间（`WatchCheckRunner.lastRound` 内存快照，不新造持久化）；

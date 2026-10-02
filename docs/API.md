@@ -231,6 +231,59 @@ v2.6.5 起，盯价每轮的 live 现价会写成"今日的曲线点"（见 `dat
 > 注意：清单只被 **2.6.0 及以后**的客户端读取，更早版本没有这套代码。
 
 
+### 选择器规则远程订阅（v2.9.0 起，GKD 式热更）
+
+京东/淘宝/拼多多改版会让无障碍识别失效（"哪里是标题、哪里是价格、怎么确认是商品页"）。
+v2.9.0 起这些判定改成**数据驱动的选择器规则**，可从远端热更，**改版不发版**。
+与 `update.json` 走**同一套信任模型**：Gitee raw 直链 + HTTPS 做传输信任，清单是信任根，
+叶子文件按清单里的 `sha256` 校验，失败一律丢弃、保留旧规则。
+
+**仓库侧布局（本仓库）**
+
+```
+rules/jd.json                 # 规则源文件（单一事实源，目前只覆盖京东）
+rules/manifest.json           # 清单：manifestVersion + 每个文件的 sha256（由脚本生成，不要手改）
+tools/gen_rules_manifest.py   # 遍历 rules/*.json 重算 sha256、内容变了就递增规则 version 与 manifestVersion，
+                              # 并把快照复制到 app/src/main/assets/rules/（内置离线规则）
+.github/workflows/rules-regen.yml  # rules/** 变更时自动跑脚本并提交（幂等，无变化不提交）
+```
+
+**规则格式**（`rules/jd.json`）
+
+| 字段 | 说明 |
+|------|------|
+| `schemaVersion` | 结构版本，目前 `1`；不认识的版本整个文件拒绝 |
+| `id` / `version` | 平台 id（与文件名一致）/ 规则版本（脚本按内容变化自动递增） |
+| `packages` | 包名前缀表（`startsWith` 匹配宿主，如 `com.jingdong`）；空串/过短前缀会在解析期被拒 |
+| `pages[]` | 页面规则，按声明顺序 fallback，命中即返回 |
+| `pages[].activityRegex` | 可选的 Activity 名过滤；**拿不到 Activity 名时放行**（内容变化事件的 className 是 View 类名） |
+| `pages[].extract{}` | 字段 → 选择器链：`title` / `price` 为约定字段名，可加任意 `buyNow` / `checkout` 等页面信号字段 |
+| `pages[].confirm` | `allOf` / `anyOf`（引用 extract 字段名，至少一个非空）/ `noneOf`（命中即否决，如购物车页的"去结算"） |
+| selector | `by` ∈ `text` / `textRegex`（`group` 选捕获组，0=整个匹配）/ `desc` / `descRegex` / `viewId`；匹配前一律过 `cleanTitle` 清洗零宽字符 |
+
+**与设计文档（§三）的偏差（以本仓库现实为准）**：现版京东商详页 resource-id 全是混淆短名，
+`viewId` 选择器保留但**预期恒不命中**（真机取证见上文「浮窗为什么常常只能到 TITLE_ONLY」），
+规则价值主线是 `textRegex`/`descRegex` + `confirm`；`matchTimeoutMs` 不采纳
+（服务是事件驱动，重复事件天然重试，没有异步轮询基建）；`confirm` 增加 `noneOf`
+并把"至少一个正向条件"设为解析期硬校验（防止把浮窗开给首页）。
+
+**客户端同步流程**（`rules/RuleSyncRepository`，冷启动一次 + 每 6 小时一次）
+
+1. 本地装载（同步、只读几 KB）：磁盘已校验规则 > 内置 `assets/rules/`（随 APK，不做 sha 校验）；
+2. 远端：`GET .../rules/manifest.json`（`FORCE_NETWORK` + `If-None-Match`，304 直接结束）；
+   `manifestVersion` 不高于本地已接受版本 → 结束；
+3. 逐文件下载 → `sha256` 校验（失败**整轮放弃**，清单是一个提交单元）；
+4. 落地：规则写成 `<id>.<sha前12位>.json`（tmp → rename 原子替换），**最后**原子写 `manifest.json`
+   —— 清单是提交点，任何中途失败都不会破坏"旧规则可用"（原地覆盖在换清单前崩溃会丢旧版）；
+5. 生效规则 = 远端（本轮）> 磁盘（上次）> 内置，缺哪个平台由低优先级顶上；
+   全空时判定管线退化为纯硬编码启发式（= 改造前行为，绝不出现"规则不可用就什么都不显示"）。
+
+**判定集成（`rules/DetectionPipeline`）**：规则优先，规则未确认/价格解析不出来时逐行走
+`PriceNodeMatcher` / `isProductPage` 老启发式；两条路都命中时以规则为准。
+日志写明命中来源（`A11Y 命中来源=规则命中 jd@v1/product_detail [price=textRegex:…]`
+或`启发式回落（规则未命中）`），改版排查第一现场就是这条日志。
+
+
 ### 请求参数规范
 
 ```typescript

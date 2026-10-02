@@ -303,8 +303,10 @@ private fun priceHitOf(
 /** 独立成节点的小数尾巴：只有 `.9` / `.90` 这种形态才认 */
 private val DECIMAL_TAIL = Regex("^\\.\\d{1,2}$")
 
-/** 把同一父节点内紧随价格节点之后的 `.dd` 尾巴并回主价文本；没有可拼的尾巴返回 null */
-private fun joinDecimalTail(root: NodeSnapshot, node: NodeSnapshot, text: String): Pair<String, Double>? {
+/** 把同一父节点内紧随价格节点之后的 `.dd` 尾巴并回主价文本；没有可拼的尾巴返回 null。
+ *  internal 而非 private：规则引擎（com.pricelens.rules.DetectionPipeline）复用同一条
+ *  拼接逻辑，保证"规则命中"与"启发式命中"对真机的分体小数位行为完全一致。 */
+internal fun joinDecimalTail(root: NodeSnapshot, node: NodeSnapshot, text: String): Pair<String, Double>? {
     if (text.contains('.')) return null // 主价文本自带小数，不需要拼
     val chain = ancestorChain(root, node)
     val parent = chain.getOrNull(chain.size - 2) ?: return null
