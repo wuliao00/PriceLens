@@ -26,7 +26,7 @@ import kotlinx.coroutines.cancel
  *  - 商详页读不到价：窗口切换事件即时收窗，不再"return 但留着旧窗"；
  *  - 包名切换时清 lastSignature（旧版永不清空导致跨 App 串台）。
  *
- * v2.9.0 选择器规则：判定入口改为 [DetectionPipeline]（规则优先，规则未命中逐行仍走
+ * v2.8.0 选择器规则：判定入口改为 [DetectionPipeline]（规则优先，规则未命中逐行仍走
  * 上述硬编码启发式 —— 行为不变），本类只读 [RuleProvider] 的进程内快照，事件热路径上
  * 不做任何 IO；规则装载/远端同步在 RuleSyncRepository / RuleSyncWorker。
  *
@@ -75,7 +75,7 @@ class PriceMonitorService : AccessibilityService() {
             // 传给规则页过滤会把绝大多数事件拦没（PageRule.matchesActivity 对 null 放行）。
             val activityName = if (isStateChanged) event.className?.toString() else null
 
-            // 规则优先 + 硬编码启发式回落（v2.9.0）：判定分支与收窗副作用在
+            // 规则优先 + 硬编码启发式回落（v2.8.0）：判定分支与收窗副作用在
             // DetectionPipeline 里逐行保留旧行为，服务只做"取根节点 → 调管线 → 执行动作"。
             when (val outcome = DetectionPipeline.detect(snapshot, platform, packageName, RuleProvider.snapshot(), activityName)) {
                 is DetectionOutcome.NotProductPage -> {

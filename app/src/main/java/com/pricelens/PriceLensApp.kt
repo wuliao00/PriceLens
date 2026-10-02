@@ -54,7 +54,7 @@ class PriceLensApp : Application(), Configuration.Provider {
         CacheCleanupWorker.scheduleDaily(this)
         // §8 后台盯价：每 30 分钟
         PriceCheckWorker.schedule(this)
-        // 选择器规则（v2.9.0）：先本地装载（磁盘已校验 > 内置 assets，只读几 KB），
+        // 选择器规则（v2.8.0）：先本地装载（磁盘已校验 > 内置 assets，只读几 KB），
         // 再让 Worker 做远端同步（规则没装载前判定管线自动走纯启发式，行为同改造前）
         runCatching { ruleSyncRepository.loadAndInstallLocal() }
             .onFailure { com.pricelens.util.LogT.e("RULES 本地规则装载失败（回退启发式）", it) }
