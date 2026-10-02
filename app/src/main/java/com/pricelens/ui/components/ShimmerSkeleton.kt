@@ -3,6 +3,7 @@ package com.pricelens.ui.components
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -19,14 +20,25 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
+import com.pricelens.domain.EnterReplayGuard
+import com.pricelens.domain.MotionEnter
 import com.pricelens.ui.theme.Dims
+import com.pricelens.ui.theme.EnterOffsetY
+import com.pricelens.ui.theme.MotionDurations
+import com.pricelens.ui.theme.RevealEasing
 
 /**
  * §2.3 骨架屏 shimmer：1500ms 循环、LinearEasing。
@@ -104,5 +116,78 @@ fun ShimmerList(items: Int = 4) {
         repeat(items) {
             ShimmerSkeleton(modifier = Modifier.fillMaxWidth())
         }
+    }
+}
+
+/**
+ * 骨架 → 内容交叉淡入（§2.4：需求区间 150~250ms，取 [MotionDurations.Crossfade] = 200ms）。
+ * 两层都只喂 graphicsLayer.alpha（绘制通道，不改测量）；骨架淡到 0 立刻从组合里摘掉，不留透明节点白画。
+ *
+ * **防重播判据**：[guard].acquire([enterKey]) 只在首次放行。enterKey 必须是与数据无关的稳定标识
+ * （由调用方给，如 "price:content"）——把数据本身当 key 就等于"每次刷新都淡一次"，
+ * 那正是这条最容易踩的坑；而骨架分支 `return` 会销毁内容组合，所以守卫实例必须挂在**屏幕级**
+ * remember 上（销毁的是组合、不是守卫），这样再次进入内容分支时 acquire 恒 false、进度直接取 1f。
+ */
+@Composable
+fun SkeletonCrossfade(
+    guard: EnterReplayGuard,
+    enterKey: String,
+    modifier: Modifier = Modifier,
+    skeleton: @Composable () -> Unit = { ShimmerList() },
+    content: @Composable () -> Unit
+) {
+    val replay = remember(enterKey) { guard.acquire(enterKey) }
+    // 没被放行过 → 从 0 淡到 1；放行过（第二次及以后）→ 一开始就是 1，animateFloatAsState 不产生动画
+    var entered by remember { mutableStateOf(!replay) }
+    LaunchedEffect(enterKey) { entered = true }
+    val progress by animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = tween(MotionDurations.Crossfade, easing = RevealEasing),
+        label = "skeletonCrossfade"
+    )
+
+    Box(modifier) {
+        Box(Modifier.graphicsLayer { alpha = MotionEnter.contentAlpha(progress) }) { content() }
+        if (progress < 1f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer { alpha = MotionEnter.skeletonAlpha(progress) }
+            ) { skeleton() }
+        }
+    }
+}
+
+/**
+ * 列表项/区块入场（§2.4）：alpha + translateY 按索引阶梯，全部只喂 graphicsLayer。
+ * 阶梯延迟 = [MotionEnter.staggerDelay]（[MotionDurations.StaggerStep] 一级、
+ * [MotionDurations.StaggerCap] 级封顶，第 8 项之后不再累加），位移 [EnterOffsetY]，
+ * 时长 [MotionDurations.Standard]。
+ *
+ * 做成 Modifier 扩展而不是容器包装，有两个实际理由：
+ *  - 不新增布局节点（区块的宽度/间距/测量完全不变，也就不会把 PriceCard 的按压 scale 中心挪走）；
+ *  - 不碰 LazyColumn 的稳定 key：条目滚出再滚回时 Modifier 会随条目重建，
+ *    但 [guard] 已登记过同一 [enterKey] → acquire 恒 false → 直接 1f，不重播。
+ *
+ * [enterKey] 用条目自己的稳定标识（如 "identity:$productId"），**不要**用条目内容/价格——
+ * 数据一刷新就又跳一次，正是这条最容易踩的坑。同一区块内的多个元素想一起入场，
+ * 就共用 index、各给一个 key。
+ */
+@Composable
+fun Modifier.enterReveal(index: Int, guard: EnterReplayGuard, enterKey: String): Modifier {
+    val replay = remember(enterKey) { guard.acquire(enterKey) }
+    var entered by remember { mutableStateOf(!replay) }
+    LaunchedEffect(enterKey) { entered = true }
+    val delayMillis = MotionEnter.staggerDelay(index, MotionDurations.StaggerStep, MotionDurations.StaggerCap)
+    val progress by animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = tween(MotionDurations.Standard, delayMillis = delayMillis, easing = RevealEasing),
+        label = "enterReveal"
+    )
+    val density = LocalDensity.current
+    val offsetPx = remember(density) { with(density) { EnterOffsetY.toPx() } }
+    return graphicsLayer {
+        alpha = MotionEnter.contentAlpha(progress)
+        translationY = offsetPx * MotionEnter.enterTravel(progress)
     }
 }
