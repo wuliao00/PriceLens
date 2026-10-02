@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,14 +30,17 @@ import com.pricelens.util.ShizukuHelper
 import com.pricelens.util.UrlOpener
 
 /**
- * 设置页 · 权限区块：无障碍 / 悬浮窗 / 通知 / Shizuku 四态。
+ * 设置页 · 权限区块：无障碍 / 悬浮窗 / 通知 / Shizuku 四态 + 后台保活设置入口。
  * 逻辑与阶段2完全一致，仅迁移文案与留白令牌；
  * v2.6.0 起权限读取与刷新时机改由 [rememberPermissionStates] 统一承载
  * （原 `isAccessibilityEnabled` 也上移为 [isPriceLensAccessibilityEnabled] 供引导共用，行为等价）。
+ *
+ * 2026-10 起末尾追加「后台保活设置」入口（[KeepAliveScreen]，文档 §12）：
+ * 国产 ROM 上盯价被杀是权限四态之外的另一个静默故障源。
  */
 
 @Composable
-fun PermissionSection() {
+fun PermissionSection(onOpenKeepAlive: () -> Unit) {
     SectionHeader(stringResource(R.string.settings_section_permission))
 
     val context = LocalContext.current
@@ -116,6 +120,16 @@ fun PermissionSection() {
             !shizukuAlive -> ShizukuHelper.openShizukuApp(context)
             !shizukuGranted -> ShizukuHelper.requestPermission()
             else -> ShizukuHelper.oneClickSetup(context) { permissions.refresh() }
+        }
+    }
+
+    // 后台保活设置入口（文档 §12）：权限四态之外，国产 ROM 的「自启动/后台限制」是另一个静默故障源
+    SettingsRow(
+        title = stringResource(R.string.keepalive_entry_title),
+        desc = stringResource(R.string.keepalive_entry_desc)
+    ) {
+        TextButton(onClick = onOpenKeepAlive) {
+            Text(stringResource(R.string.keepalive_entry_action))
         }
     }
 }

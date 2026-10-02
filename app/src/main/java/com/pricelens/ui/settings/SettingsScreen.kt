@@ -42,10 +42,19 @@ import com.pricelens.update.UpdateRepository
  *
  * v2.6.0：关于区新增"检查更新"与"重新查看新手引导"，故把 [UpdateRepository]
  * 与重开引导的回调透传进来（沿用 MainActivity 注入的单例，不另建 ViewModel）。
+ *
+ * 2026-10：权限区新增「后台保活设置」入口（[KeepAliveScreen]，文档 §12），
+ * 打开新页的回调由 MainScreen 透传，保持本页无导航职责。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(settings: SettingsRepository, updateRepository: UpdateRepository, onBack: () -> Unit, onReplayOnboarding: () -> Unit) {
+fun SettingsScreen(
+    settings: SettingsRepository,
+    updateRepository: UpdateRepository,
+    onBack: () -> Unit,
+    onReplayOnboarding: () -> Unit,
+    onOpenKeepAlive: () -> Unit
+) {
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val cacheStats by profileViewModel.cacheStats.collectAsStateWithLifecycle()
 
@@ -80,7 +89,7 @@ fun SettingsScreen(settings: SettingsRepository, updateRepository: UpdateReposit
                 .padding(horizontal = Dims.SpacingL)
         ) {
             AppearanceSection(settings)
-            PermissionSection()
+            PermissionSection(onOpenKeepAlive = onOpenKeepAlive)
             DataSection(
                 settings = settings,
                 cacheStats = cacheStats,
