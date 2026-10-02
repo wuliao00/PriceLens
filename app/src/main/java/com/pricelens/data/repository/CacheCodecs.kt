@@ -93,6 +93,9 @@ object BiliVideosCodec : CacheCodec<List<BiliApi.BiliVideo>> {
             put(
                 JSONObject().put("title", v.title).put("author", v.author)
                     .put("play", v.play).put("pic", v.pic).put("bvid", v.bvid)
+                    // pubdate 必须一起进缓存：漏了它，L2 命中回来的视频全是"发布时间未知"，
+                    // 详情页的「近半年」筛选就成了一个按下去没反应的开关。
+                    .put("pd", v.pubdate)
                     .put("sponsored", v.risk.sponsored).put("hype", v.risk.hype)
                     .put("sw", v.risk.sponsorWord ?: JSONObject.NULL)
                     .put("hw", v.risk.hypeWord ?: JSONObject.NULL)
@@ -111,6 +114,8 @@ object BiliVideosCodec : CacheCodec<List<BiliApi.BiliVideo>> {
                 o.optLong("play"),
                 o.optString("pic"),
                 o.optString("bvid"),
+                // 旧版本缓存没有 "pd" 键 → optLong 给 0 = "发布时间未知"，筛选侧按"保留"处理
+                pubdate = o.optLong("pd"),
                 risk = ContentRisk(
                     sponsored = o.optBoolean("sponsored"),
                     hype = o.optBoolean("hype"),

@@ -1,4 +1,4 @@
-package com.pricelens.ui.coupon
+package com.pricelens.ui.product
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -52,13 +52,16 @@ import com.pricelens.util.PriceFormatter
 import kotlinx.coroutines.launch
 
 /**
- * §6.3 找券 — 隐藏优惠券。
- * 阶段4：三态渲染（加载骨架 / 空态引导 / 失败提示+旧数据兜底）；
- * 到手价 countUp 走 graphicsLayer alpha（§2.1 铁律）。
- * 注：500ms countUp 与曲线入场同属 §2.3 价格数字滚动的历史例外时长。
+ * §十一 详情页「找券」段。
+ *
+ * 原 `ui/coupon/CouponScreen.kt` 的渲染整体搬进详情页（底部导航 6→4 之后找券不再是独立 tab，
+ * 顶层页文件删除，不留两份平行实现），三条既有口径原样保留：
+ *  - 券源只展示爆料里显式写出的券，不做价差反推；
+ *  - 有券但都没到门槛 → 如实说"暂无可算的到手价"，不显示误导性的 ¥0；
+ *  - 到手价 countUp 走 graphicsLayer alpha（§2.1 铁律），500ms 属 §2.3 的历史例外时长。
  */
 @Composable
-fun CouponScreen(searchViewModel: SearchViewModel) {
+fun ProductCouponSection(searchViewModel: SearchViewModel) {
     val loading by searchViewModel.loading.collectAsStateWithLifecycle()
     val couponsAsync by searchViewModel.coupons.collectAsStateWithLifecycle()
     val netPrice by searchViewModel.netPrice.collectAsStateWithLifecycle()

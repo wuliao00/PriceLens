@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -80,7 +81,7 @@ import java.util.Locale
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchViewModel) {
+fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchViewModel, onOpenProduct: (String) -> Unit = {}) {
     val loading by searchViewModel.loading.collectAsStateWithLifecycle()
     val historyAsync by searchViewModel.history.collectAsStateWithLifecycle()
     val judgment by searchViewModel.judgment.collectAsStateWithLifecycle()
@@ -369,7 +370,10 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
                     identities.forEach { identity ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = Dims.SpacingS)
+                            // §十一 盯价目标行：点整行打开这件商品的详情页（先按标题搜一轮，再盖详情页）
+                            modifier = Modifier
+                                .padding(top = Dims.SpacingS)
+                                .clickable { onOpenProduct(identity.title) }
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(
