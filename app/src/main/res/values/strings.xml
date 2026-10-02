@@ -14,7 +14,8 @@
 
     <!-- 底部导航 -->
     <string name="tab_overview">概览</string>
-    <string name="tab_bilibili">B站</string>
+    <!-- tab_bilibili 已随 §十一 导航 6→4 删除：B站评测改在商品详情页的「评测」段，
+         留着会成为没有引用的死串（tab_coupon 不同，它被详情页分段标签复用） -->
     <string name="tab_price">盯价</string>
     <string name="tab_coupon">找券</string>
     <string name="tab_community">社区</string>
@@ -60,7 +61,8 @@
     <string name="overview_guide_bili_desc">B站真实用户评测不受商品数据源限制，搜索「%1$s」看看大家的实际体验。</string>
     <!-- 还没输入关键词时不能渲染成「」：空引号读起来像出错 -->
     <string name="overview_guide_bili_desc_blank">B站真实用户评测不受商品数据源限制，搜商品名看看大家的实际体验。</string>
-    <string name="overview_guide_bili_action">切换到 B站</string>
+    <!-- 这个入口现在打开的是商品详情页并直接落在「评测」段，文案要与落点一致（别说"切换到B站"） -->
+    <string name="overview_guide_bili_action">看这件商品的评测</string>
     <string name="overview_live_price">%1$s · 实时价 ¥%2$s</string>
     <string name="overview_live_default_source">本机账号</string>
     <string name="overview_fact_lowest">历史最低</string>

@@ -93,7 +93,7 @@ import com.pricelens.util.UrlOpener
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProductDetailScreen(searchViewModel: SearchViewModel, onBack: () -> Unit) {
+fun ProductDetailScreen(searchViewModel: SearchViewModel, onBack: () -> Unit, initialSection: ProductSection = ProductSection.PRICE) {
     // Activity 作用域的盯价 VM：MainActivity 里 hiltViewModel() 拿到的就是同一个实例，
     // 所以这里改目标价，「盯价」页与后台轮次看到的是同一份数据。
     val watchViewModel: PriceWatchViewModel = hiltViewModel()
@@ -119,7 +119,10 @@ fun ProductDetailScreen(searchViewModel: SearchViewModel, onBack: () -> Unit) {
                 .fillMaxSize()
         ) {
             ProductHeadCard(searchViewModel)
-            var section by rememberSaveable { mutableStateOf(ProductSection.PRICE) }
+            // 起始段由调用方给：引导卡的「查看B站评测」落到评测段，别让人落到价格段再自己找。
+            // key 用 initialSection：同一个详情页里换入口（概览→引导卡）要真的切段，
+            // 而旋转时 key 不变、savedState 照常恢复。
+            var section by rememberSaveable(initialSection) { mutableStateOf(initialSection) }
             SectionTabRow(current = section, onSelect = { section = it })
             AnimatedContent(
                 targetState = section,

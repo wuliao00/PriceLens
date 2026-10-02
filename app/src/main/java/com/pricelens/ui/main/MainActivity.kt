@@ -29,12 +29,13 @@ import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PriceCheck
 import androidx.compose.material.icons.filled.QueryStats
+import androidx.compose.material.icons.outlined.ChatBubble
+import androidx.compose.material.icons.outlined.PriceCheck
+import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -65,10 +66,13 @@ import com.pricelens.R
 import com.pricelens.accessibility.OverlayManager
 import com.pricelens.data.repository.SettingsRepository
 import com.pricelens.ui.components.AppTopBar
+import com.pricelens.ui.components.PageTransition
+import com.pricelens.ui.components.StripReveal
 import com.pricelens.ui.onboarding.OnboardingFlow
 import com.pricelens.ui.onboarding.SetupHintBar
 import com.pricelens.ui.onboarding.rememberPermissionStates
 import com.pricelens.ui.overview.SearchViewModel
+import com.pricelens.ui.product.ProductSection
 import com.pricelens.ui.theme.MotionDurations
 import com.pricelens.ui.theme.PriceLensEasing
 import com.pricelens.ui.theme.PriceLensTheme
@@ -199,6 +203,8 @@ fun MainScreen(
     var showProduct by rememberSaveable { mutableStateOf(false) }
     // 「先按这个关键词搜、再把详情页盖上来」。nonce 是为了同一个商品再点一次也能重跑一次搜索
     var productRequest by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    // 从哪个入口进详情页就落哪一段：引导卡说"看评测"就必须落在评测段，不能落在价格段让人自己找
+    var productSection by rememberSaveable { mutableStateOf(ProductSection.PRICE) }
     // 首启引导：完成/跳过后持久化 onboardingDone，之后只从设置页"重新查看新手引导"进入
     var showOnboarding by rememberSaveable { mutableStateOf(!settings.onboardingDone) }
     var setupHintDismissed by rememberSaveable { mutableStateOf(false) }
@@ -252,8 +258,9 @@ fun MainScreen(
         val text = productRequest?.first
         if (!text.isNullOrBlank()) searchViewModel.search(text)
     }
-    val openProduct: (String) -> Unit = { text ->
+    val openProduct: (String, ProductSection) -> Unit = { text, section ->
         productRequest = text.ifBlank { keyword } to System.currentTimeMillis()
+        productSection = section
         showProduct = true
     }
     // 详情页是"页"不是"弹窗"：返回键必须先关它，不能直接把 App 退掉
@@ -324,22 +331,25 @@ fun MainScreen(
         },
         bottomBar = {
             NavigationBar {
+                // §2.1 底部导航选中态（文档"6 tab 收敛后每格要有反应"）：
+                // 未选中 Outlined / 选中 Filled 交叉淡入 + 图标 0.92→1.0 缩放，实现在 NavTabItem
                 Tab.entries.forEach { t ->
-                    NavigationBarItem(
+                    val (selectedIcon, unselectedIcon) = when (t) {
+                        Tab.OVERVIEW -> Icons.Filled.QueryStats to Icons.Outlined.QueryStats
+                        Tab.PRICE -> Icons.Filled.PriceCheck to Icons.Outlined.PriceCheck
+                        Tab.COMMUNITY -> Icons.Filled.ChatBubble to Icons.Outlined.ChatBubble
+                        // Person 属于 material-icons-core，core 只出 Filled 变体（jar 清单实测
+                        // 没有 icons/outlined/PersonKt），所以这一格没有可配的同形 Outlined 图标：
+                        // 传 null = 只做缩放，不换形状。换图标语义（Person→AccountCircle 一类）
+                        // 不是动效该顺手决定的事。
+                        Tab.PROFILE -> Icons.Filled.Person to null
+                    }
+                    NavTabItem(
                         selected = tab == t,
-                        onClick = { tab = t },
-                        icon = {
-                            Icon(
-                                when (t) {
-                                    Tab.OVERVIEW -> Icons.Filled.QueryStats
-                                    Tab.PRICE -> Icons.Filled.PriceCheck
-                                    Tab.COMMUNITY -> Icons.Filled.ChatBubble
-                                    Tab.PROFILE -> Icons.Filled.Person
-                                },
-                                contentDescription = stringResource(t.labelRes)
-                            )
-                        },
-                        label = { Text(stringResource(t.labelRes)) }
+                        label = stringResource(t.labelRes),
+                        iconSelected = selectedIcon,
+                        iconUnselected = unselectedIcon,
+                        onClick = { tab = t }
                     )
                 }
             }
@@ -348,7 +358,11 @@ fun MainScreen(
         Column(Modifier.padding(inner).fillMaxSize()) {
             // 剪贴板横条：只在概览页、只在认出商品链接时出现；「忽略」= 同一段内容不再提示
             val detected = clipboardLink
-            if (tab == Tab.OVERVIEW && detected != null) {
+            // 淡出期间 detected 已经被置 null：内容读这份快照，否则横条会在退场动画中途先空成一格
+            val bannerSnapshot = remember { mutableStateOf<com.pricelens.domain.LinkParser.ParsedLink?>(null) }
+            LaunchedEffect(detected) { if (detected != null) bannerSnapshot.value = detected }
+            StripReveal(visible = tab == Tab.OVERVIEW && detected != null) {
+                val banner = bannerSnapshot.value ?: return@StripReveal
                 androidx.compose.material3.Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     modifier = Modifier
@@ -363,14 +377,14 @@ fun MainScreen(
                         Text(
                             text = stringResource(
                                 R.string.clipboard_banner_text,
-                                detected.platform?.label ?: stringResource(R.string.clipboard_banner_unknown)
+                                banner.platform?.label ?: stringResource(R.string.clipboard_banner_unknown)
                             ),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.weight(1f)
                         )
                         TextButton(onClick = {
-                            val target = detected.url.ifBlank { detected.raw }
-                            com.pricelens.ui.common.ClipboardDetector.markIgnored(detected.raw)
+                            val target = banner.url.ifBlank { banner.raw }
+                            com.pricelens.ui.common.ClipboardDetector.markIgnored(banner.raw)
                             clipboardLink = null
                             tab = Tab.OVERVIEW
                             searchViewModel.search(target)
@@ -378,7 +392,7 @@ fun MainScreen(
                             Text(stringResource(R.string.clipboard_banner_go))
                         }
                         TextButton(onClick = {
-                            com.pricelens.ui.common.ClipboardDetector.markIgnored(detected.raw)
+                            com.pricelens.ui.common.ClipboardDetector.markIgnored(banner.raw)
                             clipboardLink = null
                         }) {
                             Text(stringResource(R.string.clipboard_banner_ignore))
@@ -387,14 +401,14 @@ fun MainScreen(
                 }
             }
             // 搜索框聚焦时展示搜索历史 chips（文档 UX）：最近搜过的一步直达
-            if (tab == Tab.OVERVIEW && searchFocused && recentSearches.isNotEmpty()) {
+            StripReveal(visible = tab == Tab.OVERVIEW && searchFocused && recentSearches.isNotEmpty()) {
                 SearchHistoryStrip(recentSearches) { kw ->
                     searchFocused = false
                     searchViewModel.research(kw)
                 }
             }
             // 引导跳过/完成后仍缺必要权限：首页顶部给一条可关闭的提示条（含"重开引导"入口）
-            if (tab == Tab.OVERVIEW && !permissionStates.essentialsReady && !setupHintDismissed) {
+            StripReveal(visible = tab == Tab.OVERVIEW && !permissionStates.essentialsReady && !setupHintDismissed) {
                 SetupHintBar(
                     missing = permissionStates.missingEssentials,
                     onReopenOnboarding = {
@@ -418,14 +432,15 @@ fun MainScreen(
                 when (targetTab) {
                     Tab.OVERVIEW -> com.pricelens.ui.overview.OverviewScreen(
                         searchViewModel,
-                        // B站不再是独立 tab：引导卡的「查看B站评测」落到详情页评测段（同一份 videos 状态）
-                        onGoBilibili = { openProduct(keyword) },
-                        onOpenProduct = openProduct
+                        // B站不再是独立 tab：引导卡的「查看B站评测」落到详情页的评测段
+                        onGoBilibili = { openProduct(keyword, ProductSection.REVIEW) },
+                        // 结果区的「看详情」是常规入口，落在价格段
+                        onOpenProduct = { openProduct(it, ProductSection.PRICE) }
                     )
                     Tab.PRICE -> com.pricelens.ui.price.PriceScreen(
                         searchViewModel,
                         priceWatchViewModel,
-                        onOpenProduct = openProduct
+                        onOpenProduct = { openProduct(it, ProductSection.PRICE) }
                     )
                     Tab.COMMUNITY -> com.pricelens.ui.community.CommunityScreen(searchViewModel)
                     Tab.PROFILE -> com.pricelens.ui.profile.ProfileScreen(
@@ -455,7 +470,8 @@ fun MainScreen(
     }
 
     // 设置页：全屏覆盖，权限 / 外观 / 数据 / 关于
-    if (showSettings) {
+    // PageTransition 而不是 if (showSettings)：调用方要常驻组合，exit 动画才有载体（见组件注释）
+    PageTransition(visible = showSettings) {
         com.pricelens.ui.settings.SettingsScreen(
             settings = settings,
             updateRepository = updateRepository,
@@ -472,7 +488,7 @@ fun MainScreen(
     }
 
     // 后台保活引导页（文档 §12）：从设置页进入，返回时回到设置页
-    if (showKeepAlive) {
+    PageTransition(visible = showKeepAlive) {
         com.pricelens.ui.settings.KeepAliveScreen(
             onBack = {
                 showKeepAlive = false
@@ -482,14 +498,15 @@ fun MainScreen(
     }
 
     // 自定义脚本页：Shizuku ADB 级 shell 执行
-    if (showScripts) {
+    PageTransition(visible = showScripts) {
         com.pricelens.ui.scripts.ScriptScreen(onBack = { showScripts = false })
     }
 
     // §十一 商品详情页（价格 / 找券 / 评测）：与设置页、保活页同一套全屏覆盖路由，不引入 Navigation
-    if (showProduct) {
+    PageTransition(visible = showProduct) {
         com.pricelens.ui.product.ProductDetailScreen(
             searchViewModel = searchViewModel,
+            initialSection = productSection,
             onBack = { showProduct = false }
         )
     }

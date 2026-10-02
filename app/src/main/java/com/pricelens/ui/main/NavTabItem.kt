@@ -35,13 +35,19 @@ import com.pricelens.ui.theme.PriceLensEasing
  * 包装函数不接 RowScope 会报 `Unresolved reference 'NavigationBarItem'`，
  * 并且**同一文件里再级联出两条 `@Composable invocations can only happen from the context of a @Composable function`**
  * ——那两条是假错，别照着它们改代码（本仓库为此白跑了两轮构建）。
+ *
+ * [iconUnselected] 可空：`material-icons-core` 只出 Filled 变体（实测 jar 里
+ * `icons/outlined/PersonKt` 不存在，extended 又为了不重复类而跳过 core 里已有的图标），
+ * 所以 `Icons.Filled.Person` 这类 core 图标**没有** Outlined 版可配对。传 null 时这一格只做
+ * 缩放不做形变；想给它配未选中态得换一个语义不同的图标（如 ManageAccounts），那属于改图标含义，
+ * 不该由动效顺手决定。
  */
 @Composable
 fun RowScope.NavTabItem(
     selected: Boolean,
     label: String,
     iconSelected: ImageVector,
-    iconUnselected: ImageVector,
+    iconUnselected: ImageVector? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -62,11 +68,16 @@ fun RowScope.NavTabItem(
         modifier = modifier,
         icon = {
             Box(contentAlignment = Alignment.Center, modifier = scaled) {
-                Crossfade(targetState = selected, animationSpec = tween(MotionDurations.Fast), label = "navIcon") { sel ->
-                    Icon(
-                        imageVector = if (sel) iconSelected else iconUnselected,
-                        contentDescription = label
-                    )
+                val unselected = iconUnselected
+                if (unselected == null) {
+                    Icon(imageVector = iconSelected, contentDescription = label)
+                } else {
+                    Crossfade(targetState = selected, animationSpec = tween(MotionDurations.Fast), label = "navIcon") { sel ->
+                        Icon(
+                            imageVector = if (sel) iconSelected else unselected,
+                            contentDescription = label
+                        )
+                    }
                 }
             }
         },
