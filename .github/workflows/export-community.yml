@@ -1,0 +1,45 @@
+name: export-community
+
+# 社区零服务器（文档 §九）：GitHub Discussions → community.json → App 经 Gitee raw 拉取。
+# 每小时导出一次；posts 无变化时脚本不写文件 → git-auto-commit 不产生提交（幂等）。
+# 注意：用 GITHUB_TOKEN 提交的 push 不会再触发其他 workflow（防循环），
+# 所以 Gitee 镜像必须在本 workflow 里自己推，不然 App（走 Gitee）拉不到新数据。
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      discussions: read
+    env:
+      GITEE_TOKEN: ${{ secrets.GITEE_MIRROR_TOKEN }}
+      GITEE_USER: ${{ secrets.GITEE_MIRROR_USERNAME }}
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          # 浅克隆推 Gitee 会被拒（shallow update not allowed）
+          fetch-depth: 0
+
+      - name: 导出 Discussions → community.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api graphql -f query='query{repository(owner:"wuliao00",name:"PriceLens"){discussions(first:50,orderBy:{field:UPDATED_AT,direction:DESC}){nodes{title url updatedAt body category{name} author{login} comments(first:3){nodes{body author{login}}}}}}}' \
+            --jq '.data.repository.discussions.nodes' > community_raw.json
+          python3 tools/format_community.py community_raw.json community.json
+
+      - name: 自动提交（有变更才提交）
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(community): 导出 Discussions → community.json"
+          file_pattern: "community.json"
+
+      - name: 同步 Gitee（App 的拉取源）
+        if: env.GITEE_TOKEN != ''
+        run: |
+          git push "https://${GITEE_USER}:${GITEE_TOKEN}@gitee.com/wuliao11541/PriceLens.git" HEAD:main

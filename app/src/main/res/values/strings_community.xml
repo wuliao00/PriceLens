@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 社区零服务器（文档 §九）：社区动态区块文案 -->
+<resources>
+    <string name="community_feed_title">社区动态（好价爆料 · 规则反馈 · 问答）</string>
+    <string name="community_feed_loading">正在读取社区动态…</string>
+    <string name="community_feed_empty">社区还没有帖子。欢迎去 GitHub 发第一帖（好价爆料 / 规则反馈 / 问答）。</string>
+    <string name="community_feed_unavailable">暂时拿不到社区动态：%1$s</string>
+    <string name="community_feed_stale">本轮刷新失败，展示的是上次同步的数据</string>
+    <string name="community_feed_more">只显示最近 10 条 · 全部内容在 GitHub 查看</string>
+    <string name="community_feed_reply">%1$s 回复：%2$s</string>
+    <string name="community_feed_footer">发起人 @%1$s · 点击卡片在浏览器打开</string>
+    <string name="community_feed_post_new">去 GitHub 发帖</string>
+    <string name="community_feed_post_hint">发帖与查看原文需能访问 GitHub；帖子的只读镜像是国内可直连的（随仓库自动同步）。</string>
+</resources>
