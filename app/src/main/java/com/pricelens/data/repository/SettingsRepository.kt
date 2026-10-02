@@ -184,6 +184,21 @@ class SettingsRepository @Inject constructor(
         prefs.edit().putBoolean("onboarding_done", done).apply()
     }
 
+    // ---------- PL-29 浮窗小圆球的位置（纯本机 UI 态，不参与备份/同步） ----------
+
+    /**
+     * 球所在窗口的左上角 x（px，TOP|START 坐标系）。
+     * -1 = 从没拖过：这时浮窗收起按当前面板位置现算，而不是把球凭空扔到屏幕边上。
+     */
+    var ballX: Int
+        get() = prefs.getInt("ball_x", -1)
+        set(value) = prefs.edit().putInt("ball_x", value).apply()
+
+    /** 球所在窗口的左上角 y（px）。哨兵值与 [ballX] 同一个 -1 */
+    var ballY: Int
+        get() = prefs.getInt("ball_y", -1)
+        set(value) = prefs.edit().putInt("ball_y", value).apply()
+
     /** 上一次已提示过的清单 generatedAt：同一次发布只提示一次（含阻断层） */
     val lastCheckedGeneratedAt: Long
         get() = prefs.getLong("last_checked_generated_at", 0L)

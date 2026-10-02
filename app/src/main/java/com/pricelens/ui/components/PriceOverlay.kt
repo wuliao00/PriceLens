@@ -1,20 +1,28 @@
 package com.pricelens.ui.components
 
+import android.view.ViewConfiguration
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -22,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -39,30 +48,48 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pricelens.R
+import com.pricelens.accessibility.BALL_DIAMETER_DP
+import com.pricelens.accessibility.OverlayMode
 import com.pricelens.accessibility.PriceBasis
 import com.pricelens.accessibility.PriceEvents
 import com.pricelens.accessibility.ShopPlatform
+import com.pricelens.accessibility.ballLabel
+import com.pricelens.accessibility.isDrag
 import com.pricelens.data.local.entity.WatchIdentityEntity
 import com.pricelens.data.remote.ManmanbuyApi
 import com.pricelens.data.repository.OverlayBundle
 import com.pricelens.domain.OverlayIdentityPolicy
 import com.pricelens.ui.theme.Dims
+import com.pricelens.ui.theme.Elevations
+import com.pricelens.ui.theme.MotionDurations
+import com.pricelens.ui.theme.PriceLensEasing
 import com.pricelens.util.PriceFormatter
 import com.pricelens.util.TimeAgo
 import java.time.LocalDate
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+
+/** 球面透明度：只有"画"这一层半透明，`LayoutParams.alpha` 仍保持 1.0（见 OverlayManager 文件头第 4 条）。
+ * 球窗口尺寸贴球，不存在"穿越到下层的触摸"，所以这层 alpha 不触发 Android 12+ Untrusted touch。 */
+private const val BALL_SURFACE_ALPHA = 0.9f
 
 /**
  * §1.5 比价浮窗（A2 重写）：默认**折叠胶囊条**（宽≤屏宽40%、高≤48dp、右上，不遮商品价与购买按钮），
@@ -79,6 +106,16 @@ import kotlin.math.roundToInt
  * 面板/胶囊不透明：窗口 alpha 保持 1.0、不加 FLAG_NOT_TOUCHABLE，规避 Android 12+
  * Untrusted touch（半透明遮挡会丢弃穿越到下层的触摸）。
  *
+ * PL-29 形态（面板 ↔ 小圆球）：
+ *  - 胶囊条上**常驻**一个「收起」动作（不加设置开关）：面板以 scale + fade（250ms、
+ *    [PriceLensEasing]，禁 bounce/overshoot）收进圆球；动画跑完才回调 [onCollapseWindow]
+ *    让 OverlayManager 把窗口收缩成球径 —— 先缩窗口会把动画裁掉。
+ *  - 球：直径 [BALL_DIAMETER_DP] dp、[Elevations.Overlay] 高度、只显极简价格
+ *    （现价 + 能算出来时的 ↑/↓ 百分数，见 [ballLabel]）；点按展开回面板（同一转场反向），
+ *    拖动松手吸附最近的左/右边（吸附与边界判定全在纯函数里，见 `BallGeometry.kt`）。
+ *  - 点按还是拖动由 `ViewConfiguration.scaledTouchSlop` 判，见 [isDrag]（阈值不写死）。
+ *  - 球上没有关闭入口：离开商详页由服务收窗；要关面板就展开后点 X。
+ *
  * [identityLowest] = 已确认身份的 `ovl:` 本机曲线最低日点（null = 还没有可用点）；
  * M7 它是这条窄接口的唯一消费者——库里积了点却读不回 UI，等于把用户"白看了"。
  */
@@ -89,7 +126,12 @@ fun PriceOverlay(
     identity: WatchIdentityEntity?,
     identityDays: Int,
     identityLowest: Double?,
+    mode: OverlayMode,
     onDrag: (Float, Float) -> Unit,
+    onBallDrag: (Float, Float) -> Unit,
+    onBallSettled: () -> Unit,
+    onCollapseWindow: () -> Unit,
+    onExpandWindow: () -> Unit,
     onToggleExpanded: (Boolean) -> Unit,
     onCompare: () -> Unit,
     onConfirmIdentity: () -> Unit,
@@ -108,8 +150,32 @@ fun PriceOverlay(
         label = "overlayEnter"
     )
 
-    // 展开态属于浮窗 UI，挂在 composable 内部；换商品（签名变化）自动回到折叠态
-    var expanded by remember(detected.signature) { mutableStateOf(false) }
+    // 形态：`mode` 是 OverlayManager 的权威态（它决定窗口尺寸），`shown` 是屏幕上正在播的那一态。
+    // 两者只在那 250ms 里不一致：旧形态先 scale+fade 收拢到看不见，才让 manager 换窗口尺寸，
+    // 新形态再从同一条曲线里长出来 —— 反过来（先缩窗口）动画会被窗口边裁掉。
+    var shown by remember(detected.signature) { mutableStateOf(mode) }
+    val form = remember { Animatable(1f) }
+    val switchScope = rememberCoroutineScope()
+    LaunchedEffect(mode) {
+        // 权威态被外部直接改写（hide()/下一次 show() 复位）而屏幕还停在旧形态：不等动画，立刻跟上
+        if (shown != mode) {
+            shown = mode
+            form.snapTo(1f)
+        }
+    }
+
+    val touchSlopPx = ViewConfiguration.get(LocalView.current.context).scaledTouchSlop
+
+    // 一次转场：旧形态 scale+fade 收拢 → 让 manager 换窗口尺寸/坐标 → 新形态同一条曲线长回来。
+    // 收拢与展开各 250ms（MotionDurations.Standard），缓动只有 PriceLensEasing（§2 铁律禁 bounce）。
+    val switchForm: (OverlayMode, () -> Unit) -> Unit = { target, commit ->
+        switchScope.launch {
+            form.animateTo(0f, tween(MotionDurations.Standard, easing = PriceLensEasing))
+            commit()
+            shown = target
+            form.animateTo(1f, tween(MotionDurations.Standard, easing = PriceLensEasing))
+        }
+    }
 
     val basisLabel = stringResource(
         when (detected.priceBasis) {
@@ -127,6 +193,87 @@ fun PriceOverlay(
         }
     )
 
+    // 展开态属于浮窗 UI，挂在 composable 内部；换商品（签名变化）或形态换了一轮都回到折叠胶囊
+    var expanded by remember(detected.signature, shown) { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier.graphicsLayer {
+            // 入场（progress）与形态转场（form）都只走绘制通道，不改布局尺寸
+            val v = form.value
+            alpha = progress * v
+            val scale = 0.45f + 0.55f * v
+            scaleX = scale
+            scaleY = scale
+            translationY = (1f - progress) * 12.dp.toPx()
+        }
+    ) {
+        when (shown) {
+            OverlayMode.Panel -> PanelForm(
+                detected = detected,
+                bundle = bundle,
+                identity = identity,
+                identityDays = identityDays,
+                identityLowest = identityLowest,
+                basisLabel = basisLabel,
+                ownPlatform = ownPlatform,
+                expanded = expanded,
+                onToggleExpanded = {
+                    expanded = it
+                    onToggleExpanded(it)
+                },
+                onCollapse = { switchForm(OverlayMode.Ball, onCollapseWindow) },
+                onDrag = onDrag,
+                onCompare = onCompare,
+                onConfirmIdentity = onConfirmIdentity,
+                onCancelIdentity = onCancelIdentity,
+                onDismiss = onDismiss
+            )
+
+            OverlayMode.Ball -> BallForm(
+                label = ballLabel(detected.price, ballReferenceLowest(detected, bundle, identity, identityLowest)),
+                touchSlopPx = touchSlopPx,
+                onDrag = onBallDrag,
+                onSettled = onBallSettled,
+                onTap = { switchForm(OverlayMode.Panel, onExpandWindow) }
+            )
+        }
+    }
+}
+
+/**
+ * 球的参考低价（↑/↓ 的分母）：与面板第②行/已确认行**同一取数口径**，不许在球上放宽 ——
+ * 确定性商品 ID 命中才用慢慢买 90 天窗口内的最低，否则只用用户确认过身份的本机最低。
+ */
+private fun ballReferenceLowest(
+    detected: PriceEvents.Detected,
+    bundle: OverlayBundle?,
+    identity: WatchIdentityEntity?,
+    identityLowest: Double?
+): Double? = if (detected.itemId != null) {
+    lowestWithinDays(bundle?.history, 90)?.price
+} else {
+    if (identity != null) identityLowest else null
+}
+
+/** 折叠胶囊 + 可选的 5 行面板（PL-29 之前 PriceOverlay 的全部内容，原样搬进来） */
+@Composable
+private fun PanelForm(
+    detected: PriceEvents.Detected,
+    bundle: OverlayBundle?,
+    identity: WatchIdentityEntity?,
+    identityDays: Int,
+    identityLowest: Double?,
+    basisLabel: String,
+    ownPlatform: String,
+    expanded: Boolean,
+    onToggleExpanded: (Boolean) -> Unit,
+    onCollapse: () -> Unit,
+    onDrag: (Float, Float) -> Unit,
+    onCompare: () -> Unit,
+    onConfirmIdentity: () -> Unit,
+    onCancelIdentity: () -> Unit,
+    onDismiss: () -> Unit
+) {
     Column(
         modifier = Modifier
             // 命中区必须铺满整块窗口：WindowManager 给本窗口的可触摸范围是整个 frame
@@ -144,19 +291,12 @@ fun PriceOverlay(
                 val capsuleBandPx = (12.dp + 48.dp).toPx()
                 detectTapGestures(onTap = { offset ->
                     // 只认胶囊那一条（含 12dp 外圈）；面板区域的点击仍归面板内控件
-                    if (offset.y <= capsuleBandPx) {
-                        expanded = !expanded
-                        onToggleExpanded(expanded)
-                    }
+                    if (offset.y <= capsuleBandPx) onToggleExpanded(!expanded)
                 })
             }
             .padding(12.dp)
-            .graphicsLayer {
-                alpha = progress
-                translationY = (1f - progress) * 12.dp.toPx()
-            }
     ) {
-        // ---------- 折叠胶囊（常驻，无 15s 自动消失；手动 X 关闭） ----------
+        // ---------- 折叠胶囊（常驻，无 15s 自动消失；手动 X 关闭，「收起」变小球） ----------
         val capsuleMaxWidth = (LocalConfiguration.current.screenWidthDp * 0.4f).dp
         Surface(
             modifier = Modifier
@@ -180,6 +320,15 @@ fun PriceOverlay(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.width(2.dp))
+                // PL-29 收起入口：始终在这一条里（展开/折叠都在），不新增设置开关
+                TextButton(
+                    onClick = onCollapse,
+                    modifier = Modifier.minimumInteractiveComponentSize(),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(stringResource(R.string.ovl_ball_collapse), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
                 IconButton(onClick = onDismiss, modifier = Modifier.minimumInteractiveComponentSize()) {
                     Icon(
                         Icons.Filled.Close,
@@ -380,6 +529,92 @@ fun PriceOverlay(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 小圆球：直径 [BALL_DIAMETER_DP] dp，只显 [ballLabel] 那两行（现价 + 可选差值标记）。
+ *
+ * 手势只有一个 `pointerInput`：按下后累计位移，**超过** touch slop 才动窗口（[onDrag]），
+ * 松手吸附（[onSettled]）；没超过就当点按展开回面板（[onTap]）。
+ * 拆成"拖动一个 pointerInput + 点击一个 pointerInput"是两个节点各自判定同一根手指，
+ * 真机上就是"一动就误判成点击"（面板那两条的历史问题，这里不再犯）。
+ */
+@Composable
+private fun BallForm(label: String, touchSlopPx: Int, onDrag: (Float, Float) -> Unit, onSettled: () -> Unit, onTap: () -> Unit) {
+    val noPrice = stringResource(R.string.ovl_ball_no_price)
+    val lines = label.split('\n')
+    val priceLine = lines.firstOrNull().orEmpty().ifEmpty { noPrice }
+    val ballCd = stringResource(R.string.ovl_ball_cd_expand, label.replace('\n', ' ').ifEmpty { noPrice })
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .semantics { contentDescription = ballCd }
+            .pointerInput(touchSlopPx) {
+                awaitEachGesture {
+                    awaitBallGesture(touchSlopPx, onDrag, onSettled, onTap)
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier.size(BALL_DIAMETER_DP.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = BALL_SURFACE_ALPHA),
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            tonalElevation = 4.dp,
+            shadowElevation = Elevations.Overlay
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(horizontal = 3.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = priceLine,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (lines.size > 1) {
+                    Text(
+                        text = lines[1],
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 球上的按下→移动→抬起一次判定：位移长度与 [isDrag] 的阈值来自 ViewConfiguration（调用方给的 px） */
+private suspend fun AwaitPointerEventScope.awaitBallGesture(
+    slopPx: Int,
+    onDrag: (Float, Float) -> Unit,
+    onSettled: () -> Unit,
+    onTap: () -> Unit
+) {
+    val down = awaitFirstDown(requireUnconsumed = false)
+    var previous = down.position
+    var travelled = 0f
+    while (true) {
+        val event = awaitPointerEvent(PointerEventPass.Main)
+        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+        if (change.pressed) {
+            val delta = change.position - previous
+            previous = change.position
+            // 没到 slop 之前窗口一动不动：手指按下时的几像素抖动不该被看成"拖了一下"
+            if (isDrag(travelled, slopPx)) onDrag(delta.x, delta.y)
+            travelled += delta.getDistance()
+            change.consume()
+        } else {
+            if (isDrag(travelled, slopPx)) onSettled() else onTap()
+            break
         }
     }
 }

@@ -13,6 +13,12 @@
     <!-- 内容描述 -->
     <string name="ovl_cd_close">关闭浮窗</string>
 
+    <!-- PL-29 浮窗收起为小圆球（不加设置开关：胶囊条上常驻「收起」入口） -->
+    <string name="ovl_ball_collapse">收起</string>
+    <!-- 价格读不出来时球上的兜底字（ballLabel 是纯函数，只出价与 ↑/↓ 百分数，不产词） -->
+    <string name="ovl_ball_no_price">比价</string>
+    <string name="ovl_ball_cd_expand">价格浮窗小圆球，点击展开 · %1$s</string>
+
     <!-- 浮窗行文案 -->
     <string name="ovl_title_fallback">当前商品</string>
     <!-- 历史最低行：窗口内有曲线点才允许说"90 天最低"；窗口内无点时只能明说是窗口外的老曲线（F3 缺陷一） -->
