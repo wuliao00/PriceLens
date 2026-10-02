@@ -27,10 +27,8 @@ import com.pricelens.R
 import com.pricelens.community.CommunityFeed
 import com.pricelens.community.CommunityPost
 import com.pricelens.community.CommunityState
-import com.pricelens.ui.components.PriceBadge
 import com.pricelens.ui.components.PriceCard
 import com.pricelens.ui.components.SectionHeader
-import com.pricelens.ui.theme.BadgeTone
 import com.pricelens.ui.theme.Dims
 import com.pricelens.util.TimeAgo
 import com.pricelens.util.UrlOpener
@@ -105,54 +103,55 @@ fun CommunityFeedSection() {
     }
 }
 
+/**
+ * 社区动态卡片：稳定三段（标题 1 行 + 摘要 2 行 + 元信息 1 行）。
+ *
+ * 改动前这张卡是"徽标行 + 标题 2 行 + 摘要 3 行 + 回复 2 行 + 落款行"——
+ * 一屏放得下的帖子数完全取决于摘要长短，扫读时眼睛找不到对齐线。
+ * 现在段数与每段行数都固定，预算与截断口径见 [CommunityRows]（纯函数 + JVM 单测）。
+ *
+ * 摘要取值有一条诚实的回落：帖子没有正文摘要时，用第一条回复充当摘要——
+ * 内容还是那条内容，只是换了个段来放（回复比"这段是空的"有用）。
+ */
 @Composable
 private fun CommunityPostCard(post: CommunityPost) {
     val context = LocalContext.current
+    val parts = CommunityRows.of(
+        title = post.title,
+        excerpt = post.excerpt.ifBlank { post.replies.firstOrNull()?.body ?: "" },
+        metaParts = listOf(
+            post.category,
+            stringResource(R.string.layout_community_author_prefix, post.author),
+            if (post.updatedAtMs > 0) TimeAgo.format(post.updatedAtMs) else "",
+            if (post.replies.isNotEmpty()) stringResource(R.string.layout_community_replies, post.replies.size) else ""
+        )
+    )
     PriceCard(modifier = Modifier.fillMaxWidth(), onClick = { UrlOpener.open(context, post.url) }) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PriceBadge(post.category, BadgeTone.NEUTRAL)
-                Spacer(Modifier.weight(1f))
-                if (post.updatedAtMs > 0) {
-                    Text(
-                        TimeAgo.format(post.updatedAtMs),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(Modifier.height(Dims.SpacingS))
+        Text(
+            parts.title,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        parts.excerpt?.let {
+            Spacer(Modifier.height(Dims.SpacingXS))
+            // 段宽已由 CommunityRows 收敛到两行预算，这里的 maxLines=2 只是兜底
             Text(
-                post.title,
-                style = MaterialTheme.typography.bodyLarge,
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            if (post.excerpt.isNotBlank()) {
-                Text(
-                    post.excerpt,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            post.replies.take(1).forEach { reply ->
-                Text(
-                    stringResource(R.string.community_feed_reply, reply.author, reply.body),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(Modifier.height(Dims.SpacingS))
-            Text(
-                stringResource(R.string.community_feed_footer, post.author),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
+        Spacer(Modifier.height(Dims.SpacingXS))
+        Text(
+            parts.meta,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  排版 / 信息密度 / 版面层级大改（2026-10-02，代理 D）新增文案。
+  单独成文件而不是往 strings.xml / strings_ux.xml 里塞：本批次三个代理同时在改文案，
+  集中一处必然互相踩。键名统一 layout_ 前缀，合并时按前缀就能认出来。
+
+  注意：源名类文案受版面预算约束——紧凑行的源名最多 6 个汉字（纯函数
+  com.pricelens.ui.layout.SourceQuotes.LABEL_UNITS 会截，超了不会报错但会被省略号吃掉），
+  所以这里刻意写短："慢慢买价"而不是"慢慢买历史价格"。
+-->
+<resources>
+
+    <!-- 概览 · 各源报价单行列表 -->
+    <string name="layout_overview_quotes_title">各源报价</string>
+    <string name="layout_quote_account">本机实时价</string>
+    <string name="layout_quote_main">商品现价</string>
+    <string name="layout_quote_history">慢慢买价</string>
+    <string name="layout_quote_coupon">券后到手</string>
+    <string name="layout_quote_shihuo">识货报价</string>
+    <string name="layout_quote_post">爆料价</string>
+    <string name="layout_quote_no_price">无价</string>
+    <string name="layout_quote_count_word">条</string>
+
+    <!-- 概览 · 头卡一行收纳 + 降低高度的走势条 -->
+    <string name="layout_overview_header_lowest">最低 %1$s</string>
+    <string name="layout_overview_header_coupon">券后 %1$s</string>
+    <string name="layout_overview_curve_title">近期走势</string>
+    <string name="layout_overview_curve_none">历史点不足两条，画不出走势；已有的日点：%1$s</string>
+
+    <!-- 设置页 · 分组标题（组内各 section 的原小标题沿用 strings.xml 既有键） -->
+    <string name="layout_settings_group_account">账号与凭证</string>
+    <string name="layout_settings_group_notify">通知与提醒</string>
+    <string name="layout_settings_group_data">数据与备份</string>
+    <string name="layout_settings_group_appearance">外观</string>
+    <string name="layout_settings_group_about">关于与诊断</string>
+
+    <!-- 社区 · 稳定三段的元信息 -->
+    <string name="layout_community_author_prefix">@%1$s</string>
+    <string name="layout_community_replies">%1$d 回复</string>
+    <string name="layout_community_votes">值 %1$d · 不值 %2$d</string>
+    <string name="layout_community_votes_none">还没人投票</string>
+    <string name="layout_link_missing">无链接</string>
+
+</resources>

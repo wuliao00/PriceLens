@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -70,7 +69,7 @@ class OptionalCredsStep(private val settings: SettingsRepository) : OnboardingSt
                 label = { Text(stringResource(R.string.onboarding_creds_mmb)) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(110.dp)
+                    .height(Dims.TextAreaTall)
             )
             OutlinedButton(
                 onClick = {

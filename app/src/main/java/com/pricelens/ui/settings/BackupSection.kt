@@ -29,7 +29,6 @@ import com.pricelens.R
 import com.pricelens.data.backup.BackupFormat
 import com.pricelens.data.backup.WebDavProbe
 import com.pricelens.data.repository.SettingsRepository
-import com.pricelens.ui.components.SectionHeader
 import com.pricelens.ui.theme.Dims
 import com.pricelens.util.SecretMask
 
@@ -63,7 +62,7 @@ fun BackupSection(settings: SettingsRepository) {
         if (uri != null) vm.importSaf(uri)
     }
 
-    SectionHeader(stringResource(R.string.settings_section_backup))
+    SettingsSubtitle(stringResource(R.string.settings_section_backup))
     Column(Modifier.fillMaxWidth()) {
         Text(
             stringResource(R.string.settings_backup_desc),

@@ -34,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
 import com.pricelens.R
 import com.pricelens.data.repository.SettingsRepository
 import com.pricelens.ui.theme.Dims
@@ -161,7 +160,7 @@ private fun StepDots(count: Int, index: Int) {
         repeat(count) { i ->
             val active = i == index
             Surface(
-                modifier = Modifier.size(if (active) 8.dp else 6.dp),
+                modifier = Modifier.size(if (active) Dims.DotActive else Dims.DotIdle),
                 shape = CircleShape,
                 color = if (active) {
                     MaterialTheme.colorScheme.primary

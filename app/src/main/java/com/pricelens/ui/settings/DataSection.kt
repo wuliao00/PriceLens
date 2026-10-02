@@ -24,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -33,7 +32,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
 import com.pricelens.data.remote.CookieProbe
 import com.pricelens.data.remote.ManmanbuyApi
-import com.pricelens.ui.components.SectionHeader
 import com.pricelens.ui.theme.Dims
 import com.pricelens.update.UpdateRepository
 import com.pricelens.update.UpdateState
@@ -49,7 +47,7 @@ fun DataSection(
     onRefresh: () -> Unit,
     onClear: () -> Unit
 ) {
-    SectionHeader(stringResource(R.string.settings_section_data))
+    SettingsSubtitle(stringResource(R.string.settings_section_data))
     SettingsRow(
         title = stringResource(R.string.settings_cache_title),
         desc = cacheStats
@@ -80,7 +78,7 @@ fun DataSection(
  */
 @Composable
 fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepository) {
-    SectionHeader(stringResource(R.string.settings_section_credentials))
+    SettingsSubtitle(stringResource(R.string.settings_section_credentials))
 
     var apiKey by remember { mutableStateOf(settings.linkstarsApiKey) }
     var cookie by remember { mutableStateOf(settings.manmanbuyCookie) }
@@ -173,7 +171,7 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
                     )
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(120.dp)
+            modifier = Modifier.fillMaxWidth().height(Dims.TextAreaTall)
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
@@ -308,7 +306,7 @@ private fun probeCopy(ui: CookieProbeViewModel.Ui): String = when (ui) {
  */
 @Composable
 fun AboutSection(versionName: String, versionCode: Int, updateRepository: UpdateRepository, onReplayOnboarding: () -> Unit) {
-    SectionHeader(stringResource(R.string.settings_section_about))
+    SettingsSubtitle(stringResource(R.string.settings_section_about))
 
     var showDisclaimer by remember { mutableStateOf(false) }
     val updateState by updateRepository.state.collectAsStateWithLifecycle()

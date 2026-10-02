@@ -22,7 +22,6 @@ import androidx.compose.ui.res.stringResource
 import com.pricelens.R
 import com.pricelens.accessibility.OverlayManager
 import com.pricelens.ui.components.PriceBadge
-import com.pricelens.ui.components.SectionHeader
 import com.pricelens.ui.onboarding.isPriceLensAccessibilityEnabled
 import com.pricelens.ui.onboarding.rememberPermissionStates
 import com.pricelens.ui.theme.BadgeTone
@@ -42,7 +41,7 @@ import com.pricelens.util.UrlOpener
 
 @Composable
 fun PermissionSection(onOpenKeepAlive: () -> Unit) {
-    SectionHeader(stringResource(R.string.settings_section_permission))
+    SettingsSubtitle(stringResource(R.string.settings_section_permission))
 
     val context = LocalContext.current
     // 从系统设置返回时刷新各项状态：ON_RESUME + refreshKey 算法已抽到
@@ -142,7 +141,7 @@ internal fun PermissionRow(title: String, desc: String, granted: Boolean, action
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = Dims.SpacingM)
+            .padding(vertical = Dims.SpacingS)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(

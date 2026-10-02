@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.pricelens.R
 import com.pricelens.data.repository.SettingsRepository
-import com.pricelens.ui.components.SectionHeader
 import java.util.Locale
 
 /**
@@ -34,8 +33,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotifySection(settings: SettingsRepository) {
-    SectionHeader(stringResource(R.string.settings_section_notify))
-
+    // 组标题「通知与提醒」（SettingsBand）已经说明这一组是什么，这里不再重复一遍小标题
     // 轻量刷新键：开关/时间改动后让 remember 重读（设置本身是同步的 prefs 读写）
     var tick by remember { mutableStateOf(0) }
     val wifiOnly = remember(tick) { settings.notifyWifiOnly }

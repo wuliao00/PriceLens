@@ -37,8 +37,8 @@ import com.pricelens.update.UpdateRepository
 
 /**
  * 设置页（阶段4 拆分）：主壳只负责 Scaffold / 顶栏 / 滚动容器与页脚，
- * 内容按 外观/权限/数据/关于 拆到同包 4 个子文件：
- * [AppearanceSection] / [PermissionSection] / [DataSection] / [AboutSection]。
+ * 内容由同包各 Section 提供，2026-10-02 版式统一后**按五组分块**渲染（[SettingsBand]）：
+ * 账号与凭证 / 通知与提醒 / 数据与备份 / 外观 / 关于与诊断。
  *
  * v2.6.0：关于区新增"检查更新"与"重新查看新手引导"，故把 [UpdateRepository]
  * 与重开引导的回调透传进来（沿用 MainActivity 注入的单例，不另建 ViewModel）。
@@ -88,25 +88,37 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = Dims.SpacingL)
         ) {
-            AppearanceSection(settings)
-            PermissionSection(onOpenKeepAlive = onOpenKeepAlive)
-            DataSection(
-                settings = settings,
-                cacheStats = cacheStats,
-                onRefresh = { profileViewModel.refreshCacheStats() },
-                onClear = { profileViewModel.clearCache() }
-            )
-            // §五 备份与恢复（WebDAV 主路径 + SAF 本地导出兜底）
-            BackupSection(settings)
-            CredentialsSection(settings)
-            NotifySection(settings)
-            DiagnosticsSection()
-            AboutSection(
-                versionName = BuildConfig.VERSION_NAME,
-                versionCode = BuildConfig.VERSION_CODE,
-                updateRepository = updateRepository,
-                onReplayOnboarding = onReplayOnboarding
-            )
+            // 五组分块（顺序与相邻关系的来龙去脉见 [SettingsBand] 的注释）
+            SettingsBand(stringResource(R.string.layout_settings_group_account)) {
+                PermissionSection(onOpenKeepAlive = onOpenKeepAlive)
+                CredentialsSection(settings)
+            }
+            SettingsBand(stringResource(R.string.layout_settings_group_notify)) {
+                NotifySection(settings)
+            }
+            SettingsBand(stringResource(R.string.layout_settings_group_data)) {
+                DataSection(
+                    settings = settings,
+                    cacheStats = cacheStats,
+                    onRefresh = { profileViewModel.refreshCacheStats() },
+                    onClear = { profileViewModel.clearCache() }
+                )
+                // §五 备份与恢复（WebDAV 主路径 + SAF 本地导出兜底）：仍紧跟"数据"之后
+                BackupSection(settings)
+            }
+            SettingsBand(stringResource(R.string.layout_settings_group_appearance)) {
+                AppearanceSection(settings)
+            }
+            SettingsBand(stringResource(R.string.layout_settings_group_about)) {
+                AboutSection(
+                    versionName = BuildConfig.VERSION_NAME,
+                    versionCode = BuildConfig.VERSION_CODE,
+                    updateRepository = updateRepository,
+                    onReplayOnboarding = onReplayOnboarding
+                )
+                // 诊断收尾（2.8.0 就是最后一格，崩溃日志导出是"出事了才找"的东西，不抢前面的路）
+                DiagnosticsSection()
+            }
 
             Spacer(Modifier.height(Dims.SpacingS))
             Text(

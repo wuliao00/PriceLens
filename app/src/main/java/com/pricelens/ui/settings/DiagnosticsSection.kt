@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.pricelens.BuildConfig
 import com.pricelens.R
-import com.pricelens.ui.components.SectionHeader
 import com.pricelens.util.CrashHandler
 import com.pricelens.util.CrashLog
 import java.time.ZoneId
@@ -46,7 +45,7 @@ fun DiagnosticsSection() {
         }
     }
 
-    SectionHeader(stringResource(R.string.settings_section_diagnostics))
+    SettingsSubtitle(stringResource(R.string.settings_section_diagnostics))
     SettingsRow(
         title = stringResource(R.string.settings_crash_title),
         desc = if (count > 0) {

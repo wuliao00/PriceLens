@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -46,6 +46,7 @@ import com.pricelens.ui.components.ShimmerList
 import com.pricelens.ui.overview.SearchViewModel
 import com.pricelens.ui.theme.Dims
 import com.pricelens.ui.theme.LocalSemanticColors
+import com.pricelens.ui.theme.PriceType
 import com.pricelens.ui.theme.SemanticPalette
 import com.pricelens.util.PriceFormatter
 import com.pricelens.util.UrlOpener
@@ -157,116 +158,123 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
     }
 }
 
-/** 识货商品卡：标题 + 价格 + 品牌/销量 + 国补标签 */
+/**
+ * 识货商品卡：标题 1 行 + 元信息 1 行（价在元信息之前，同一行）。
+ *
+ * 改动前是"标题 2 行 + 价/品牌/销量/国补挤在一行"，长标题会把元信息顶出屏。
+ * 现在段数固定、每段一行，预算与截断口径全部走 [CommunityRows]（字簇口径，emoji 不截半）。
+ * 摘要段识货没给（搜索接口只有标题），按稳定三段的降级规则整段不出现。
+ */
 @Composable
 private fun ShihuoCard(item: ShihuoApi.ShihuoItem, onClick: () -> Unit) {
-    val semantic = LocalSemanticColors.current
+    val parts = CommunityRows.of(
+        title = item.title,
+        excerpt = null,
+        metaParts = listOfNotNull(
+            item.brand.takeIf { it.isNotEmpty() },
+            item.salesInfo.takeIf { it.isNotEmpty() },
+            if (item.hasSubsidy) stringResource(R.string.community_subsidy) else null,
+            if (item.url.isEmpty()) stringResource(R.string.layout_link_missing) else null
+        )
+    )
     PriceCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
-        Row {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             if (item.image.isNotEmpty()) {
                 AppImage(
                     url = item.image,
                     contentDescription = item.title,
-                    modifier = Modifier
-                        .width(Dims.SpacingXXXL * 2)
-                        .height(Dims.SpacingXXXL * 2)
-                        .padding(end = Dims.SpacingM),
+                    modifier = Modifier.size(Dims.ThumbHeader),
                     corner = Dims.ChipCorner
                 )
+                Spacer(Modifier.size(Dims.SpacingS))
             }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    item.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(Dims.SpacingS))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        PriceFormatter.format(item.price),
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontFeatureSettings = "tnum"
-                        ),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.width(Dims.SpacingM))
-                    Text(
-                        listOf(item.brand, item.salesInfo).filter { it.isNotEmpty() }
-                            .joinToString(" · "),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (item.hasSubsidy) {
-                        Spacer(Modifier.width(Dims.SpacingS))
-                        Text(
-                            stringResource(R.string.community_subsidy),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = semantic.lowPrice,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
+            Text(
+                parts.title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(Modifier.height(Dims.SpacingXS))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                PriceFormatter.format(item.price),
+                style = PriceType.PriceRowCompact,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.size(Dims.SpacingS))
+            Text(
+                parts.meta,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
         }
     }
 }
 
+/**
+ * 值得买爆料卡：标题 1 行（关键词高亮保留）+ 元信息 1 行（价 · 商城 · 值/不值票数）。
+ *
+ * 上一轮把「值不值」从 11sp 挤角标抬成整行 + 进度条，是因为那时它**只有**这一处展示；
+ * 现在票数同时进元信息行（文字，可被 TalkBack 读到），进度条退成"装饰 + 一眼比例感"，
+ * 没票时两者都不出现——不摆空条冒充结论。
+ */
 @Composable
 private fun PostCard(post: SmzdmApi.SmzdmPost, onClick: () -> Unit) {
     val semantic = LocalSemanticColors.current
+    val votes = post.positive + post.negative
+    val parts = CommunityRows.of(
+        title = post.title,
+        excerpt = null,
+        metaParts = listOfNotNull(
+            post.mall.takeIf { it.isNotEmpty() },
+            if (votes > 0) {
+                stringResource(R.string.layout_community_votes, post.positive, post.negative)
+            } else {
+                stringResource(R.string.layout_community_votes_none)
+            }
+        )
+    )
     PriceCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Text(
-            highlightKeywords(post.title, semantic),
+            highlightKeywords(parts.title, semantic),
             style = MaterialTheme.typography.bodyLarge,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(Modifier.height(Dims.SpacingS))
+        Spacer(Modifier.height(Dims.SpacingXS))
         Row(verticalAlignment = Alignment.CenterVertically) {
             post.price?.let {
                 Text(
                     PriceFormatter.format(it),
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontFeatureSettings = "tnum"
-                    ),
+                    style = PriceType.PriceRowCompact,
                     color = MaterialTheme.colorScheme.primary
                 )
-                Spacer(Modifier.width(Dims.SpacingM))
+                Spacer(Modifier.size(Dims.SpacingS))
             }
-        }
-        // 「值不值」原来挤在价格右侧的剩余宽度里、用 labelSmall(≈11sp) 显示，
-        // 真机上几乎看不清；而且票数恒为 0 时也照样报「值 0 / 不值 0」。
-        // 现在整行展示，并且**没票就说没票**，不摆一根空进度条冒充结论。
-        Spacer(Modifier.height(Dims.SpacingS))
-        if (post.positive + post.negative > 0) {
             Text(
-                stringResource(
-                    R.string.community_worth_votes,
-                    post.positive,
-                    post.negative,
-                    post.positive * 100 / (post.positive + post.negative)
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface
+                parts.meta,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
+        }
+        if (votes > 0) {
+            Spacer(Modifier.height(Dims.SpacingXS))
             LinearProgressIndicator(
-                progress = { post.positive.toFloat() / (post.positive + post.negative) },
+                progress = { post.positive.toFloat() / votes },
                 color = semantic.lowPrice,
                 trackColor = semantic.suspicious.copy(alpha = 0.25f),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = Dims.SpacingXS)
                     .height(Dims.SpacingXS)
-            )
-        } else {
-            Text(
-                stringResource(R.string.community_worth_none),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
