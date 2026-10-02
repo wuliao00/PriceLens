@@ -177,6 +177,7 @@ fun MainScreen(
     var tab by rememberSaveable { mutableStateOf(Tab.OVERVIEW) }
     var showDisclaimer by remember { mutableStateOf(!settings.disclaimerAgreed) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showKeepAlive by rememberSaveable { mutableStateOf(false) }
     var showScripts by rememberSaveable { mutableStateOf(false) }
     // 首启引导：完成/跳过后持久化 onboardingDone，之后只从设置页"重新查看新手引导"进入
     var showOnboarding by rememberSaveable { mutableStateOf(!settings.onboardingDone) }
@@ -411,6 +412,20 @@ fun MainScreen(
             onReplayOnboarding = {
                 showSettings = false
                 showOnboarding = true
+            },
+            onOpenKeepAlive = {
+                showSettings = false
+                showKeepAlive = true
+            }
+        )
+    }
+
+    // 后台保活引导页（文档 §12）：从设置页进入，返回时回到设置页
+    if (showKeepAlive) {
+        com.pricelens.ui.settings.KeepAliveScreen(
+            onBack = {
+                showKeepAlive = false
+                showSettings = true
             }
         )
     }

@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### 新增
+- **国产 ROM 保活引导页**（文档 §12；设置 → 权限 → 后台保活设置）：把「盯价被杀 → 降价提醒不会来」的因果讲清楚，再逐项给出路——
+  - 能自动判定的替你判定：通知权限（`areNotificationsEnabled`）、电池优化白名单（`isIgnoringBatteryOptimizations`；查询被 ROM 拒绝时显示「系统不给查」，不猜一个值糊弄）；
+  - 没有公开接口的绝不假装能判：「自启动」「后台弹出界面」直接写「系统不给查」；「前台服务 / 定时任务是否在跑」同理，只如实显示本进程最近一轮盯价时间（`WatchCheckRunner.lastRound` 内存快照，不新造持久化）；
+  - 分品牌步骤表 + 安全跳转：ROM 识别（小米 / 华为含荣耀 / OPPO 含一加·realme / vivo 含 iQOO / 其它）与「哪段步骤表、哪些跳转候选」是纯函数（`RomDetector` / `KeepAlivePlan`，不碰 Context）；自启动页按候选 `ComponentName` 逐个 `runCatching` 尝试（MIUI / EMUI / ColorOS / OriginOS 各自已知入口，跳不动自动退到「应用信息」页），任何一家 ROM 缺 Activity 都不闪退；
+  - 新增两个 JVM 单测类（`RomDetectorTest` / `KeepAlivePlanTest`）钉住品牌映射、步骤表选择与候选链形状。跳转执行本身（`startActivity` 落到各厂商页）没有 Robolectric 写不成测试，且本机无真机，可达性未验证 —— 已全部兜底到应用详情页。
+
 ## [2.8.0] - 2026-10-02
 
 > 本版主题：**把"凭证"与"入口"这两件事做对。**
