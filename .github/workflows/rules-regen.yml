@@ -1,0 +1,37 @@
+name: rules-regen
+
+# 选择器规则仓库侧自动化（防手写 sha256 出错）：
+# rules/** 或 assets 快照变更时，重算 sha256、递增规则 version / manifestVersion 并提交。
+# 幂等：无变化时不产生提交，也就不会再触发本 workflow（不会形成提交循环）。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "rules/**"
+      - "app/src/main/assets/rules/**"
+      - "tools/gen_rules_manifest.py"
+      - ".github/workflows/rules-regen.yml"
+  workflow_dispatch:
+
+jobs:
+  regen:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 重算 manifest 与 assets 快照
+        run: python3 tools/gen_rules_manifest.py
+
+      - name: 自动提交（有变更才提交）
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(rules): 重算 sha256 / 递增 manifest 版本"
+          file_pattern: "rules/** app/src/main/assets/rules/**"

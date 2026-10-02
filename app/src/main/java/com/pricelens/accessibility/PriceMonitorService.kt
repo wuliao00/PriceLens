@@ -5,6 +5,10 @@ import android.content.res.Configuration
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.pricelens.R
+import com.pricelens.rules.DetectionPipeline
+import com.pricelens.rules.DetectionPipeline.DetectionOutcome
+import com.pricelens.rules.RuleProvider
+import com.pricelens.util.LogT
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +25,10 @@ import kotlinx.coroutines.cancel
  *    旧浮窗最长滞留 15s）；
  *  - 商详页读不到价：窗口切换事件即时收窗，不再"return 但留着旧窗"；
  *  - 包名切换时清 lastSignature（旧版永不清空导致跨 App 串台）。
+ *
+ * v2.9.0 选择器规则：判定入口改为 [DetectionPipeline]（规则优先，规则未命中逐行仍走
+ * 上述硬编码启发式 —— 行为不变），本类只读 [RuleProvider] 的进程内快照，事件热路径上
+ * 不做任何 IO；规则装载/远端同步在 RuleSyncRepository / RuleSyncWorker。
  *
  * 配置见 res/xml/accessibility_service_config.xml（packageNames 白名单，300ms 事件节流）。
  */
@@ -63,47 +71,63 @@ class PriceMonitorService : AccessibilityService() {
         try {
             val platform = ShopPlatform.fromPackage(packageName)
             val snapshot = rootNode.toSnapshotCompat()
+            // 只有窗口切换事件的 className 才是 Activity 名；内容变化事件给的是 View 类名，
+            // 传给规则页过滤会把绝大多数事件拦没（PageRule.matchesActivity 对 null 放行）。
+            val activityName = if (isStateChanged) event.className?.toString() else null
 
-            if (!isProductPage(snapshot, platform)) {
-                // 离开商详（首页/列表/购物车/其他）：收窗 + 清内容，允许下次进入重新 emit
-                if (lastSignature != null) {
-                    lastSignature = null
-                    OverlayManager.onLeftProductPage()
+            // 规则优先 + 硬编码启发式回落（v2.9.0）：判定分支与收窗副作用在
+            // DetectionPipeline 里逐行保留旧行为，服务只做"取根节点 → 调管线 → 执行动作"。
+            when (val outcome = DetectionPipeline.detect(snapshot, platform, packageName, RuleProvider.snapshot(), activityName)) {
+                is DetectionOutcome.NotProductPage -> {
+                    // 离开商详（首页/列表/购物车/其他）：收窗 + 清内容，允许下次进入重新 emit
+                    if (lastSignature != null) {
+                        lastSignature = null
+                        OverlayManager.onLeftProductPage()
+                    }
+                    return
                 }
-                return
-            }
-
-            val priceHit = extractPriceHit(snapshot, platform)
-            if (priceHit == null) {
-                // 商详但读不到价（页面加载中/改版）：窗口切换事件收窗；内容变化事件等渲染完成
-                if (isStateChanged && lastSignature != null) {
-                    lastSignature = null
-                    OverlayManager.onLeftProductPage()
+                is DetectionOutcome.NoPrice -> {
+                    // 商详但读不到价（页面加载中/改版）：窗口切换事件收窗；内容变化事件等渲染完成
+                    if (isStateChanged && lastSignature != null) {
+                        lastSignature = null
+                        OverlayManager.onLeftProductPage()
+                    }
+                    return
                 }
-                return
+                is DetectionOutcome.Hit -> emitDetection(packageName, platform, outcome.detection)
             }
-            val titleHit = extractTitle(snapshot, platform)
-            val itemId = extractItemId(snapshot)
-
-            val signature = "$packageName|${itemId ?: ""}|${titleHit?.text ?: ""}|${priceHit.rawText}"
-            if (signature == lastSignature) return
-            lastSignature = signature
-
-            PriceEvents.emit(
-                PriceEvents.Detected(
-                    price = priceHit.value,
-                    rawPriceText = priceHit.rawText,
-                    title = titleHit?.text,
-                    packageName = packageName,
-                    platform = platform,
-                    priceBasis = priceHit.basis,
-                    itemId = itemId,
-                    sourceText = sourceLabel(platform)
-                )
-            )
         } finally {
             rootNode.recycleCompat()
         }
+    }
+
+    /**
+     * 命中出口（去重签名 + 日志 + 事件）。
+     * 日志写明"是谁命中的"：规则命中（含规则 id/版本/页面/选择器）或启发式回落 ——
+     * 规则失效排查（改版后浮窗内容变旧）的第一现场就是这条。
+     */
+    private fun emitDetection(packageName: String, platform: ShopPlatform, detection: DetectionPipeline.Detection) {
+        val priceHit = detection.price
+        val signature = "$packageName|${detection.itemId ?: ""}|${detection.title ?: ""}|${priceHit.rawText}"
+        if (signature == lastSignature) return
+        lastSignature = signature
+
+        LogT.i(
+            "A11Y 命中来源=${detection.source.label} ${detection.matchedBy} " +
+                "price=${priceHit.rawText}(basis=${priceHit.basis}) title=${detection.title?.take(24)} itemId=${detection.itemId}"
+        )
+        PriceEvents.emit(
+            PriceEvents.Detected(
+                price = priceHit.value,
+                rawPriceText = priceHit.rawText,
+                title = detection.title,
+                packageName = packageName,
+                platform = platform,
+                priceBasis = priceHit.basis,
+                itemId = detection.itemId,
+                sourceText = sourceLabel(platform)
+            )
+        )
     }
 
     /** 浮窗脚注"来源"文案（机器可读的平台名保留在 Detected.platform，这里是人读文案） */

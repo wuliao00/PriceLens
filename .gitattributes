@@ -1,0 +1,5 @@
+# 选择器规则按字节做 sha256（manifest.json 里的摘要必须与 Gitee raw 上的字节一致），
+# 因此这两个目录必须锁死 LF：Windows 的 autocrlf 换行会让“工作区字节 ≠ 仓库字节”，
+# 直接破坏完整性校验与 BuiltinRuleTest 的摘要断言。
+rules/*.json text eol=lf
+app/src/main/assets/rules/*.json text eol=lf

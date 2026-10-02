@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### 新增
+- **选择器规则远程订阅（GKD 式热更）**：商详页"哪里是标题、哪里是价格、怎么确认是商品页"从硬编码判定抽出为 JSON 规则，可从远端热更，京东改版不再等发版。仓库侧新增 `rules/jd.json` + `rules/manifest.json`（sha256 清单）+ `tools/gen_rules_manifest.py`（内容变化自动递增版本并重算 sha256）+ `rules-regen` Actions；App 侧冷启动装载 + 每 6 小时同步（ETag + sha256 校验 + 原子替换，失败保留旧规则，全失败回落内置 `assets/rules/jd.json`）。
+- 提取引擎支持 `text` / `textRegex`（含捕获组）/ `desc` / `descRegex` / `viewId` 五种选择器与 `allOf`/`anyOf`/`noneOf` 确认条件；规则优先、启发式兜底（规则未命中行为与改造前完全一致，日志写明是谁命中的）。
+- 规则侧信任模型与 `update.json` 完全一致（Gitee raw + HTTPS + sha256），详见 `docs/API.md`「选择器规则远程订阅」。
+
 ## [2.8.0] - 2026-10-02
 
 > 本版主题：**把"凭证"与"入口"这两件事做对。**
