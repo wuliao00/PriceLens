@@ -62,6 +62,10 @@ class SearchViewModel @Inject constructor(
     private val _keyword = MutableStateFlow("")
     val keyword: StateFlow<String> = _keyword
 
+    /** 最近搜索（顶栏聚焦时的历史 chips；与「我的」页同一数据源） */
+    val recentSearches: StateFlow<List<String>> =
+        repository.recentSearches().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
     /** 整体搜索进行中（骨架屏门控，与原全局 loading 语义一致） */
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading

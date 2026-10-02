@@ -107,6 +107,17 @@ interface PriceTargetDao {
 
     @Query("SELECT * FROM price_targets WHERE active = 1")
     fun observeActive(): Flow<List<PriceTargetEntity>>
+
+    @Query("SELECT * FROM price_targets WHERE productId = :productId")
+    suspend fun getById(productId: String): PriceTargetEntity?
+
+    /** 全部目标（含已暂停）：「我的」页要能看到暂停项并恢复它 */
+    @Query("SELECT * FROM price_targets ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<PriceTargetEntity>>
+
+    /** 彻底删除（与「暂停」= active=0 不同） */
+    @Query("DELETE FROM price_targets WHERE productId = :productId")
+    suspend fun delete(productId: String)
 }
 
 @Dao

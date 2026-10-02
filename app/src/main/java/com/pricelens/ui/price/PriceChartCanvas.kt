@@ -45,6 +45,8 @@ fun PriceChartCanvas(
     // §3.5 语义色走 LocalSemanticColors（暗色感知）；网格灰走 colorScheme，暗色自动适配
     val semantic = LocalSemanticColors.current
     val gridColor = MaterialTheme.colorScheme.outlineVariant
+    // 当前价脉冲光晕向"当前主题的表面色"混合：亮色下≈白，暗色下不再泛白刺眼（深色审查项）
+    val haloColor = lerp(lineColor, MaterialTheme.colorScheme.surface, 0.6f)
 
     Canvas(modifier = modifier) {
         val points = history.points
@@ -106,7 +108,7 @@ fun PriceChartCanvas(
         val lastX = xOf(visibleCount - 1)
         val lastY = yOf(points[visibleCount - 1].price)
         drawCircle(
-            color = lerp(lineColor, Color.White, 0.6f).copy(alpha = 0.45f * progress),
+            color = haloColor.copy(alpha = 0.45f * progress),
             radius = 9.dp.toPx(),
             center = Offset(lastX, lastY)
         )

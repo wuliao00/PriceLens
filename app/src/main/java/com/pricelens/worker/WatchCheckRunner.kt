@@ -5,6 +5,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -27,6 +29,7 @@ import com.pricelens.util.LogT
 import com.pricelens.util.PriceFormatter
 import com.pricelens.widget.WatchWidget
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
@@ -297,8 +300,28 @@ class WatchCheckRunner @Inject constructor(
      *    `WatchTargetPolicy.skipReasonFor` 已经把它判成"本轮取不到现价"，
      *    既不计 checked 也不进 [WatchRoundReport.triggeredProductIds]。
      */
-    private fun sendNotification(context: Context, target: PriceTargetEntity, sample: PriceSample) {
+    private suspend fun sendNotification(context: Context, target: PriceTargetEntity, sample: PriceSample) {
         if (!notificationsAllowed(context)) return
+        // 富通知闸门（文档 UX）：免打扰时段 / 仅 WiFi；被抑制只是"这一轮不发"，下一轮重新评估
+        val nowMinute = Calendar.getInstance().let {
+            it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE)
+        }
+        val gate = NotificationGate.decide(
+            nowMinuteOfDay = nowMinute,
+            quietHoursEnabled = settings.quietHoursEnabled,
+            quietStartMinute = settings.quietStartMinute,
+            quietEndMinute = settings.quietEndMinute,
+            wifiOnlyEnabled = settings.notifyWifiOnly,
+            onWifi = onWifi(context)
+        )
+        if (!gate.allowed) {
+            LogT.i("降价通知被闸门抑制（${gate.reason}）：${target.productId}")
+            return
+        }
+        // 「忽略」记忆：忽略时的价格之上不再提醒；创新低自动解除（按了按钮就必须有感）
+        val ignoreStore = NotifyIgnoreStore(context)
+        if (ignoreStore.suppress(target.productId, sample.price)) return
+        ignoreStore.clearIfPriceLower(target.productId, sample.price)
         val price = PriceFormatter.formatRaw(sample.price)
         val targetPrice = PriceFormatter.formatRaw(target.targetPrice)
         val liveFromJd = sample.source == PriceSource.JD_P3CN
@@ -312,17 +335,61 @@ class WatchCheckRunner @Inject constructor(
         } else {
             context.getString(R.string.notification_price_drop_sourced, price, sample.source.label, targetPrice)
         }
+        val viewIntent = PendingIntent.getActivity(
+            context,
+            target.productId.hashCode(),
+            Intent(context, com.pricelens.ui.main.MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val ignoreIntent = PendingIntent.getBroadcast(
+            context,
+            target.productId.hashCode() + 1,
+            Intent(context, NotifyIgnoreReceiver::class.java)
+                .setAction(NotifyIgnoreReceiver.ACTION_NOTIFY_IGNORE)
+                .putExtra(NotifyIgnoreReceiver.EXTRA_PRODUCT_ID, target.productId)
+                .putExtra(NotifyIgnoreReceiver.EXTRA_PRICE, sample.price),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val notification = NotificationCompat.Builder(context, CHANNEL_PRICE_ALERT)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setStyle(curveStyle(target.productId, text))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(viewIntent)
+            .addAction(0, context.getString(R.string.notification_action_view), viewIntent)
+            .addAction(0, context.getString(R.string.notification_action_ignore), ignoreIntent)
             .build()
         NotificationManagerCompat.from(context)
             .notify(target.productId.hashCode(), notification)
     }
+
+    /** 有曲线（≥2 个日点）就给迷你曲线缩略图；取数与绘制全程 runCatching，失败回落纯文本 */
+    private suspend fun curveStyle(productId: String, text: String): NotificationCompat.Style {
+        val picture = runCatching {
+            val values = db.priceHistoryDao().getByProduct(productId)
+                .sortedBy { it.date }
+                .map { it.price }
+                .filter { it > 0 }
+            val points = NotifyCurveGeometry.pathPoints(values, CURVE_WIDTH, CURVE_HEIGHT, CURVE_PAD)
+                ?: return@runCatching null
+            NotifyCurveBitmap.render(points, CURVE_WIDTH.toInt(), CURVE_HEIGHT.toInt(), CURVE_COLOR)
+        }.getOrNull()
+        return if (picture != null) {
+            NotificationCompat.BigPictureStyle()
+                .bigPicture(picture)
+                .bigLargeIcon(null as android.graphics.Bitmap?)
+        } else {
+            NotificationCompat.BigTextStyle().bigText(text)
+        }
+    }
+
+    /** 是否 WiFi；查询异常按"放行"（宁多提醒一次），无网络按非 WiFi 处理（仅 WiFi 选项下抑制） */
+    private fun onWifi(context: Context): Boolean = runCatching {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        cm.getNetworkCapabilities(cm.activeNetwork)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ?: false
+    }.getOrDefault(true)
 
     /**
      * 连续多轮零进展 → 一条可点开的说明通知。
@@ -369,6 +436,12 @@ class WatchCheckRunner @Inject constructor(
     companion object {
         const val CHANNEL_PRICE_ALERT = "price_alert"
         const val CHANNEL_WATCH_STATUS = "watch_status"
+
+        /** 通知迷你曲线画布：尺寸够清楚又不至于把通知撑爆；线色是通知栏深浅底都可辨认的中绿 */
+        private const val CURVE_WIDTH = 512f
+        private const val CURVE_HEIGHT = 128f
+        private const val CURVE_PAD = 12f
+        private val CURVE_COLOR = 0xFF4CAF50.toInt()
 
         /** 连续这么多轮零进展才提示一次（30 分钟一轮 → 约 1 小时） */
         private const val STALLED_ROUNDS_BEFORE_NOTICE = 2

@@ -183,6 +183,8 @@ fun MainScreen(
     val searchViewModel: SearchViewModel = hiltViewModel()
     val priceWatchViewModel: com.pricelens.ui.price.PriceWatchViewModel = hiltViewModel()
     val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
+    // 搜索框聚焦时展示的历史 chips（文档 UX）——「我的」页搜索历史同一数据源
+    val recentSearches by searchViewModel.recentSearches.collectAsStateWithLifecycle()
 
     // 顺从原则：顶栏随内容滚动自动隐去（enterAlways），向下滚动立即回归
     val topBarState = rememberTopAppBarState()
@@ -193,6 +195,7 @@ fun MainScreen(
     var tab by rememberSaveable { mutableStateOf(Tab.OVERVIEW) }
     var showDisclaimer by remember { mutableStateOf(!settings.disclaimerAgreed) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var searchFocused by rememberSaveable { mutableStateOf(false) }
     var showKeepAlive by rememberSaveable { mutableStateOf(false) }
     var showScripts by rememberSaveable { mutableStateOf(false) }
     // 首启引导：完成/跳过后持久化 onboardingDone，之后只从设置页"重新查看新手引导"进入
@@ -296,8 +299,12 @@ fun MainScreen(
             AppTopBar(
                 keyword = keyword,
                 onKeywordChange = searchViewModel::updateKeyword,
-                onSearch = { searchViewModel.search(keyword) },
+                onSearch = {
+                    searchFocused = false
+                    searchViewModel.search(keyword)
+                },
                 onOpenSettings = { showSettings = true },
+                onFocusChanged = { searchFocused = it },
                 scrollBehavior = scrollBehavior
             )
         },
@@ -365,6 +372,13 @@ fun MainScreen(
                             Text(stringResource(R.string.clipboard_banner_ignore))
                         }
                     }
+                }
+            }
+            // 搜索框聚焦时展示搜索历史 chips（文档 UX）：最近搜过的一步直达
+            if (tab == Tab.OVERVIEW && searchFocused && recentSearches.isNotEmpty()) {
+                SearchHistoryStrip(recentSearches) { kw ->
+                    searchFocused = false
+                    searchViewModel.research(kw)
                 }
             }
             // 引导跳过/完成后仍缺必要权限：首页顶部给一条可关闭的提示条（含"重开引导"入口）

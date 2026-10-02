@@ -60,6 +60,10 @@ import com.pricelens.ui.theme.Dims
 import com.pricelens.util.PriceFormatter
 import com.pricelens.util.PriceJudgment
 import com.pricelens.worker.WatchCheckRunner
+import com.pricelens.worker.WatchCountdown
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * §6.2 盯价 — 历史价格曲线：手写 Canvas、
@@ -104,7 +108,7 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
         WatchTargetPolicy.decide(product?.skuId, product?.url)
     }
     val watchable = decision as? WatchDecision.Watchable
-    val watchedTarget = watchable?.let { w -> targets.firstOrNull { it.productId == w.productId } }
+    val watchedTarget = watchable?.let { w -> targets.firstOrNull { it.productId == w.productId && it.active } }
     // 目标价预填依据：只有"关键词自带同一 SKU"时历史曲线才属于当前候选
     val prefill = remember(watchable?.externalId, keyword, history?.current, history?.lowest, product?.url) {
         if (watchable == null || history == null) {
@@ -396,6 +400,7 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
         WatchStatusCard(
             summary = lastRound,
             untrackableCount = untrackable.size,
+            activeTargetCount = targets.count { it.active },
             checking = checking,
             onCheckNow = { watchViewModel.checkNow() }
         )
@@ -549,7 +554,13 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
 
 /** 检查轮次实况：查到几个价、因何跳过几个目标，替代旧的"永远静默" */
 @Composable
-private fun WatchStatusCard(summary: WatchCheckRunner.RoundSummary?, untrackableCount: Int, checking: Boolean, onCheckNow: () -> Unit) {
+private fun WatchStatusCard(
+    summary: WatchCheckRunner.RoundSummary?,
+    untrackableCount: Int,
+    activeTargetCount: Int,
+    checking: Boolean,
+    onCheckNow: () -> Unit
+) {
     PriceCard(modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.watch_status_title), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(Dims.SpacingS))
@@ -617,9 +628,32 @@ private fun WatchStatusCard(summary: WatchCheckRunner.RoundSummary?, untrackable
             )
         }
         Spacer(Modifier.height(Dims.SpacingS))
+        // 0 个盯价目标时"立即检查一次"是无意义操作（文档 UX）：置灰并说清为什么
+        if (activeTargetCount == 0) {
+            Text(
+                stringResource(R.string.watch_check_needs_target),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            // 下次检查是"约"值：基于最近一轮 + 30 分钟轮询预算（WorkManager 不暴露确切触发时刻）
+            val nextAt = WatchCountdown.nextCheckAt(summary?.atMillis)
+            if (nextAt != null) {
+                Text(
+                    text = if (WatchCountdown.isDue(nextAt, System.currentTimeMillis())) {
+                        stringResource(R.string.watch_next_check_soon)
+                    } else {
+                        stringResource(R.string.watch_next_check_at, NEXT_CHECK_FORMAT.format(Date(nextAt)))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(Modifier.height(Dims.SpacingS))
         TextButton(
             onClick = onCheckNow,
-            enabled = !checking
+            enabled = !checking && activeTargetCount > 0
         ) {
             Text(stringResource(if (checking) R.string.watch_check_running else R.string.watch_check_now))
         }
@@ -650,3 +684,6 @@ private fun platformLabelRes(platform: String): Int = when (platform) {
     WatchTargetPolicy.PLATFORM_SMZDM -> R.string.watch_platform_smzdm
     else -> R.string.watch_platform_unknown
 }
+
+/** 「下次检查」时间格式（与盯价轮次同口径：HH:mm） */
+private val NEXT_CHECK_FORMAT = SimpleDateFormat("HH:mm", Locale.getDefault())

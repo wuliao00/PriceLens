@@ -143,6 +143,12 @@
             </intent-filter>
         </service>
 
+        <!-- 降价通知的「忽略」动作（富通知）：由 PendingIntent 拉起，只接自家广播 -->
+        <receiver
+            android:name=".worker.NotifyIgnoreReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
         <!-- 使用 Hilt 自定义 WorkManager 配置，禁用默认初始化器 -->
         <provider
             android:name="androidx.startup.InitializationProvider"

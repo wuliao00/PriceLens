@@ -46,6 +46,41 @@ class SettingsRepository @Inject constructor(
         prefs.edit().putBoolean("clipboard_detect_enabled", enabled).apply()
     }
 
+    /**
+     * 降价通知闸门（文档 UX「富通知」）：
+     *  - 仅 WiFi 时提醒；免打扰时段（[quietStartMinute, quietEndMinute) 半开区间，跨零点自动处理）。
+     * 被抑制只是"这一轮不发"，下一轮重新评估（见 worker/NotificationGate）。
+     */
+    val notifyWifiOnly: Boolean
+        get() = prefs.getBoolean("notify_wifi_only", false)
+
+    fun setNotifyWifiOnly(enabled: Boolean) {
+        prefs.edit().putBoolean("notify_wifi_only", enabled).apply()
+    }
+
+    val quietHoursEnabled: Boolean
+        get() = prefs.getBoolean("quiet_hours_enabled", false)
+
+    fun setQuietHoursEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("quiet_hours_enabled", enabled).apply()
+    }
+
+    /** 免打扰开始（一天内分钟数；默认 22:00） */
+    val quietStartMinute: Int
+        get() = prefs.getInt("quiet_start_minute", 22 * 60)
+
+    fun setQuietStartMinute(minute: Int) {
+        prefs.edit().putInt("quiet_start_minute", minute.coerceIn(0, 24 * 60 - 1)).apply()
+    }
+
+    /** 免打扰结束（默认 08:00） */
+    val quietEndMinute: Int
+        get() = prefs.getInt("quiet_end_minute", 8 * 60)
+
+    fun setQuietEndMinute(minute: Int) {
+        prefs.edit().putInt("quiet_end_minute", minute.coerceIn(0, 24 * 60 - 1)).apply()
+    }
+
     /** 免责声明是否已同意（同意后启动不再弹出） */
     val disclaimerAgreed: Boolean
         get() = prefs.getBoolean("disclaimer_agreed", false)

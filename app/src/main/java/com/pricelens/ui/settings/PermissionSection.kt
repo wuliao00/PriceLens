@@ -5,6 +5,7 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -140,6 +141,7 @@ internal fun PermissionRow(title: String, desc: String, granted: Boolean, action
     Column(
         Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(vertical = Dims.SpacingM)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
