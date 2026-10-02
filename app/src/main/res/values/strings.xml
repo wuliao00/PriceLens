@@ -242,6 +242,16 @@
     <string name="settings_section_permission">权限</string>
     <string name="settings_section_data">数据</string>
     <string name="settings_section_about">关于</string>
+    <string name="settings_section_diagnostics">诊断</string>
+    <string name="settings_crash_title">崩溃日志（仅存本机）</string>
+    <string name="settings_crash_desc">已记录 %1$d 条。只写在本机，绝不上传；导出文本会自动对 Cookie/Authorization 等敏感串打码</string>
+    <string name="settings_crash_empty">暂无崩溃记录。只写在本机，绝不上传</string>
+    <string name="settings_crash_export">导出</string>
+    <string name="settings_crash_clear">清空</string>
+    <string name="settings_crash_exported">已导出到所选位置</string>
+    <string name="settings_crash_test_title">写入一条测试崩溃（调试包）</string>
+    <string name="settings_crash_test_desc">点按后应用会立即崩溃一次，用于验证崩溃日志链路；正式包不显示本行</string>
+    <string name="settings_crash_test_btn">测试崩溃</string>
     <string name="settings_dynamic_color_title">Material You 动态取色</string>
     <string name="settings_dynamic_color_desc">跟随系统壁纸取色（Android 12+）；关闭后使用品牌蓝</string>
     <string name="settings_cache_title">缓存占用（上限 30MB）</string>

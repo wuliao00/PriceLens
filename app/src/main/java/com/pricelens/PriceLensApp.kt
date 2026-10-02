@@ -3,6 +3,7 @@ package com.pricelens
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import coil.Coil
@@ -14,6 +15,13 @@ import javax.inject.Inject
 
 @HiltAndroidApp
 class PriceLensApp : Application(), Configuration.Provider {
+
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        // 崩溃日志（文档 §十三·本地版，2026-10-02 拍板不上传）：尽早安装，
+        // 连 Application 初始化自己崩了也能留下现场。不联网、不写 Cookie/header。
+        com.pricelens.util.CrashHandler.install(base)
+    }
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
 

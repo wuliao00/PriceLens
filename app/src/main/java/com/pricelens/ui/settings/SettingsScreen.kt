@@ -88,6 +88,7 @@ fun SettingsScreen(settings: SettingsRepository, updateRepository: UpdateReposit
                 onClear = { profileViewModel.clearCache() }
             )
             CredentialsSection(settings)
+            DiagnosticsSection()
             AboutSection(
                 versionName = BuildConfig.VERSION_NAME,
                 versionCode = BuildConfig.VERSION_CODE,
