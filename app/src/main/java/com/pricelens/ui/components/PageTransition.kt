@@ -9,6 +9,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.pricelens.ui.theme.MotionDurations
 import com.pricelens.ui.theme.PriceLensEasing
@@ -62,9 +63,11 @@ fun StripReveal(visible: Boolean, modifier: Modifier = Modifier, content: @Compo
         visible = visible,
         modifier = modifier,
         enter = expandVertically(
-            // 不传 expandFrom：默认 VerticalDirection.Bottom = 顶边钉住、下缘往外展开，
-            // 正是"横条从上往下掀开"的观感；传 Top 会变成从下往上顶，把上面的内容推来推去
-            animationSpec = tween(MotionDurations.Standard, easing = PriceLensEasing)
+            animationSpec = tween(MotionDurations.Standard, easing = PriceLensEasing),
+            // 以顶边为轴往下掀开。参数类型是 Alignment.Vertical（不是 VerticalDirection——
+            // 我先猜错过一次，两轮构建白跑），且不传时默认是 Bottom：
+            // 这条横条插在内容之上，从下往上顶会把上方内容来回推。观感待真机复核。
+            expandFrom = Alignment.Top
         ) + fadeIn(animationSpec = tween(MotionDurations.Standard, easing = PriceLensEasing)),
         exit = shrinkVertically(animationSpec = tween(MotionDurations.Fast, easing = PriceLensEasing)) +
             fadeOut(animationSpec = tween(MotionDurations.Fast, easing = PriceLensEasing)),
