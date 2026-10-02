@@ -246,13 +246,21 @@ private fun ProductHeadCard(searchViewModel: SearchViewModel) {
                                 Text(
                                     PriceFormatter.format(candidate.price),
                                     style = PriceType.PriceHero,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
+                                    // 真机（PLB110 / 358.86dp 逻辑宽）实测：32sp 的 ¥5,915.16 加上
+                                    // 「现价」两字已经顶到卡片右缘，标签被挤成一字一行。
+                                    // fill=false 让价格只吃它需要的宽度、标签保住自己的宽度，
+                                    // 极端长金额时价格自己省略号，而不是把标签竖排。
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                                 Spacer(Modifier.width(Dims.SpacingS))
                                 Text(
                                     stringResource(R.string.product_current_price),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
                                     modifier = Modifier.padding(bottom = Dims.SpacingS)
                                 )
                             }

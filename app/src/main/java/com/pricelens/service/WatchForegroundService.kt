@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.pricelens.R
 import com.pricelens.ui.main.MainActivity
+import com.pricelens.util.LogT
 import com.pricelens.worker.WatchCheckRunner
 import dagger.hilt.android.AndroidEntryPoint
 import java.text.SimpleDateFormat
@@ -116,7 +117,20 @@ class WatchForegroundService : Service() {
         private const val CHECK_INTERVAL_MS = 30 * 60 * 1000L
 
         fun start(context: Context) {
-            context.startForegroundService(Intent(context, WatchForegroundService::class.java))
+            val intent = Intent(context, WatchForegroundService::class.java)
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                // Android 12+ 的后台启动限制：进程在后台（无障碍服务把它拉起来、WorkManager 建进程、
+                // 开机广播）时 startForegroundService() 会抛 ForegroundServiceStartNotAllowedException，
+                // 而调用点在 Room Flow 的 collect 里 → 未捕获 = 主线程崩，且进程一被拉起就再崩一次（崩溃循环）。
+                // PLB110 / Android 15 真机实测到（crash-1790963779323.log，2026-10-03 01:56，
+                // 打开京东触发无障碍事件那一刻）。这条路径的"盯价"实际由无障碍服务在做，
+                // 常驻通知只是保活与可见性，起不来不该赔上进程：降级试普通 startService，再不行就等下一次跳变。
+                LogT.w("常驻通知服务后台启动被拒（${e.javaClass.simpleName}），降级为普通 startService")
+                runCatching { context.startService(intent) }
+                    .onFailure { LogT.w("普通 startService 同样失败（${it.javaClass.simpleName}），本轮跳过常驻通知") }
+            }
         }
 
         fun stop(context: Context) {

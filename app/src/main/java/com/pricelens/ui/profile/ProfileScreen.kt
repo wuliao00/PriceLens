@@ -117,7 +117,9 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
                 EmptyText(stringResource(R.string.profile_pinned_empty))
             }
         } else {
-            items(pinned, key = { it.id }) { product ->
+            // key 必须带段前缀：收藏与盯价共用同一个 id 空间（jd:xxx），同一个商品
+            // 既收藏又盯价时裸 id 会撞 key，Compose 直接抛 IllegalArgumentException（真机崩过）
+            items(pinned, key = { ProfileKeys.pin(it.id) }) { product ->
                 PinnedRow(
                     title = product.title,
                     price = product.currentPrice,
@@ -140,7 +142,7 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
                 EmptyText(stringResource(R.string.profile_targets_empty))
             }
         } else {
-            items(targets, key = { it.productId }) { target ->
+            items(targets, key = { ProfileKeys.target(it.productId) }) { target ->
                 TargetSwipeRow(
                     target = target,
                     onPause = { priceWatchViewModel.pauseTarget(target.productId) },
