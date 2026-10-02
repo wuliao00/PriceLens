@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Warning
@@ -77,24 +79,33 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
             keyword.isNotBlank(),
             listOf(postsAsync, shihuoAsync)
         )
-        EmptyState(
-            icon = if (emptyCause == EmptyStateCause.UNREACHABLE) Icons.Filled.Warning else Icons.Filled.ChatBubble,
-            title = stringResource(
-                when (emptyCause) {
-                    EmptyStateCause.NOT_SEARCHED -> R.string.empty_search_first
-                    EmptyStateCause.UNREACHABLE -> R.string.error_load_failed
-                    EmptyStateCause.NO_MATCH -> R.string.community_no_result
-                }
-            ),
-            desc = stringResource(
-                when (emptyCause) {
-                    EmptyStateCause.NOT_SEARCHED -> R.string.community_empty_hint
-                    EmptyStateCause.UNREACHABLE -> R.string.error_retry_hint
-                    EmptyStateCause.NO_MATCH -> R.string.community_no_result_desc
-                }
-            ),
-            modifier = Modifier.padding(Dims.SpacingXL)
-        )
+        // 社区动态（§九 Discussions 镜像）不依赖关键词，空态页也要能见到它可读/可发帖
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(Dims.SpacingXL)
+        ) {
+            CommunityFeedSection()
+            Spacer(Modifier.height(Dims.SpacingXL))
+            EmptyState(
+                icon = if (emptyCause == EmptyStateCause.UNREACHABLE) Icons.Filled.Warning else Icons.Filled.ChatBubble,
+                title = stringResource(
+                    when (emptyCause) {
+                        EmptyStateCause.NOT_SEARCHED -> R.string.empty_search_first
+                        EmptyStateCause.UNREACHABLE -> R.string.error_load_failed
+                        EmptyStateCause.NO_MATCH -> R.string.community_no_result
+                    }
+                ),
+                desc = stringResource(
+                    when (emptyCause) {
+                        EmptyStateCause.NOT_SEARCHED -> R.string.community_empty_hint
+                        EmptyStateCause.UNREACHABLE -> R.string.error_retry_hint
+                        EmptyStateCause.NO_MATCH -> R.string.community_no_result_desc
+                    }
+                )
+            )
+        }
         return
     }
 
@@ -103,6 +114,11 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(Dims.SpacingXL)
     ) {
+        // 社区动态（§九）：不依赖搜索关键词的 Discussions 镜像，固定在最上方
+        item(key = "feed") {
+            CommunityFeedSection()
+            Spacer(Modifier.height(Dims.SpacingL))
+        }
         if (anyError) {
             // 失败但持有旧数据：顶部提示，列表照常展示
             item(key = "error_hint") {
