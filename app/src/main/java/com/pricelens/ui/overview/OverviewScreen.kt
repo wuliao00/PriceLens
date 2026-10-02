@@ -1,5 +1,12 @@
 package com.pricelens.ui.overview
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Accessibility
-import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OndemandVideo
@@ -29,16 +35,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
+import com.pricelens.data.remote.CrawlerResult
 import com.pricelens.data.remote.GwdangApi
 import com.pricelens.data.remote.JdApi
 import com.pricelens.data.remote.ManmanbuyApi
+import com.pricelens.data.remote.ShihuoApi
+import com.pricelens.data.remote.SmzdmApi
 import com.pricelens.ui.common.AsyncValue
 import com.pricelens.ui.common.EmptyStateCause
 import com.pricelens.ui.common.EmptyStateCauseOf
@@ -48,11 +58,20 @@ import com.pricelens.ui.components.AppImage
 import com.pricelens.ui.components.EmptyState
 import com.pricelens.ui.components.PriceBadge
 import com.pricelens.ui.components.PriceCard
-import com.pricelens.ui.components.PriceRow
 import com.pricelens.ui.components.ShimmerList
 import com.pricelens.ui.components.SourceStatusRow
+import com.pricelens.ui.layout.QuoteGroup
+import com.pricelens.ui.layout.QuoteInputs
+import com.pricelens.ui.layout.QuoteKind
+import com.pricelens.ui.layout.QuoteLabels
+import com.pricelens.ui.layout.QuoteState
+import com.pricelens.ui.layout.SourceObservation
+import com.pricelens.ui.layout.SourceQuotes
 import com.pricelens.ui.theme.BadgeTone
 import com.pricelens.ui.theme.Dims
+import com.pricelens.ui.theme.MotionDurations
+import com.pricelens.ui.theme.PriceLensEasing
+import com.pricelens.ui.theme.PriceType
 import com.pricelens.util.PriceFormatter
 import com.pricelens.util.PriceJudgment
 import com.pricelens.util.UrlOpener
@@ -76,11 +95,14 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
     val shihuoAsync by searchViewModel.shihuo.collectAsStateWithLifecycle()
     val livePrice by searchViewModel.livePrice.collectAsStateWithLifecycle()
     val realtimeSource by searchViewModel.realtimeSource.collectAsStateWithLifecycle()
+    val netPrice by searchViewModel.netPrice.collectAsStateWithLifecycle()
 
     // 适配数据源：AsyncValue → 渲染所需的纯值（Error 自动回退旧数据）
     val product = productAsync.valueOrNull()?.toJdProduct()
     val history = historyAsync.valueOrNull()
     val coupons = couponsAsync.valueOrDefault(emptyList())
+    val posts = postsAsync.valueOrDefault(emptyList())
+    val shihuoItems = shihuoAsync.valueOrDefault(emptyList())
 
     if (loading && product == null) {
         ShimmerList()
@@ -174,18 +196,64 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
                 }
             }
             item(key = "product") {
-                Spacer(Modifier.height(Dims.SpacingM))
-                ProductHeader(product, judgment, history, livePrice, realtimeSource)
+                Spacer(Modifier.height(Dims.SpacingS))
+                ProductHeader(product, judgment, history, coupons)
             }
-            item(key = "meta") { QuickFacts(history, coupons, judgment) }
+            // 各源报价：单行紧凑列表（原先这里是"历史最低 / 券 / 建议"三张高卡片，一屏放不下几件事）
+            item(key = "quotes") {
+                CompactQuoteList(
+                    overviewQuotes(
+                        outcomeOf = { searchViewModel.lastOutcome(it) },
+                        product = product,
+                        historyAsync = historyAsync,
+                        history = history,
+                        couponsAsync = couponsAsync,
+                        coupons = coupons,
+                        postsAsync = postsAsync,
+                        posts = posts,
+                        shihuoAsync = shihuoAsync,
+                        shihuo = shihuoItems,
+                        livePrice = livePrice,
+                        realtimeSource = realtimeSource,
+                        netPrice = netPrice
+                    )
+                )
+            }
+            // 曲线保留，但降到 Dims.CurveCompact：详情大曲线在盯价页，概览只回答"最近是涨是跌"
+            item(key = "curve") {
+                CurveStripCard(history)
+            }
         }
     }
 }
 
-/** 可折叠引导卡：默认折起（首屏密度），点标题行展开原样的 [EmptyState] 说明 */
+/**
+ * 可折叠引导卡：默认折起（首屏密度），点标题行展开原样的 [EmptyState] 说明。
+ *
+ * 动效（上一轮只做到"能折",没做到"折得顺眼"）：
+ *  - chevron：**绘制通道**旋转。animateFloatAsState + graphicsLayer(rotationZ)，
+ *    不触发重测重排，完全符合 Motion.kt 的铁律「仅 animateFloatAsState + graphicsLayer/drawBehind」。
+ *  - 展开/收起：**这里确实需要高度动画**，用的是 AnimatedVisibility + expandVertically/shrinkVertically
+ *    （+ fadeIn/fadeOut）。它与铁律的关系要写明白：
+ *    铁律禁的是"用布局通道做常态动效"（每帧重测、和列表回收打架、易掉帧）；
+ *    而折叠卡的目的恰恰是**不保留占位高度**——纯 draw 通道的 scaleY 只能改视觉、
+ *    改不了布局，收起后仍会留一段空白，密度目标就废了。
+ *    所以这里让布局参与，但把代价压到最小：
+ *     ① 只在用户显式点击的三张卡上发生，不是自动播放；
+ *     ② 时长取令牌上限内（进 Standard=250ms、退 Fast=150ms，≤350ms 铁律），缓动统一 PriceLensEasing，无弹跳；
+ *     ③ 顶部对齐展开（expandFrom = Alignment.Top），视觉上像"从标题行长出来"，
+ *        同时 expandVertically 默认 clip=true，动画期间内容走裁剪而非重排整屏；
+ *     ④ 同仓库的既有例外先例：ui/components/PriceOverlay.kt 的展开面板就是同一组 API。
+ */
 @Composable
 private fun CollapsibleGuide(icon: ImageVector, title: String, desc: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
     var expanded by rememberSaveable { mutableStateOf(false) }
+    // chevron 角度只走 graphicsLayer：旋转不改 Icon 的测量尺寸，标题行高度恒定
+    val chevron by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(MotionDurations.Fast, easing = PriceLensEasing),
+        label = "guideChevron"
+    )
     Column(Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -198,19 +266,26 @@ private fun CollapsibleGuide(icon: ImageVector, title: String, desc: String, act
                 icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(Dims.IconInline)
             )
             Spacer(Modifier.size(Dims.SpacingS))
             Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             Icon(
-                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                Icons.Filled.ExpandMore,
                 contentDescription = stringResource(
                     if (expanded) R.string.overview_guide_collapse else R.string.overview_guide_expand
                 ),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.graphicsLayer { rotationZ = chevron }
             )
         }
-        if (expanded) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween<Float>(MotionDurations.Standard, easing = PriceLensEasing)) +
+                expandVertically(tween<IntSize>(MotionDurations.Standard, easing = PriceLensEasing), expandFrom = Alignment.Top),
+            exit = fadeOut(tween<Float>(MotionDurations.Fast, easing = PriceLensEasing)) +
+                shrinkVertically(tween<IntSize>(MotionDurations.Fast, easing = PriceLensEasing), shrinkTowards = Alignment.Top)
+        ) {
             EmptyState(
                 icon = icon,
                 title = title,
@@ -222,13 +297,22 @@ private fun CollapsibleGuide(icon: ImageVector, title: String, desc: String, act
     }
 }
 
+/**
+ * 结果头卡（紧凑化）：图 + 标题（≤2 行）+ **一行**收纳 现价 / 历史最低 / 建议徽章。
+ *
+ * 与改动前的三处区别：
+ *  - 缩略图从 80dp 降到 [Dims.ThumbHeader]（64dp，= 两行标题 + 一行现价的文本列高，图不再把行拉高）；
+ *  - 金额从 32sp 的 PriceHero 降到 [PriceType.PriceInline]（16sp），原来一行的金额现在和
+ *    "历史最低""建议徽章"同处一行，首屏少滚一屏；
+ *  - 本机账号实时价不再是卡里的绿胶囊——它本身就是"某个源的报价"，交给下面的紧凑报价列表，
+ *    与慢慢买/券后/识货/爆料同排同列，读者能横向比。
+ */
 @Composable
 private fun ProductHeader(
     product: JdApi.JdProduct,
     judgment: PriceJudgment,
     history: ManmanbuyApi.History?,
-    livePrice: Double?,
-    realtimeSource: String?
+    coupons: List<GwdangApi.Coupon>
 ) {
     val context = LocalContext.current
     PriceCard(
@@ -240,99 +324,139 @@ private fun ProductHeader(
             AppImage(
                 url = product.image,
                 contentDescription = product.title,
-                modifier = Modifier.size(80.dp)
+                modifier = Modifier.size(Dims.ThumbHeader)
             )
             Spacer(Modifier.size(Dims.SpacingM))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(
                     product.title,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(Dims.SpacingS))
-                if (product.price > 0) {
-                    PriceRow(
-                        current = product.price,
-                        original = product.originalPrice,
-                        badge = judgment.label.takeIf { history != null },
-                        badgeTone = when (judgment) {
-                            is PriceJudgment.LOW -> BadgeTone.POSITIVE
-                            is PriceJudgment.SUSPICIOUS -> BadgeTone.NEGATIVE
-                            else -> BadgeTone.NEUTRAL
-                        }
-                    )
-                } else {
-                    // 2026-09：京东公开查价通道不可达时的如实提示，避免展示 ¥0 误导
-                    Text(
-                        stringResource(R.string.overview_price_unavailable),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Spacer(Modifier.height(Dims.SpacingXS))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dims.SpacingS)) {
+                    if (product.price > 0) {
+                        // 2026-09：京东公开查价通道不可达时不给 ¥0，宁可只说"拿不到"
+                        Text(
+                            PriceFormatter.format(product.price),
+                            style = PriceType.PriceInline,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Text(
+                            stringResource(R.string.overview_price_unavailable),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    history?.let {
+                        Text(
+                            stringResource(R.string.layout_overview_header_lowest, PriceFormatter.format(it.lowest)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
+                    coupons.maxByOrNull { it.amount }?.let {
+                        Text(
+                            stringResource(
+                                R.string.layout_overview_header_coupon,
+                                PriceFormatter.formatRaw(it.amount)
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
+                    history?.let {
+                        PriceBadge(
+                            judgment.label,
+                            when (judgment) {
+                                is PriceJudgment.LOW -> BadgeTone.POSITIVE
+                                is PriceJudgment.SUSPICIOUS -> BadgeTone.NEGATIVE
+                                else -> BadgeTone.NEUTRAL
+                            }
+                        )
+                    }
                 }
             }
         }
-        // 本机账号实时价（无障碍读取的价格，即用户登录账号看到的价格）
-        livePrice?.let { live ->
-            Spacer(Modifier.height(Dims.SpacingS))
-            PriceBadge(
-                stringResource(
-                    R.string.overview_live_price,
-                    realtimeSource ?: stringResource(R.string.overview_live_default_source),
-                    PriceFormatter.formatRaw(live)
-                ),
-                BadgeTone.POSITIVE
-            )
-        }
     }
 }
 
-/** §3.5 信息密度：历史最低 / 是否有券 / 建议购买 —— 一行三块 */
+/**
+ * 概览的「各源报价」取值层：把 6 路 AsyncValue + 域名诊断结果摊平成 [SourceObservation]，
+ * 规则（0 价不算价、IDLE 不占行、排序、分组、文案收敛）全在纯函数层
+ * [QuoteInputs.of] / [SourceQuotes.of] / [SourceQuotes.sections]，那里有 JVM 单测。
+ *
+ * 域名键与顶部那排 [com.pricelens.ui.components.SourceStatusRow] 保持一致：
+ * 同一个源在两处说话不能一个说"反爬"一个说"失败"。
+ */
 @Composable
-private fun QuickFacts(history: ManmanbuyApi.History?, coupons: List<GwdangApi.Coupon>, judgment: PriceJudgment) {
-    Spacer(Modifier.height(Dims.SpacingXL))
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(Dims.SpacingM),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        FactCard(
-            stringResource(R.string.overview_fact_lowest),
-            history?.let { PriceFormatter.format(it.lowest) }
-                ?: stringResource(R.string.overview_no_data),
-            Modifier.weight(1f)
+private fun overviewQuotes(
+    outcomeOf: (String) -> CrawlerResult<String>?,
+    product: JdApi.JdProduct,
+    historyAsync: AsyncValue<ManmanbuyApi.History>,
+    history: ManmanbuyApi.History?,
+    couponsAsync: AsyncValue<List<GwdangApi.Coupon>>,
+    coupons: List<GwdangApi.Coupon>,
+    postsAsync: AsyncValue<List<SmzdmApi.SmzdmPost>>,
+    posts: List<SmzdmApi.SmzdmPost>,
+    shihuoAsync: AsyncValue<List<ShihuoApi.ShihuoItem>>,
+    shihuo: List<ShihuoApi.ShihuoItem>,
+    livePrice: Double?,
+    realtimeSource: String?,
+    netPrice: Double?
+): List<QuoteGroup> {
+    val labels = QuoteLabels(
+        account = stringResource(R.string.layout_quote_account),
+        main = stringResource(R.string.layout_quote_main),
+        history = stringResource(R.string.layout_quote_history),
+        coupon = stringResource(R.string.layout_quote_coupon),
+        shihuo = stringResource(R.string.layout_quote_shihuo),
+        post = stringResource(R.string.layout_quote_post),
+        countWord = stringResource(R.string.layout_quote_count_word)
+    )
+    val observations = listOf(
+        // 本机登录账号所见：决策权重最高，来源名进"备注"而不是源名（源名要短）
+        SourceObservation(
+            kind = QuoteKind.ACCOUNT,
+            price = livePrice,
+            state = if (livePrice != null) QuoteState.PRICED else QuoteState.IDLE,
+            attribution = realtimeSource
+        ),
+        SourceObservation(QuoteKind.MAIN, product.price, QuoteState.PRICED),
+        SourceObservation(
+            kind = QuoteKind.HISTORY,
+            price = history?.current,
+            state = SourceQuotes.stateOf(historyAsync, outcomeOf("apapia-history.manmanbuy.com")),
+            // 历史价唯一诚实的时间戳：最后一个采样日（yyyy-MM-dd），不是"刚刚"
+            stamp = history?.points?.lastOrNull()?.date
+        ),
+        SourceObservation(
+            kind = QuoteKind.COUPON,
+            price = netPrice,
+            state = if (netPrice != null) QuoteState.PRICED else SourceQuotes.stateOf(couponsAsync, outcomeOf("www.gwdang.com")),
+            itemCount = coupons.size
+        ),
+        SourceObservation(
+            kind = QuoteKind.SHIHUO,
+            price = shihuo.minByOrNull { it.price }?.price,
+            state = SourceQuotes.stateOf(shihuoAsync, outcomeOf("m.shihuo.cn")),
+            itemCount = shihuo.size
+        ),
+        SourceObservation(
+            kind = QuoteKind.POST,
+            price = posts.mapNotNull { it.price }.minOrNull(),
+            state = SourceQuotes.stateOf(postsAsync, outcomeOf("search.smzdm.com")),
+            itemCount = posts.size
         )
-        FactCard(
-            stringResource(R.string.overview_fact_coupon),
-            coupons.maxByOrNull { it.amount }?.let {
-                stringResource(R.string.overview_coupon_yuan, it.amount.toInt())
-            } ?: stringResource(R.string.overview_no_coupon),
-            Modifier.weight(1f)
-        )
-        FactCard(
-            stringResource(R.string.overview_fact_advice),
-            when (judgment) {
-                is PriceJudgment.LOW -> stringResource(R.string.overview_advice_low)
-                is PriceJudgment.SUSPICIOUS -> stringResource(R.string.overview_advice_suspicious)
-                else -> stringResource(R.string.overview_advice_normal)
-            },
-            Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-private fun FactCard(label: String, value: String, modifier: Modifier = Modifier) {
-    PriceCard(modifier = modifier) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(Dims.SpacingS))
-        Text(
-            value,
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
+    )
+    return SourceQuotes.sections(SourceQuotes.of(QuoteInputs.of(labels, observations)))
 }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -59,6 +60,7 @@ import com.pricelens.ui.components.EmptyText
 import com.pricelens.ui.components.PriceBadge
 import com.pricelens.ui.components.PriceCard
 import com.pricelens.ui.components.SectionHeader
+import com.pricelens.ui.layout.CompactTileRow
 import com.pricelens.ui.overview.SearchViewModel
 import com.pricelens.ui.price.PriceWatchViewModel
 import com.pricelens.ui.theme.BadgeTone
@@ -148,51 +150,54 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
                 )
             }
         }
-        item(key = "scripts_entry") {
-            Spacer(Modifier.height(Dims.SpacingS))
-            PriceCard(modifier = Modifier.fillMaxWidth(), onClick = onOpenScripts) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.Terminal,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.size(Dims.SpacingM))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            stringResource(R.string.profile_scripts_title),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            stringResource(R.string.profile_scripts_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+        item(key = "entries") {
+            // 组间留白走 Dims.GroupGap：入口区与"盯价目标"之间要能看出换了一组（SectionHeader 自己带的
+            // 20dp 只够撑开同组内的标题层级，撑不开组）
+            Spacer(Modifier.height(Dims.GroupGap))
+            CompactTileRow(onClick = onOpenScripts) {
+                Icon(
+                    Icons.Filled.Terminal,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    stringResource(R.string.profile_scripts_title),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    stringResource(R.string.profile_scripts_desc),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
             }
-        }
-        item(key = "settings_entry") {
-            Spacer(Modifier.height(Dims.SpacingL))
-            PriceCard(modifier = Modifier.fillMaxWidth(), onClick = onOpenSettings) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.size(Dims.SpacingM))
-                    Text(
-                        stringResource(R.string.profile_settings_title),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        stringResource(R.string.profile_settings_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            Spacer(Modifier.height(Dims.SpacingXS))
+            CompactTileRow(onClick = onOpenSettings) {
+                Icon(
+                    Icons.Filled.Settings,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    stringResource(R.string.profile_settings_title),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    stringResource(R.string.profile_settings_desc),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
             }
         }
         item(key = "footer") {
@@ -250,39 +255,32 @@ private fun ProfileHeader() {
 
 @Composable
 private fun StatsRow(pinnedCount: Int, targetCount: Int, cacheStats: String) {
-    Spacer(Modifier.height(Dims.SpacingL))
-    Row(horizontalArrangement = Arrangement.spacedBy(Dims.SpacingM)) {
-        StatCard(stringResource(R.string.profile_stat_favorites), pinnedCount.toString(), Modifier.weight(1f))
-        StatCard(stringResource(R.string.profile_stat_watching), targetCount.toString(), Modifier.weight(1f))
-        PriceCard(modifier = Modifier.weight(1.4f)) {
-            Text(
-                stringResource(R.string.profile_stat_cache),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(Dims.SpacingS))
-            Text(
-                cacheStats,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
+    Spacer(Modifier.height(Dims.SpacingS))
+    // 三张卡片 → 一行三段：数字要看的只是"多少"，不需要每张卡各占 60dp
+    CompactTileRow {
+        StatCell(stringResource(R.string.profile_stat_favorites), pinnedCount.toString())
+        StatCell(stringResource(R.string.profile_stat_watching), targetCount.toString())
+        StatCell(stringResource(R.string.profile_stat_cache), cacheStats, grow = true)
     }
 }
 
+/** 一格统计：标签（labelSmall，次要色）+ 值（等宽数字，主色）；[grow] 的那格吸收剩余宽度并省略号 */
 @Composable
-private fun StatCard(label: String, value: String, modifier: Modifier = Modifier) {
-    PriceCard(modifier = modifier) {
+private fun RowScope.StatCell(label: String, value: String, grow: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(Dims.SpacingS))
+        Spacer(Modifier.size(Dims.SpacingXS))
         Text(
             value,
-            style = PriceType.PriceLarge,
-            color = MaterialTheme.colorScheme.primary
+            style = PriceType.PriceRowCompact,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = if (grow) Modifier.weight(1f, fill = false) else Modifier
         )
     }
 }
@@ -297,38 +295,34 @@ private fun HistoryChips(history: List<String>, onPick: (String) -> Unit) {
     }
 }
 
+/** 收藏行：紧凑单行（图 + 标题 1 行 + 价），点按 = 用标题重新搜（并顺手打开链接） */
 @Composable
 private fun PinnedRow(title: String, price: Double, image: String, url: String, onClick: () -> Unit) {
     val context = LocalContext.current
-    PriceCard(modifier = Modifier.fillMaxWidth(), onClick = {
+    CompactTileRow(onClick = {
         onClick()
         if (url.startsWith("http")) UrlOpener.open(context, url)
     }) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AppImage(
-                url = image,
-                contentDescription = title,
-                modifier = Modifier.size(Dims.SpacingXXXL + Dims.SpacingM)
-            )
-            Spacer(Modifier.size(Dims.SpacingM))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    PriceFormatter.format(price),
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFeatureSettings = "tnum"
-                    ),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
+        AppImage(
+            url = image,
+            contentDescription = title,
+            modifier = Modifier.size(Dims.ThumbRow)
+        )
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            PriceFormatter.format(price),
+            style = PriceType.PriceRowCompact,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1
+        )
     }
-    Spacer(Modifier.height(Dims.SpacingS))
+    Spacer(Modifier.height(Dims.SpacingXS))
 }
 
 /**
@@ -415,48 +409,49 @@ private fun SwipeBackground(direction: SwipeToDismissBoxValue, target: PriceTarg
     }
 }
 
+/**
+ * 盯价目标行（紧凑单行，替换原来的两行卡片）。
+ *
+ * 段位：标题 · 「已暂停」徽标 · 目标价 · 恢复 · 删除。宽度账（内容宽 302.86dp）：
+ *  - 未暂停：目标价 60 + 删除键 48 + 段间距 24 = 132 → 标题拿 170dp（≈12 个 14sp 汉字）；
+ *  - 已暂停：再挤进徽标 60 + 恢复键 56 = 248 → 标题只剩 ~54dp（≈4 字）会被省略号。
+ *    这是"一屏多放一行"的代价，刻意接受：此时"已暂停"徽标 + 两个动作就是这一行的主要信息，
+ *    标题靠点按后的改价对话框（对话框里标题给两行）再读一次。真机走查若认为不可接受，
+ *    退路是把恢复/删除收进长按菜单（但那是隐藏入口，与"明路可走"的既有决定冲突，不擅自做）。
+ */
 @Composable
 private fun TargetRow(target: PriceTargetEntity, onClick: () -> Unit, onResume: () -> Unit, onDelete: () -> Unit) {
-    PriceCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        target.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (!target.active) {
-                        Spacer(Modifier.size(Dims.SpacingS))
-                        PriceBadge(stringResource(R.string.watch_target_paused_badge), BadgeTone.NEUTRAL)
-                    }
-                }
-                Text(
-                    stringResource(
-                        R.string.profile_target_price,
-                        PriceFormatter.format(target.targetPrice)
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (!target.active) {
-                TextButton(onClick = onResume) {
-                    Text(stringResource(R.string.watch_target_resume))
-                }
-            }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Filled.Delete,
-                    contentDescription = stringResource(R.string.cd_swipe_delete_target),
-                    tint = MaterialTheme.colorScheme.error
-                )
+    CompactTileRow(onClick = onClick) {
+        Text(
+            target.title,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        if (!target.active) {
+            PriceBadge(stringResource(R.string.watch_target_paused_badge), BadgeTone.NEUTRAL)
+        }
+        Text(
+            stringResource(R.string.profile_target_price, PriceFormatter.format(target.targetPrice)),
+            style = PriceType.PriceRowCompact,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+        if (!target.active) {
+            TextButton(onClick = onResume) {
+                Text(stringResource(R.string.watch_target_resume))
             }
         }
+        IconButton(onClick = onDelete) {
+            Icon(
+                Icons.Filled.Delete,
+                contentDescription = stringResource(R.string.cd_swipe_delete_target),
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
     }
-    Spacer(Modifier.height(Dims.SpacingS))
+    Spacer(Modifier.height(Dims.SpacingXS))
 }
 
 @Composable
