@@ -102,6 +102,9 @@ class MainActivity : ComponentActivity() {
 
     private var incomingSearch by mutableStateOf<IncomingSearch?>(null)
 
+    /** 小组件点击「打开盯价页」（文档 §七）：nonce 保证重复点击也切一次 tab */
+    private var openWatchTabNonce by mutableStateOf(0L)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -116,6 +119,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     MainScreen(
                         incomingSearch = incomingSearch,
+                        openWatchTabNonce = openWatchTabNonce,
                         overlayPermissionAvailable = !OverlayManager.canDrawOverlays(this),
                         settings = settings,
                         updateRepository = updateRepository
@@ -134,8 +138,14 @@ class MainActivity : ComponentActivity() {
     /**
      * 分享 / 浏览器打开 / 浮窗"去比价"（focus_title）三合一。
      * 不在这里解析链接：短链跳转要联网，交给搜索流程（它已有 SKU 解析与历史价加载）。
+     *
+     * 小组件点击（文档 §七）另走 [EXTRA_OPEN_WATCH_TAB]：请求切到盯价 tab。
+     * 必须在文本解析之前处理：小组件点击没有文本，放在后面会被提前 return 吞掉。
      */
     private fun handleIntent(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_WATCH_TAB, false) == true) {
+            openWatchTabNonce = System.currentTimeMillis()
+        }
         val text = when (intent?.action) {
             android.content.Intent.ACTION_SEND -> intent.getStringExtra(android.content.Intent.EXTRA_TEXT)
             android.content.Intent.ACTION_VIEW -> intent.dataString
@@ -143,6 +153,11 @@ class MainActivity : ComponentActivity() {
         }?.trim()
         if (text.isNullOrBlank()) return
         incomingSearch = IncomingSearch(text, System.currentTimeMillis())
+    }
+
+    companion object {
+        /** 小组件点击传给本 Activity 的 extra key（与 widget 包的 ActionParameters.Key 名称一致） */
+        const val EXTRA_OPEN_WATCH_TAB = "open_watch_tab"
     }
 }
 
@@ -159,6 +174,7 @@ private enum class Tab(@StringRes val labelRes: Int) {
 @Composable
 fun MainScreen(
     incomingSearch: IncomingSearch?,
+    openWatchTabNonce: Long,
     overlayPermissionAvailable: Boolean,
     settings: SettingsRepository,
     updateRepository: UpdateRepository
@@ -219,6 +235,11 @@ fun MainScreen(
             tab = Tab.OVERVIEW
             searchViewModel.search(text)
         }
+    }
+
+    // 小组件点击「打开盯价页」（文档 §七）：key 用 nonce，重复点击也能再切一次
+    LaunchedEffect(openWatchTabNonce) {
+        if (openWatchTabNonce > 0L) tab = Tab.PRICE
     }
 
     // 剪贴板识别（文档 §4.2）：回前台时读一次，认出商品链接就在概览页顶部给一条横条。

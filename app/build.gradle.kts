@@ -126,6 +126,9 @@ dependencies {
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 
+    // 桌面小组件（用户优化文档 §七）：Glance —— Compose 风格的 App Widget，避免手写 RemoteViews
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+
     // Shizuku（免 root/无线调试授权，用于一键开启无障碍服务）
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")

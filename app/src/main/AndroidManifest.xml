@@ -118,6 +118,31 @@
             </intent-filter>
         </receiver>
 
+        <!-- 盯价桌面小组件（用户优化文档 §七）：Glance 官方模板 receiver -->
+        <receiver
+            android:name=".widget.WatchWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/pricing_widget_info" />
+        </receiver>
+
+        <!-- QS 磁贴「立即检查」（用户优化文档 §七）：官方模板，BIND_QUICK_SETTINGS_TILE 系统级保护 -->
+        <service
+            android:name=".widget.CheckTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="@string/watch_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- 使用 Hilt 自定义 WorkManager 配置，禁用默认初始化器 -->
         <provider
             android:name="androidx.startup.InitializationProvider"

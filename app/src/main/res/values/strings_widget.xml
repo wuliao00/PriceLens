@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    桌面小组件 + QS 磁贴专用文案（用户优化文档 §七）。
+    单独成文件是为了不动 strings.xml（其它代理在改），命名一律 widget_* / watch_tile_* 前缀。
+-->
+<resources>
+    <!-- 桌面小组件（4x2）：盯价中 N 个 / 累计降价 M 次 / 上次检查 HH:mm -->
+    <string name="widget_label">盯价小组件</string>
+    <string name="widget_description">盯价中目标数、累计降价次数与上次检查时间</string>
+    <string name="widget_watching">盯价中 %1$d 个</string>
+    <string name="widget_dropped">累计降价 %1$d 次</string>
+    <string name="widget_last_check">上次检查 %1$s</string>
+
+    <!-- QS 磁贴：点击触发与盯价页「立即检查一次」同一条路径 -->
+    <string name="watch_tile_label">立即检查</string>
+    <string name="watch_tile_subtitle">上次 %1$s</string>
+    <string name="watch_tile_checking">检查中…</string>
+</resources>

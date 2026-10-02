@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.glance.appwidget.updateAll
 import com.pricelens.R
 import com.pricelens.data.local.AppDatabase
 import com.pricelens.data.local.DayCurve
@@ -24,6 +25,7 @@ import com.pricelens.domain.WatchTargetPolicy
 import com.pricelens.domain.WatchTargetRef
 import com.pricelens.util.LogT
 import com.pricelens.util.PriceFormatter
+import com.pricelens.widget.WatchWidget
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -55,6 +57,10 @@ import kotlinx.coroutines.flow.StateFlow
  * 于是没有慢慢买 Cookie 的用户永远攒不出历史曲线。现在 [recordDailyCurvePoints]
  * 在分类之后把"今日的曲线点"写进 `price_history`：一天一行、当日最后一个 live 样本作收盘点、
  * 另存当日至低；资格判定依旧只在 [PriceSampling.curveWorthy]，取不到价的目标不写。
+ *
+ * 2026-10-02 桌面小组件快照（用户优化文档 §七）：每轮收尾由 [publishWidgetState] 把
+ * watching（当轮活跃目标数）/ dropped（累计发出降价提醒数）/ last_check_at 落成
+ * SharedPreferences("watch_state") 快照并刷新 [WatchWidget]；目标清空轮只归零 watching。
  */
 @Singleton
 class WatchCheckRunner @Inject constructor(
@@ -110,6 +116,9 @@ class WatchCheckRunner @Inject constructor(
             stalledRounds = 0
             stallNoticePosted = false
             _lastRound.value = null
+            // 小组件收尾：只把 watching 归零；目标清空轮没有"完成时刻"（传 0），
+            // 保留上次检查时间与累计降价（都是历史事实，不随清零动作抹掉）
+            publishWidgetState(context, watching = 0, triggeredThisRound = 0, atMillis = 0L)
             return Outcome(0, 0, 0, 0)
         }
         val targets = entities.map { WatchTargetRef(it.productId, it.platform, it.targetPrice) }
@@ -171,7 +180,29 @@ class WatchCheckRunner @Inject constructor(
             stallNoticePosted = true
             sendStalledNotification(context, outcome)
         }
+        // 收尾：把小组件要的三个数落成持久快照并刷新桌面小组件（文档 §七）
+        publishWidgetState(
+            context = context,
+            watching = targets.size,
+            triggeredThisRound = triggered,
+            atMillis = System.currentTimeMillis()
+        )
         return outcome
+    }
+
+    /**
+     * 小组件快照收尾（用户优化文档 §七）：watching = 本轮活跃目标数；
+     * dropped 累加本轮**发出降价提醒**的次数（口径 = 累计发出降价提醒的次数，见 [WidgetStats.nextDropped]，
+     * 与轮次统计的 [Outcome.triggered] 同源）；last_check_at = 本轮完成时刻（<=0 表示没有完成时刻，保留原值）。
+     * 快照写盘或小组件刷新失败都不影响盯价轮次本身，只记日志。
+     */
+    private suspend fun publishWidgetState(context: Context, watching: Int, triggeredThisRound: Int, atMillis: Long) {
+        runCatching {
+            WidgetStateStore(context).recordRound(watching, triggeredThisRound, atMillis)
+            WatchWidget().updateAll(context)
+        }.onFailure { e ->
+            LogT.w("小组件状态更新失败（不影响本轮盯价）：${e.javaClass.simpleName}")
+        }
     }
 
     /** 按 platform 分发查价；null = 该平台本轮失败（应重试），空 Map = 通道在但一个价都没拿到 */
