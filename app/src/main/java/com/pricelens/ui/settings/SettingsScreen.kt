@@ -97,6 +97,7 @@ fun SettingsScreen(
                 onClear = { profileViewModel.clearCache() }
             )
             CredentialsSection(settings)
+            NotifySection(settings)
             DiagnosticsSection()
             AboutSection(
                 versionName = BuildConfig.VERSION_NAME,

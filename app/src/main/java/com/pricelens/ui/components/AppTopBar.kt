@@ -20,6 +20,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -44,6 +45,7 @@ fun AppTopBar(
     onSearch: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onFocusChanged: (Boolean) -> Unit = {},
     scrollBehavior: TopAppBarScrollBehavior? = null
 ) {
     val barColor = MaterialTheme.colorScheme.surface.copy(alpha = TOP_BAR_ALPHA)
@@ -54,7 +56,8 @@ fun AppTopBar(
                 onValueChange = onKeywordChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 52.dp),
+                    .heightIn(max = 52.dp)
+                    .onFocusChanged { onFocusChanged(it.isFocused) },
                 placeholder = {
                     Text(
                         stringResource(R.string.search_hint),

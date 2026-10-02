@@ -44,9 +44,10 @@ class PriceWatchViewModel @Inject constructor(
     private val targets = MutableStateFlow<List<PriceTargetEntity>>(emptyList())
 
     /**
-     * 进行中的盯价目标。VM 存活期间持续订阅 Room 流，
-     * 因此保存前读到的主键占用情况一定是最新的（旧实现依赖 Lazy 共享，
-     * 用户没开过"我的"页时快照为空，防撞会失效）。
+     * 全部盯价目标（含已暂停，active=false）——「我的」页列表要能展示并恢复暂停项。
+     * VM 存活期间持续订阅 Room 流，因此保存前读到的主键占用情况一定是最新的
+     * （旧实现依赖 Lazy 共享，用户没开过"我的"页时快照为空，防撞会失效）。
+     * 注意：后台检查与"盯价中"计数只认 `active=true`（见 WatchCheckRunner / ProfileScreen）。
      */
     val watchTargets: StateFlow<List<PriceTargetEntity>> = targets
 
@@ -62,7 +63,7 @@ class PriceWatchViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            repository.observeTargets().collect { targets.value = it }
+            repository.observeAllTargets().collect { targets.value = it }
         }
         // C1：两个订阅必须是两条独立协程。observeTargets() 是 Room 的实时流，collect 永不返回，
         // 与它串在同一条协程里的 observeIdentities().collect{} 因此是死代码 ——
@@ -109,6 +110,26 @@ class PriceWatchViewModel @Inject constructor(
 
     fun removeTarget(productId: String) {
         viewModelScope.launch { repository.deactivateTarget(productId) }
+    }
+
+    /** 暂停盯价（文档 UX 列表操作）：保留目标与目标价，只是不再参与后台检查 */
+    fun pauseTarget(productId: String) {
+        viewModelScope.launch { repository.deactivateTarget(productId) }
+    }
+
+    /** 恢复暂停的盯价目标 */
+    fun resumeTarget(productId: String) {
+        viewModelScope.launch { repository.activateTarget(productId) }
+    }
+
+    /** 彻底删除盯价目标（列表随 Room 流即时消失） */
+    fun deleteTarget(productId: String) {
+        viewModelScope.launch { repository.deleteTarget(productId) }
+    }
+
+    /** 修改目标价（对话框侧已校验，这里再兜一层） */
+    fun updateTargetPrice(productId: String, targetPrice: Double) {
+        viewModelScope.launch { repository.updateTargetPrice(productId, targetPrice) }
     }
 
     /** 立即跑一轮检查：把"盯了没反应"变成用户能当场验证的动作 */

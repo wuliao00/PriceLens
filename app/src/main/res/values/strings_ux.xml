@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UX 批次新增文案（文档 UX 清单：0 目标置灰 / 列表操作 / 倒计时 / 富通知 / 历史 chips / 引导卡折叠） -->
+<resources>
+    <!-- 盯价页 · 检查状态卡 -->
+    <string name="watch_check_needs_target">还没有盯价目标：先搜索商品，用「盯价」按钮添加目标后再来检查。</string>
+    <string name="watch_next_check_at">下次检查约 %1$s（后台每 30 分钟一轮）</string>
+    <string name="watch_next_check_soon">下次检查即将进行（后台每 30 分钟一轮）</string>
+
+    <!-- 我的页 · 盯价目标行（滑动暂停/删除/改价） -->
+    <string name="watch_target_paused_badge">已暂停</string>
+    <string name="watch_target_resume">恢复</string>
+    <string name="watch_target_edit_title">修改目标价</string>
+    <string name="watch_target_edit_hint">目标价（元）</string>
+    <string name="cd_swipe_pause_target">暂停盯价</string>
+    <string name="cd_swipe_delete_target">删除盯价目标</string>
+
+    <!-- 降价通知动作（富通知） -->
+    <string name="notification_action_view">查看</string>
+    <string name="notification_action_ignore">忽略</string>
+
+    <!-- 设置页 · 通知区块 -->
+    <string name="settings_section_notify">通知</string>
+    <string name="settings_notify_wifi_title">仅 WiFi 时提醒</string>
+    <string name="settings_notify_wifi_desc">移动网络下暂缓降价提醒；连上 WiFi 后下一轮照常提醒，不会丢。</string>
+    <string name="settings_notify_quiet_title">免打扰时段</string>
+    <string name="settings_notify_quiet_desc_off">打开后，该时段内暂不推送降价提醒（出时段后下一轮自动恢复）。</string>
+    <string name="settings_notify_quiet_desc_on">%1$s – %2$s 之间不推送降价提醒，出时段后自动恢复。</string>
+    <string name="settings_notify_quiet_start">开始时间</string>
+    <string name="settings_notify_quiet_end">结束时间</string>
+    <string name="settings_notify_quiet_confirm">确定</string>
+
+    <!-- 概览页 · 引导卡折叠 -->
+    <string name="overview_guide_expand">展开引导</string>
+    <string name="overview_guide_collapse">收起</string>
+
+    <!-- 搜索历史 chips（顶栏搜索框聚焦时） -->
+    <string name="search_history_recent">最近搜索</string>
+</resources>

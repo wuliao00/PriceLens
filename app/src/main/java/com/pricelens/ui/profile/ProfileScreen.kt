@@ -1,5 +1,6 @@
 package com.pricelens.ui.profile
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -14,30 +15,45 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.BuildConfig
 import com.pricelens.R
+import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.ui.components.AppImage
 import com.pricelens.ui.components.EmptyText
 import com.pricelens.ui.components.PriceBadge
@@ -67,6 +83,8 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
     val targets by priceWatchViewModel.watchTargets.collectAsStateWithLifecycle()
     val history by profileViewModel.searchHistory.collectAsStateWithLifecycle()
     val cacheStats by profileViewModel.cacheStats.collectAsStateWithLifecycle()
+    // 正在修改目标价的目标（对话框状态）
+    var editingTarget by remember { mutableStateOf<PriceTargetEntity?>(null) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -76,7 +94,8 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
         item(key = "stats") {
             StatsRow(
                 pinnedCount = pinned.size,
-                targetCount = targets.size,
+                // "盯价中"只算未暂停的（暂停项仍在列表里可见、可恢复）
+                targetCount = targets.count { it.active },
                 cacheStats = cacheStats
             )
         }
@@ -120,10 +139,12 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
             }
         } else {
             items(targets, key = { it.productId }) { target ->
-                TargetRow(
-                    title = target.title,
-                    targetPrice = target.targetPrice,
-                    onDelete = { priceWatchViewModel.removeTarget(target.productId) }
+                TargetSwipeRow(
+                    target = target,
+                    onPause = { priceWatchViewModel.pauseTarget(target.productId) },
+                    onResume = { priceWatchViewModel.resumeTarget(target.productId) },
+                    onDelete = { priceWatchViewModel.deleteTarget(target.productId) },
+                    onEditPrice = { editingTarget = target }
                 )
             }
         }
@@ -185,6 +206,18 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
                 textAlign = TextAlign.Center
             )
         }
+    }
+
+    // 点行 = 改目标价（文档 UX 列表操作之一）；点按/滑动之外没有隐藏入口
+    editingTarget?.let { target ->
+        EditTargetPriceDialog(
+            target = target,
+            onDismiss = { editingTarget = null },
+            onConfirm = { price ->
+                priceWatchViewModel.updateTargetPrice(target.productId, price)
+                editingTarget = null
+            }
+        )
     }
 }
 
@@ -298,30 +331,126 @@ private fun PinnedRow(title: String, price: Double, image: String, url: String, 
     Spacer(Modifier.height(Dims.SpacingS))
 }
 
+/**
+ * 盯价目标行（文档 UX 列表操作）：
+ *  - 点按 → 修改目标价；
+ *  - 右滑（StartToEnd）→ 暂停 / 恢复（行留在原地，只换状态）；
+ *  - 左滑（EndToStart）→ 彻底删除（列表随 Room 流消失）；
+ *  - 暂停中的行显示「已暂停」徽标与「恢复」按钮（滑动手势不好发现时还有明路可走）。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TargetRow(title: String, targetPrice: Double, onDelete: () -> Unit) {
-    PriceCard(modifier = Modifier.fillMaxWidth()) {
+private fun TargetSwipeRow(
+    target: PriceTargetEntity,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onDelete: () -> Unit,
+    onEditPrice: () -> Unit
+) {
+    val state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    if (target.active) onPause() else onResume()
+                    false // 不真的滑走：暂停/恢复只是换状态
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onDelete()
+                    true
+                }
+                SwipeToDismissBoxValue.Settled -> false
+            }
+        }
+    )
+    SwipeToDismissBox(
+        state = state,
+        backgroundContent = { SwipeBackground(state.dismissDirection, target) },
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true
+    ) {
+        // RowScope 下用 Column 包一层，避免卡片与 Spacer 被并排摆放
+        Column {
+            TargetRow(target = target, onClick = onEditPrice, onResume = onResume, onDelete = onDelete)
+        }
+    }
+}
+
+@Composable
+private fun SwipeBackground(direction: SwipeToDismissBoxValue, target: PriceTargetEntity) {
+    if (direction == SwipeToDismissBoxValue.Settled) return
+    val isDelete = direction == SwipeToDismissBoxValue.EndToStart
+    val container = if (isDelete) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        MaterialTheme.colorScheme.tertiaryContainer
+    }
+    val onContainer = if (isDelete) {
+        MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    }
+    val icon = when {
+        isDelete -> Icons.Filled.Delete
+        target.active -> Icons.Filled.Pause
+        else -> Icons.Filled.PlayArrow
+    }
+    val label = if (isDelete) {
+        stringResource(R.string.cd_swipe_delete_target)
+    } else if (target.active) {
+        stringResource(R.string.cd_swipe_pause_target)
+    } else {
+        stringResource(R.string.watch_target_resume)
+    }
+    Row(
+        Modifier
+            .fillMaxSize()
+            .background(container)
+            .padding(horizontal = Dims.SpacingL),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (isDelete) Arrangement.End else Arrangement.Start
+    ) {
+        Icon(icon, contentDescription = null, tint = onContainer)
+        Spacer(Modifier.size(Dims.SpacingS))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = onContainer)
+    }
+}
+
+@Composable
+private fun TargetRow(target: PriceTargetEntity, onClick: () -> Unit, onResume: () -> Unit, onDelete: () -> Unit) {
+    PriceCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        target.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (!target.active) {
+                        Spacer(Modifier.size(Dims.SpacingS))
+                        PriceBadge(stringResource(R.string.watch_target_paused_badge), BadgeTone.NEUTRAL)
+                    }
+                }
                 Text(
                     stringResource(
                         R.string.profile_target_price,
-                        PriceFormatter.format(targetPrice)
+                        PriceFormatter.format(target.targetPrice)
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            if (!target.active) {
+                TextButton(onClick = onResume) {
+                    Text(stringResource(R.string.watch_target_resume))
+                }
+            }
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Filled.Delete,
-                    contentDescription = stringResource(R.string.profile_cd_delete_target),
+                    contentDescription = stringResource(R.string.cd_swipe_delete_target),
                     tint = MaterialTheme.colorScheme.error
                 )
             }
@@ -329,3 +458,48 @@ private fun TargetRow(title: String, targetPrice: Double, onDelete: () -> Unit) 
     }
     Spacer(Modifier.height(Dims.SpacingS))
 }
+
+@Composable
+private fun EditTargetPriceDialog(target: PriceTargetEntity, onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
+    var priceText by remember(target.productId) { mutableStateOf(formatEditable(target.targetPrice)) }
+    val parsed = priceText.toDoubleOrNull()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.watch_target_edit_title)) },
+        text = {
+            Column {
+                Text(
+                    target.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(Dims.SpacingS))
+                OutlinedTextField(
+                    value = priceText,
+                    onValueChange = { priceText = it },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    supportingText = { Text(stringResource(R.string.watch_target_edit_hint)) }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = parsed != null && parsed > 0,
+                onClick = { parsed?.let(onConfirm) }
+            ) {
+                Text(stringResource(R.string.price_watch_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        }
+    )
+}
+
+/** 目标价输入框初始值：整数不带小数点，非整数保持原样 */
+private fun formatEditable(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()

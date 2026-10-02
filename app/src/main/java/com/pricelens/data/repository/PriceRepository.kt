@@ -377,6 +377,27 @@ class PriceRepository @Inject constructor(
         db.priceTargetDao().deactivate(productId)
     }
 
+    /** 全部盯价目标（含已暂停）：个人页列表用；检查轮次仍只看 [observeTargets]（active=1） */
+    fun observeAllTargets() = db.priceTargetDao().observeAll()
+
+    /** 恢复暂停的目标（保留原目标价与建立时刻，只把 active 置回） */
+    suspend fun activateTarget(productId: String) {
+        val entity = db.priceTargetDao().getById(productId) ?: return
+        if (!entity.active) db.priceTargetDao().upsert(entity.copy(active = true))
+    }
+
+    /** 彻底删除盯价目标（与「暂停」不同：不再展示、也不会被检查） */
+    suspend fun deleteTarget(productId: String) {
+        db.priceTargetDao().delete(productId)
+    }
+
+    /** 修改目标价；非法值一律忽略（UI 侧已拦截，这里是双保险） */
+    suspend fun updateTargetPrice(productId: String, targetPrice: Double) {
+        if (targetPrice <= 0 || targetPrice.isNaN() || targetPrice.isInfinite()) return
+        val entity = db.priceTargetDao().getById(productId) ?: return
+        db.priceTargetDao().upsert(entity.copy(targetPrice = targetPrice))
+    }
+
     /** 立即清缓存：内存全清、Room 保留收藏、其余按非收藏淘汰；通用 L2 条目一并清空 */
     suspend fun clearCaches() {
         memoryCache.clear()

@@ -1,5 +1,6 @@
 package com.pricelens.ui.overview
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,19 +9,27 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Accessibility
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,10 +123,11 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            // 三张引导卡默认折叠成紧凑标题行：首屏留给"搜索/粘贴"核心路径（文档 UX 卡片偏高）
             item(key = "guide_acc") {
                 val context = LocalContext.current
                 Spacer(Modifier.height(Dims.SpacingL))
-                EmptyState(
+                CollapsibleGuide(
                     icon = Icons.Filled.Accessibility,
                     title = stringResource(R.string.overview_guide_acc_title),
                     desc = stringResource(R.string.overview_guide_acc_desc),
@@ -131,7 +141,7 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
             }
             item(key = "guide_link") {
                 Spacer(Modifier.height(Dims.SpacingL))
-                EmptyState(
+                CollapsibleGuide(
                     icon = Icons.Filled.Link,
                     title = stringResource(R.string.overview_guide_link_title),
                     desc = stringResource(R.string.overview_guide_link_desc)
@@ -139,7 +149,7 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
             }
             item(key = "guide_bili") {
                 Spacer(Modifier.height(Dims.SpacingL))
-                EmptyState(
+                CollapsibleGuide(
                     icon = Icons.Filled.OndemandVideo,
                     title = stringResource(R.string.overview_guide_bili_title),
                     desc = if (searched) {
@@ -168,6 +178,46 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
                 ProductHeader(product, judgment, history, livePrice, realtimeSource)
             }
             item(key = "meta") { QuickFacts(history, coupons, judgment) }
+        }
+    }
+}
+
+/** 可折叠引导卡：默认折起（首屏密度），点标题行展开原样的 [EmptyState] 说明 */
+@Composable
+private fun CollapsibleGuide(icon: ImageVector, title: String, desc: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = Dims.SpacingS)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.size(Dims.SpacingS))
+            Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = stringResource(
+                    if (expanded) R.string.overview_guide_collapse else R.string.overview_guide_expand
+                ),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (expanded) {
+            EmptyState(
+                icon = icon,
+                title = title,
+                desc = desc,
+                actionLabel = actionLabel,
+                onAction = onAction
+            )
         }
     }
 }
