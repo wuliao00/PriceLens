@@ -65,7 +65,7 @@ import com.pricelens.util.UrlOpener
  * 数据源失败展示友好错误提示（旧数据仍兜底展示）。
  */
 @Composable
-fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = {}) {
+fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = {}, onOpenProduct: (String) -> Unit = {}) {
     val loading by searchViewModel.loading.collectAsStateWithLifecycle()
     val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
     val productAsync by searchViewModel.product.collectAsStateWithLifecycle()
@@ -178,6 +178,17 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
                 ProductHeader(product, judgment, history, livePrice, realtimeSource)
             }
             item(key = "meta") { QuickFacts(history, coupons, judgment) }
+            // §十一 详情页入口：概览只管"一眼看到"，价格/找券/评测三段在详情页里
+            item(key = "detail_entry") {
+                Spacer(Modifier.height(Dims.SpacingM))
+                PriceBadge(
+                    stringResource(R.string.product_open_detail),
+                    BadgeTone.NEUTRAL,
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenProduct(product.title) }
+                )
+            }
         }
     }
 }

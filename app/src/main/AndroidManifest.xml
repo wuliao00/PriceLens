@@ -24,6 +24,8 @@
         <package android:name="com.jingdong.app.mall" />
         <package android:name="com.taobao.taobao" />
         <package android:name="com.xunmeng.pinduoduo" />
+        <!-- §十一 详情页评测段：装了 B站 App 才走 bilibili:// 深链，"装没装"这次查询要有可见性 -->
+        <package android:name="tv.danmaku.bili" />
         <!-- Shizuku（设置页检测“已安装未启动”状态需要包可见性） -->
         <package android:name="moe.shizuku.privileged.api" />
     </queries>

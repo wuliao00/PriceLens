@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  §十一 商品详情页（价格 / 找券 / 评测 三段式）专用文案。
+  单独成文件：本轮并行改动很多，strings.xml / strings_ux.xml 由其他改动在用，避免撞车。
+  「找券」段标签沿用既有的 tab_coupon（6→4 之后它不再出现在底部导航，改出现在详情页分段里）。
+-->
+<resources>
+    <string name="product_detail_title">商品详情</string>
+    <string name="product_open_detail">看详情 · 价格 / 找券 / 评测</string>
+
+    <!-- 商品头卡 -->
+    <string name="product_current_price">现价</string>
+    <string name="product_price_unknown">暂时取不到价格</string>
+    <string name="product_history_lowest">历史最低 %1$s</string>
+    <string name="product_history_none">还没有历史价</string>
+    <string name="product_advice_percentile">当前价处在历史 %1$d%% 分位</string>
+
+    <!-- 三段式模块 -->
+    <string name="product_tab_price">价格</string>
+    <string name="product_tab_review">评测</string>
+
+    <!-- 价格段：各源报价 + 来源状态 + 盯价目标 -->
+    <string name="product_quotes_title">各源报价</string>
+    <string name="product_quote_candidate">搜索到的商品报价</string>
+    <string name="product_quote_history">慢慢买历史当前点</string>
+    <string name="product_quote_live">本机账号实时价</string>
+    <string name="product_quote_net">券后到手价</string>
+    <string name="product_quote_none">—</string>
+    <string name="product_watch_title">盯价目标</string>
+    <string name="product_watch_none">这件还没设目标价</string>
+    <string name="product_watch_target_price">目标价 %1$s</string>
+    <string name="product_watch_paused">已暂停</string>
+    <string name="product_watch_button">设目标价</string>
+    <string name="product_watch_edit">改目标价</string>
+    <string name="product_watch_pause">暂停</string>
+    <string name="product_watch_resume">继续盯</string>
+    <string name="product_watch_delete">删除</string>
+    <string name="product_watch_hint">到价提醒由「盯价」页的周期检查发出；这里只改目标本身</string>
+    <string name="product_watch_invalid">目标价要大于 0</string>
+    <string name="product_watch_no_channel">这件归属不到有查价渠道的商品 ID，暂时盯不了</string>
+    <string name="product_watch_target_label">目标价（元）</string>
+    <string name="product_watch_save">保存</string>
+
+    <!-- 评测段 -->
+    <string name="product_review_recent">近半年</string>
+    <string name="product_review_recent_desc">只留发布时间在近半年内的视频；接口没给发布时间的照常保留</string>
+    <string name="product_review_filtered">近半年筛掉 %1$d 条</string>
+    <string name="product_review_deep_link">用 B站 App 打开</string>
+    <string name="product_review_deep_link_installed">已装 B站 · 点视频直达播放器</string>
+    <string name="product_review_deep_link_absent">未装 B站 App · 点视频走网页</string>
+    <string name="product_review_pubdate">%1$s 发布</string>
+    <string name="product_review_pubdate_unknown">发布时间未知</string>
+    <string name="product_review_retry_keyword">按「%1$s」重搜</string>
+    <string name="product_review_keyword_hint">标题里的颜色/容量/营销词不适合搜评测，已去掉</string>
+</resources>

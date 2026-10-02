@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -25,8 +26,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.ConfirmationNumber
-import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PriceCheck
 import androidx.compose.material.icons.filled.QueryStats
@@ -163,9 +162,7 @@ class MainActivity : ComponentActivity() {
 
 private enum class Tab(@StringRes val labelRes: Int) {
     OVERVIEW(R.string.tab_overview),
-    BILIBILI(R.string.tab_bilibili),
     PRICE(R.string.tab_price),
-    COUPON(R.string.tab_coupon),
     COMMUNITY(R.string.tab_community),
     PROFILE(R.string.tab_profile)
 }
@@ -198,6 +195,10 @@ fun MainScreen(
     var searchFocused by rememberSaveable { mutableStateOf(false) }
     var showKeepAlive by rememberSaveable { mutableStateOf(false) }
     var showScripts by rememberSaveable { mutableStateOf(false) }
+    // §十一 商品详情页：底部导航 6→4 后，B站/找券都在这一页里；路由沿用 [showSettings] 那种全屏覆盖
+    var showProduct by rememberSaveable { mutableStateOf(false) }
+    // 「先按这个关键词搜、再把详情页盖上来」。nonce 是为了同一个商品再点一次也能重跑一次搜索
+    var productRequest by remember { mutableStateOf<Pair<String, Long>?>(null) }
     // 首启引导：完成/跳过后持久化 onboardingDone，之后只从设置页"重新查看新手引导"进入
     var showOnboarding by rememberSaveable { mutableStateOf(!settings.onboardingDone) }
     var setupHintDismissed by rememberSaveable { mutableStateOf(false) }
@@ -244,6 +245,19 @@ fun MainScreen(
     LaunchedEffect(openWatchTabNonce) {
         if (openWatchTabNonce > 0L) tab = Tab.PRICE
     }
+
+    // §十一 详情页入口：带着被点条目的标题/关键词先搜一轮，再全屏盖上详情页。
+    // nonce 让"同一个商品再点一次"也能重跑（同 key 不重跑是 LaunchedEffect 的语义）。
+    LaunchedEffect(productRequest) {
+        val text = productRequest?.first
+        if (!text.isNullOrBlank()) searchViewModel.search(text)
+    }
+    val openProduct: (String) -> Unit = { text ->
+        productRequest = text.ifBlank { keyword } to System.currentTimeMillis()
+        showProduct = true
+    }
+    // 详情页是"页"不是"弹窗"：返回键必须先关它，不能直接把 App 退掉
+    BackHandler(enabled = showProduct) { showProduct = false }
 
     // 剪贴板识别（文档 §4.2）：回前台时读一次，认出商品链接就在概览页顶部给一条横条。
     // Android 10+ 只有前台应用能读剪贴板，所以必须挂在 ON_RESUME 上；同一段内容只提示一次。
@@ -318,9 +332,7 @@ fun MainScreen(
                             Icon(
                                 when (t) {
                                     Tab.OVERVIEW -> Icons.Filled.QueryStats
-                                    Tab.BILIBILI -> Icons.Filled.OndemandVideo
                                     Tab.PRICE -> Icons.Filled.PriceCheck
-                                    Tab.COUPON -> Icons.Filled.ConfirmationNumber
                                     Tab.COMMUNITY -> Icons.Filled.ChatBubble
                                     Tab.PROFILE -> Icons.Filled.Person
                                 },
@@ -406,11 +418,15 @@ fun MainScreen(
                 when (targetTab) {
                     Tab.OVERVIEW -> com.pricelens.ui.overview.OverviewScreen(
                         searchViewModel,
-                        onGoBilibili = { tab = Tab.BILIBILI }
+                        // B站不再是独立 tab：引导卡的「查看B站评测」落到详情页评测段（同一份 videos 状态）
+                        onGoBilibili = { openProduct(keyword) },
+                        onOpenProduct = openProduct
                     )
-                    Tab.BILIBILI -> com.pricelens.ui.bilibili.BilibiliScreen(searchViewModel)
-                    Tab.PRICE -> com.pricelens.ui.price.PriceScreen(searchViewModel, priceWatchViewModel)
-                    Tab.COUPON -> com.pricelens.ui.coupon.CouponScreen(searchViewModel)
+                    Tab.PRICE -> com.pricelens.ui.price.PriceScreen(
+                        searchViewModel,
+                        priceWatchViewModel,
+                        onOpenProduct = openProduct
+                    )
                     Tab.COMMUNITY -> com.pricelens.ui.community.CommunityScreen(searchViewModel)
                     Tab.PROFILE -> com.pricelens.ui.profile.ProfileScreen(
                         onOpenSettings = { showSettings = true },
@@ -468,6 +484,14 @@ fun MainScreen(
     // 自定义脚本页：Shizuku ADB 级 shell 执行
     if (showScripts) {
         com.pricelens.ui.scripts.ScriptScreen(onBack = { showScripts = false })
+    }
+
+    // §十一 商品详情页（价格 / 找券 / 评测）：与设置页、保活页同一套全屏覆盖路由，不引入 Navigation
+    if (showProduct) {
+        com.pricelens.ui.product.ProductDetailScreen(
+            searchViewModel = searchViewModel,
+            onBack = { showProduct = false }
+        )
     }
 }
 
