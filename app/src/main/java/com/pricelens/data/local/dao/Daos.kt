@@ -28,6 +28,10 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE pinned = 1 ORDER BY lastAccessedAt DESC")
     fun observePinned(): Flow<List<ProductEntity>>
 
+    /** §五 备份用一次性收藏快照（与 [observePinned] 同口径：只要 pinned=1） */
+    @Query("SELECT * FROM products WHERE pinned = 1 ORDER BY lastAccessedAt DESC")
+    suspend fun getPinnedOnce(): List<ProductEntity>
+
     @Query("UPDATE products SET lastAccessedAt = :now WHERE id = :id")
     suspend fun touch(id: String, now: Long)
 
@@ -101,6 +105,10 @@ interface PriceTargetDao {
 
     @Query("SELECT * FROM price_targets WHERE active = 1")
     suspend fun getAllActive(): List<PriceTargetEntity>
+
+    /** §五 恢复合并用：按主键读单个目标（含已停用的，"新者胜"比较不做 active 过滤） */
+    @Query("SELECT * FROM price_targets WHERE productId = :productId LIMIT 1")
+    suspend fun get(productId: String): PriceTargetEntity?
 
     @Query("UPDATE price_targets SET active = 0 WHERE productId = :productId")
     suspend fun deactivate(productId: String)
