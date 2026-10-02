@@ -98,6 +98,18 @@ object MmbPageSeries {
     fun pageLooksCrawling(visibleText: String?): Boolean =
         visibleText?.contains("正在抓取") == true || visibleText?.contains("抓取中") == true
 
+    /**
+     * 页面是否停在人机验证（站点自己的滑块/拼图）。
+     *
+     * 真机实测：桌面页在 WebView 里也可能落到这一步（同一 URL 在桌面 Chrome 上却不落）。
+     * **这一步只能由用户本人完成** —— App 不代拖滑块，只把状态说清楚。
+     */
+    fun pageWantsCaptcha(visibleText: String?): Boolean {
+        if (visibleText == null) return false
+        return visibleText.contains("拖动滑块") || visibleText.contains("拼图") ||
+            visibleText.contains("人机验证") || visibleText.contains("安全验证")
+    }
+
     /** 页面是否停在「京东授权」引导（站点自己的弹窗） */
     fun pageWantsJdAuth(visibleText: String?): Boolean =
         visibleText?.contains("京东授权") == true

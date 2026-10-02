@@ -104,6 +104,16 @@ class MmbPageSeriesTest {
     }
 
     @Test
+    fun `the slider captcha is recognised and never mistaken for empty data`() {
+        // 真机实测：桌面页在 WebView 里也会落到滑块页（同一 URL 在桌面 Chrome 上不落）。
+        // 认出它，状态栏才能说"这一步只能你本人做"；认不出就会写成"该商品没有数据"。
+        assertTrue(MmbPageSeries.pageWantsCaptcha("拖动滑块完成拼图"))
+        assertTrue(MmbPageSeries.pageWantsCaptcha("请完成安全验证"))
+        assertFalse(MmbPageSeries.pageWantsCaptcha("京东授权"))
+        assertFalse(MmbPageSeries.pageWantsCaptcha(null))
+    }
+
+    @Test
     fun `the auth gate and the crawling notice are recognised from the site's own wording`() {
         assertTrue(MmbPageSeries.pageWantsJdAuth("京东授权 请先完成授权"))
         assertTrue(MmbPageSeries.pageLooksCrawling("正在抓取该商品的历史价格"))

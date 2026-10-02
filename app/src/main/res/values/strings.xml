@@ -159,6 +159,7 @@
     <string name="mmb_fetch_status_loading">正在打开慢慢买历史页…页面会先检查京东授权、再取数。若弹出授权窗口，请按提示完成一次授权。</string>
     <string name="mmb_fetch_status_one_point">页面目前只给出 1 个日点（%1$s）。折线至少要两个日点 —— 可以过一会儿点「重新取数」。</string>
     <string name="mmb_fetch_status_need_auth">页面上是「京东授权」引导：请按页面里的提示扫码/授权，完成后回到这里点「重新取数」。</string>
+    <string name="mmb_fetch_status_captcha">页面要求人机验证（滑块/拼图）：这一步只能由你本人完成 —— 拖动滑块通过后回到这里点「重新取数」。App 不会代替你过验证码。</string>
     <string name="mmb_fetch_status_crawling">慢慢买正在抓取该商品的历史价（这是他们服务器在抓，不是本机在等）：稍等片刻再点「重新取数」。</string>
     <string name="mmb_fetch_status_no_series">页面没有给出历史序列：可能是该商品真的没有数据，也可能停在授权/验证页 —— 以上面的网页内容为准，这条结论不猜。</string>
     <string name="mmb_fetch_status_saving">取到 %1$d 个日点，正在写入本机曲线…</string>

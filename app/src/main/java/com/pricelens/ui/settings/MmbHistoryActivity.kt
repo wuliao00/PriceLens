@@ -71,6 +71,8 @@ class MmbHistoryActivity : ComponentActivity() {
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            // 桌面 UA：这一页本来就是桌面版（真机实测：WebView 默认的 "wv" UA 更容易被弹人机验证）
+            settings.userAgentString = DESKTOP_UA
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
@@ -152,7 +154,13 @@ class MmbHistoryActivity : ComponentActivity() {
         val cookie = settings.manmanbuyCookie
         if (cookie.isBlank()) return
         val manager = CookieManager.getInstance()
-        for (host in COOKIE_HOSTS) manager.setCookie(host, cookie)
+        // ⚠ 真机实测（2026-10-02）：`setCookie(host, "a=1; b=2; c=3")` 只会存下**第一条**，
+        // 于是登录 Cookie（60014_mmmuser / mmbuser_ext）全丢，页面看起来像"未登录"。
+        // 必须逐条拆开注入 —— 拉到 WebView 的 cookie 库里数过条目才发现。
+        val pairs = cookie.split(';').map { it.trim() }.filter { it.contains('=') }
+        for (host in COOKIE_HOSTS) {
+            for (pair in pairs) manager.setCookie(host, pair)
+        }
         manager.flush()
     }
 
@@ -172,6 +180,9 @@ class MmbHistoryActivity : ComponentActivity() {
                     }
                     MmbPageSeries.pageLooksCrawling(probe.visibleText) -> {
                         status.text = getString(R.string.mmb_fetch_status_crawling)
+                    }
+                    MmbPageSeries.pageWantsCaptcha(probe.visibleText) -> {
+                        status.text = getString(R.string.mmb_fetch_status_captcha)
                     }
                     else -> {
                         polls++
@@ -225,6 +236,11 @@ class MmbHistoryActivity : ComponentActivity() {
         const val EXTRA_PRODUCT_ID = "product_id"
 
         private const val HISTORY_URL_PREFIX = "https://tool.manmanbuy.com/HistoryLowest.aspx?url="
+
+        /** 桌面版 Chrome UA（与站点给桌面浏览器的一致） */
+        private const val DESKTOP_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         private const val MAX_POLLS = 20
         private const val POLL_INTERVAL_MS = 1500L
         private val COOKIE_HOSTS = listOf(
