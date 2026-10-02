@@ -30,6 +30,9 @@ class PriceLensApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // 凭证加密（2026-10-02）：把历史明文 Cookie/apikey 搬进 Keystore 加密存储并删掉明文。
+        // 幂等，放在最前面 —— 任何读设置的代码之前都该是密文。
+        com.pricelens.util.SecretStore.migrateFromPlainPrefs(this)
         // Shizuku 状态响应式监听（Binder 启动/停止/授权自动流转）
         com.pricelens.util.ShizukuHelper.init(this)
         // Coil 全局单例（§4.4：内存 10% / 磁盘 15MB）

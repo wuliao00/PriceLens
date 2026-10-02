@@ -37,7 +37,27 @@
         <activity
             android:name=".ui.main.MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
+
+            <!-- 系统分享（文档 §4.3）：在京东/淘宝/拼多多里点「分享 → PriceLens」直接比价 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <!-- 浏览器打开商品链接时可选本应用 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="item.jd.com" />
+                <data android:scheme="https" android:host="item.m.jd.com" />
+                <data android:scheme="https" android:host="item.taobao.com" />
+                <data android:scheme="https" android:host="detail.m.tmall.com" />
+                <data android:scheme="https" android:host="mobile.yangkeduo.com" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -49,6 +69,14 @@
             android:name=".ui.settings.ManmanbuyLoginActivity"
             android:exported="false"
             android:label="@string/settings_mmb_login_title"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 慢慢买网页取历史价（2026-10-02）：在应用内 WebView 里跑站点自己的取数脚本，
+             只读它渲染用的 flotChart.data；不代过验证码、不代点授权 -->
+        <activity
+            android:name=".ui.settings.MmbHistoryActivity"
+            android:exported="false"
+            android:label="@string/mmb_fetch_title"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!-- 无障碍服务（§1.3）：仅监听电商 APP，BIND_ACCESSIBILITY_SERVICE 系统级保护 -->

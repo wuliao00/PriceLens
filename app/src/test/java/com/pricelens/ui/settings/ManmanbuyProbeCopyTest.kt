@@ -21,6 +21,18 @@ class ManmanbuyProbeCopyTest {
     fun `each outcome maps to its own string`() {
         assertEquals(R.string.settings_mmb_probe_ok, mmbProbeStringRes(CookieProbe.Ok(List(3) { point() })))
         assertEquals(
+            R.string.settings_mmb_probe_logged_out,
+            mmbProbeStringRes(CookieProbe.LoggedOut("checkJdAuth 返回 code=0/login=0"))
+        )
+        assertEquals(
+            R.string.settings_mmb_probe_need_jd_auth,
+            mmbProbeStringRes(CookieProbe.JdNotAuthorized("https://apapia-config.manmanbuy.com/h5/x", "auth=false"))
+        )
+        assertEquals(
+            R.string.settings_mmb_probe_ready,
+            mmbProbeStringRes(CookieProbe.Ready("checkJdAuth 返回 auth=true"))
+        )
+        assertEquals(
             R.string.settings_mmb_probe_captcha,
             mmbProbeStringRes(CookieProbe.Captcha("aliVal markers"))
         )
@@ -31,6 +43,23 @@ class ManmanbuyProbeCopyTest {
         assertEquals(
             R.string.settings_mmb_probe_unreachable,
             mmbProbeStringRes(CookieProbe.Unreachable("network: SocketTimeoutException"))
+        )
+    }
+
+    @Test
+    fun `not-authorized is never worded as logged-out`() {
+        // 2026-10-02 的真机事故：登录有效、只是没授权京东，旧文案却写「登录态无效或已过期」，
+        // 把用户引去重新登录。这两句话必须永远不同、且各自指向正确的下一步。
+        val needAuth = CookieProbe.JdNotAuthorized("https://x", "auth=false")
+        assertNotEquals(R.string.settings_mmb_probe_logged_out, mmbProbeStringRes(needAuth))
+        assertNotEquals(R.string.settings_mmb_probe_captcha, mmbProbeStringRes(needAuth))
+        assertNotEquals(
+            R.string.settings_mmb_probe_need_jd_auth,
+            mmbProbeStringRes(CookieProbe.LoggedOut("login=0"))
+        )
+        assertNotEquals(
+            R.string.settings_mmb_probe_need_jd_auth,
+            mmbProbeStringRes(CookieProbe.Ready("auth=true"))
         )
     }
 
@@ -55,5 +84,8 @@ class ManmanbuyProbeCopyTest {
             "network: SocketTimeoutException",
             mmbProbeArg(CookieProbe.Unreachable("network: SocketTimeoutException"))
         )
+        assertEquals("login=0", mmbProbeArg(CookieProbe.LoggedOut("login=0")))
+        assertEquals("auth=false", mmbProbeArg(CookieProbe.JdNotAuthorized("https://x", "auth=false")))
+        assertEquals("auth=true", mmbProbeArg(CookieProbe.Ready("auth=true")))
     }
 }

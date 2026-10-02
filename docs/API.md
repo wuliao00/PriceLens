@@ -169,6 +169,21 @@ v2.6.5 起，盯价每轮的 live 现价会写成"今日的曲线点"（见 `dat
 - 边界（phase 2，未实现）：同一商品将来拿到真 SKU 时，`jd:<sku>` 与 `ovl:<hash>` 是两条独立历史；合并需处理同日冲突，本期不做。
 - 曲线跟随**当日最后一次浏览**（收盘语义），不是当日最低；「历史最低」用的是 `dayLow`。文案不得误导。
 
+
+#### 慢慢买：登录有效 ≠ 能取数，卡点在「京东授权」（2026-10-02 实测）
+
+真机事故：用户 Cookie 抓取成功、`m.manmanbuy.com` 首页能认出登录，但历史价始终为空，
+而 App 当时的结论写的是「登录态无效或已过期」——**归因错了**。四组对照 + 一次账号查询后的结论：
+
+| 通道 | 实测 | 结论 |
+|------|------|------|
+| `tool.manmanbuy.com/m/history.aspx?type=history_mobile_tool` | 返回 4,135 字节阿里云滑块页（`/m/aliVal.aspx?method=slideAuth` + AliyunCaptcha.js）。**带 Cookie / 不带 Cookie / okhttp UA / 手机 Chrome UA / 桌面 Chrome UA 五组结果字节数完全相同** | 这条通道对任何程序化请求都要人机验证，与登录态无关；保留为兜底，不再作为主路径 |
+| `HistoryLowest.aspx?action=checkJdAuth` | 带 Cookie：`{"code":1,"msg":"未授权","data":{"auth":false,"authUrl":"…jd_oauth_redirect.html…"}}`；不带 Cookie：`{"code":0,"msg":"请先登录","data":{"login":0}}` | **账号侧权威三态**：未登录 / 已登录未授权京东 / 已授权。登录有效但未授权，是"换不到数据"的最常见原因 |
+| 桌面页 `HistoryLowest.aspx?url=…` | 66 KB 真页面、显示账号名、无滑块；数据由页面自己 `POST /api.ashx`（带一页一签的 `ticket` + 混淆过的签名脚本）取回，再交给全局 `flotChart.data = [[毫秒时间戳, 价格, 附加], …]` 渲染 | 数据接口的签名脚本**混淆过**：复刻它属于逆向站点反爬，不做。改走应用内 WebView：站点自己的 JS 取数，我们只读 `flotChart.data` |
+
+⇒ 因此 v2.8.0 的形态是：**先 `checkJdAuth` 拿三态 → 未授权就把授权入口给用户（网页里自己点一次）→ 已授权则用应用内 WebView 打开桌面历史页取数**。
+红线不变：不代过人机验证、不代点授权、不解析混淆脚本。
+
 #### 关键词搜索通道的三态契约（F4，2026-09-29）
 
 **"没够着数据源"与"够着了但确实没有"是两件事，全链路不得压成同一个值。**

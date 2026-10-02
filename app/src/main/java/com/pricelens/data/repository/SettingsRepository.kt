@@ -1,6 +1,8 @@
 package com.pricelens.data.repository
 
 import android.content.Context
+import com.pricelens.util.SecretKeys
+import com.pricelens.util.SecretStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,6 +35,17 @@ class SettingsRepository @Inject constructor(
         _dynamicColor.value = enabled
     }
 
+    /**
+     * 回前台时读剪贴板、认出商品链接就给一条"去比价"横条（文档 §4.2）。
+     * 默认开；关掉后不再读剪贴板（合规：Android 10+ 只有前台应用能读，且本 App 只在本机判断）。
+     */
+    val clipboardDetectEnabled: Boolean
+        get() = prefs.getBoolean("clipboard_detect_enabled", true)
+
+    fun setClipboardDetectEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("clipboard_detect_enabled", enabled).apply()
+    }
+
     /** 免责声明是否已同意（同意后启动不再弹出） */
     val disclaimerAgreed: Boolean
         get() = prefs.getBoolean("disclaimer_agreed", false)
@@ -41,21 +54,42 @@ class SettingsRepository @Inject constructor(
         prefs.edit().putBoolean("disclaimer_agreed", agreed).apply()
     }
 
-    /** 星罗好货开放平台 apikey（可选：历史低价参考 + 盯价兜底） */
+    /**
+     * 星罗好货开放平台 apikey（可选：历史低价参考 + 盯价兜底）。
+     *
+     * 2026-10-02 起经 [SecretStore] 加密存取（KeyStore AES-GCM）；换机恢复后密钥不在时读回空串，
+     * 按"没配"处理并让 UI 引导重新获取 —— 这是正确的安全行为，不是 bug。
+     */
     val linkstarsApiKey: String
-        get() = prefs.getString("linkstars_apikey", "").orEmpty()
+        get() = SecretStore.getString(context, SecretKeys.APIKEY_XL).orEmpty()
 
     fun setLinkstarsApiKey(value: String) {
-        prefs.edit().putString("linkstars_apikey", value.trim()).apply()
+        SecretStore.putString(context, SecretKeys.APIKEY_XL, value.trim())
     }
 
-    /** 慢慢买登录 Cookie（可选：自填后尝试拉取完整历史价格曲线） */
+    /** 慢慢买登录 Cookie（可选；加密存储，见 [linkstarsApiKey] 的说明） */
     val manmanbuyCookie: String
-        get() = prefs.getString("mmb_cookie", "").orEmpty()
+        get() = SecretStore.getString(context, SecretKeys.COOKIE_MMB).orEmpty()
 
+    /**
+     * 保存 Cookie 时**一并记下抓取时刻**：慢慢买的登录态通常 7~30 天有效，
+     * 到期提醒靠这个时间戳（见 PriceCheckWorker 的到期检查）。
+     */
     fun setManmanbuyCookie(value: String) {
-        prefs.edit().putString("mmb_cookie", value.trim()).apply()
+        SecretStore.putString(context, SecretKeys.COOKIE_MMB, value.trim())
+        if (value.isNotBlank()) {
+            SecretStore.putString(context, SecretKeys.COOKIE_FETCHED_AT, System.currentTimeMillis().toString())
+        }
     }
+
+    /** Cookie 的抓取时刻（毫秒）；0 = 没有记录（老数据或从未抓取） */
+    val manmanbuyCookieFetchedAt: Long
+        get() = SecretStore.getString(context, SecretKeys.COOKIE_FETCHED_AT)?.toLongOrNull() ?: 0L
+
+    /** 这个 fetchedAt 是否已经提醒过到期（同一次抓取只提醒一次） */
+    var cookieExpiryNotifiedFor: Long
+        get() = prefs.getLong("cookie_expiry_notified_for", 0L)
+        set(value) = prefs.edit().putLong("cookie_expiry_notified_for", value).apply()
 
     // ---------- 强制更新闸门状态（v2.6.0 新增，全部本机持久化，不上传） ----------
 

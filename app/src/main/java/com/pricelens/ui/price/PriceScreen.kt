@@ -80,6 +80,8 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
     val loading by searchViewModel.loading.collectAsStateWithLifecycle()
     val historyAsync by searchViewModel.history.collectAsStateWithLifecycle()
     val judgment by searchViewModel.judgment.collectAsStateWithLifecycle()
+    val adviceState by searchViewModel.advice.collectAsStateWithLifecycle()
+    val advicePercentile by searchViewModel.advicePercentile.collectAsStateWithLifecycle()
     val curveProvenance by searchViewModel.curveProvenance.collectAsStateWithLifecycle()
     val productAsync by searchViewModel.product.collectAsStateWithLifecycle()
     val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
@@ -266,6 +268,23 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
                     )
                 }
                 Spacer(Modifier.height(Dims.SpacingS))
+                // 购买建议（文档 §10）：把"当前价处在历史什么位置"翻成一句能拍板的话。
+                // UNKNOWN（采样点不够）不显示 —— 徽章位不摆"暂无判断"这种废话。
+                val adviceNow = adviceState
+                if (adviceNow != null && adviceNow != com.pricelens.domain.PriceAdvice.Advice.UNKNOWN) {
+                    val pct = advicePercentile
+                    Text(
+                        text = if (pct != null) {
+                            stringResource(R.string.advice_percentile, pct) + " · " +
+                                stringResource(adviceStringRes(adviceNow))
+                        } else {
+                            stringResource(adviceStringRes(adviceNow))
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(Dims.SpacingS))
+                }
                 // 曲线出处脚注（2026-09-30 盯价自采）：这条线是本机一轮轮攒的还是慢慢买给的，
                 // 必须看得出来 —— 否则"历史最低"到底是谁的低点就没人说得清。
                 val curveDays = curveProvenance?.dayPairsText().orEmpty()

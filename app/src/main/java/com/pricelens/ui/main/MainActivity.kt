@@ -18,6 +18,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -42,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +57,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.BuildConfig
 import com.pricelens.R
@@ -76,6 +81,14 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.delay
 
+/**
+ * 一次"要搜索的入口"（文档 §4.3）：分享、浏览器打开、无障碍浮窗的 focus_title 都汇到这里。
+ *
+ * 为什么要 nonce：Compose 的 `LaunchedEffect(key)` 在 key 相等时不会重跑，
+ * 而"同一段文本再来一次"（比如用户又分享了一次同一个链接）必须能再次触发搜索。
+ */
+data class IncomingSearch(val text: String, val nonce: Long)
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
@@ -87,10 +100,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var updateRepository: UpdateRepository
 
+    private var incomingSearch by mutableStateOf<IncomingSearch?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        val focusTitle = intent?.getStringExtra("focus_title")
+        handleIntent(intent)
         setContent {
             // 设置页的“动态取色”开关在 Activity 级生效
             val dynamicColor by settings.dynamicColor.collectAsStateWithLifecycle()
@@ -100,7 +115,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     MainScreen(
-                        initialKeyword = focusTitle,
+                        incomingSearch = incomingSearch,
                         overlayPermissionAvailable = !OverlayManager.canDrawOverlays(this),
                         settings = settings,
                         updateRepository = updateRepository
@@ -108,6 +123,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    /**
+     * 分享 / 浏览器打开 / 浮窗"去比价"（focus_title）三合一。
+     * 不在这里解析链接：短链跳转要联网，交给搜索流程（它已有 SKU 解析与历史价加载）。
+     */
+    private fun handleIntent(intent: android.content.Intent?) {
+        val text = when (intent?.action) {
+            android.content.Intent.ACTION_SEND -> intent.getStringExtra(android.content.Intent.EXTRA_TEXT)
+            android.content.Intent.ACTION_VIEW -> intent.dataString
+            else -> intent?.getStringExtra("focus_title")
+        }?.trim()
+        if (text.isNullOrBlank()) return
+        incomingSearch = IncomingSearch(text, System.currentTimeMillis())
     }
 }
 
@@ -123,7 +158,7 @@ private enum class Tab(@StringRes val labelRes: Int) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    initialKeyword: String?,
+    incomingSearch: IncomingSearch?,
     overlayPermissionAvailable: Boolean,
     settings: SettingsRepository,
     updateRepository: UpdateRepository
@@ -176,8 +211,27 @@ fun MainScreen(
         updateRepository.checkOnColdStart(BuildConfig.VERSION_CODE)
     }
 
-    LaunchedEffect(initialKeyword) {
-        if (!initialKeyword.isNullOrBlank()) searchViewModel.search(initialKeyword)
+    // 分享 / 浏览器 / 浮窗入口：每次带 nonce 的请求都切回概览并搜索
+    LaunchedEffect(incomingSearch) {
+        val text = incomingSearch?.text
+        if (!text.isNullOrBlank()) {
+            tab = Tab.OVERVIEW
+            searchViewModel.search(text)
+        }
+    }
+
+    // 剪贴板识别（文档 §4.2）：回前台时读一次，认出商品链接就在概览页顶部给一条横条。
+    // Android 10+ 只有前台应用能读剪贴板，所以必须挂在 ON_RESUME 上；同一段内容只提示一次。
+    var clipboardLink by remember { mutableStateOf<com.pricelens.domain.LinkParser.ParsedLink?>(null) }
+    val clipboardLifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(clipboardLifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && settings.clipboardDetectEnabled) {
+                clipboardLink = com.pricelens.ui.common.ClipboardDetector.detect(context)
+            }
+        }
+        clipboardLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { clipboardLifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // 阻断层严格互斥、顺序固定：免责声明 → 强制更新 → 新手引导。
@@ -251,6 +305,46 @@ fun MainScreen(
         }
     ) { inner ->
         Column(Modifier.padding(inner).fillMaxSize()) {
+            // 剪贴板横条：只在概览页、只在认出商品链接时出现；「忽略」= 同一段内容不再提示
+            val detected = clipboardLink
+            if (tab == Tab.OVERVIEW && detected != null) {
+                androidx.compose.material3.Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    androidx.compose.foundation.layout.Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 12.dp, end = 4.dp)
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.clipboard_banner_text,
+                                detected.platform?.label ?: stringResource(R.string.clipboard_banner_unknown)
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = {
+                            val target = detected.url.ifBlank { detected.raw }
+                            com.pricelens.ui.common.ClipboardDetector.markIgnored(detected.raw)
+                            clipboardLink = null
+                            tab = Tab.OVERVIEW
+                            searchViewModel.search(target)
+                        }) {
+                            Text(stringResource(R.string.clipboard_banner_go))
+                        }
+                        TextButton(onClick = {
+                            com.pricelens.ui.common.ClipboardDetector.markIgnored(detected.raw)
+                            clipboardLink = null
+                        }) {
+                            Text(stringResource(R.string.clipboard_banner_ignore))
+                        }
+                    }
+                }
+            }
             // 引导跳过/完成后仍缺必要权限：首页顶部给一条可关闭的提示条（含"重开引导"入口）
             if (tab == Tab.OVERVIEW && !permissionStates.essentialsReady && !setupHintDismissed) {
                 SetupHintBar(

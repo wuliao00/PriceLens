@@ -15,6 +15,7 @@ import com.pricelens.data.remote.SmzdmApi
 import com.pricelens.data.remote.SourceUnreachableException
 import com.pricelens.data.repository.CurveProvenance
 import com.pricelens.data.repository.PriceRepository
+import com.pricelens.domain.PriceAdvice
 import com.pricelens.domain.ProductCandidate
 import com.pricelens.domain.ProductCandidateResolver
 import com.pricelens.ui.common.AsyncValue
@@ -107,6 +108,16 @@ class SearchViewModel @Inject constructor(
 
     private val _judgment = MutableStateFlow<PriceJudgment>(PriceJudgment.NORMAL())
     val judgment: StateFlow<PriceJudgment> = _judgment
+
+    /**
+     * 购买建议：当前价处在历史的什么位置（文档 §10）。null = 本轮没算（没搜到/没有历史点）。
+     * 口径全在 [com.pricelens.domain.PriceAdvice]，UI 只负责显示。
+     */
+    private val _advice = MutableStateFlow<com.pricelens.domain.PriceAdvice.Advice?>(null)
+    val advice: StateFlow<com.pricelens.domain.PriceAdvice.Advice?> = _advice
+
+    private val _advicePercentile = MutableStateFlow<Int?>(null)
+    val advicePercentile: StateFlow<Int?> = _advicePercentile
 
     /**
      * 历史曲线的出处（盯价页脚注）：这条线是本机盯价自采长出来的、还是慢慢买给的。
@@ -254,6 +265,8 @@ class SearchViewModel @Inject constructor(
                         _history.value = AsyncValue.Idle
                         _judgment.value = PriceJudgment.NORMAL()
                         _curveProvenance.value = null
+                        _advice.value = null
+                        _advicePercentile.value = null
                         return@launch
                     }
                     _searchedCacheKeys.value = _searchedCacheKeys.value + "mmb:history:$url"
@@ -283,6 +296,10 @@ class SearchViewModel @Inject constructor(
                     val h = (_history.value as? AsyncValue.Success)?.data
                     _judgment.value = h?.let { judgePrice(it.current, it.points.map { p -> p.price }) }
                         ?: PriceJudgment.NORMAL()
+                    // 购买建议（文档 §10）：同一批历史点算分位，口径全在 PriceAdvice
+                    val historyPrices = h?.points?.map { p -> p.price }.orEmpty()
+                    _advice.value = h?.let { PriceAdvice.advise(it.current, historyPrices) }
+                    _advicePercentile.value = h?.let { PriceAdvice.percentile(it.current, historyPrices) }
                     // 曲线出处：放在历史取数之后算，才包含这一轮可能写回的外源点。
                     // 问失败就不显示脚注（宁可不说话，也不说一条猜出来的出处）。
                     _curveProvenance.value = ownSku?.let { id ->

@@ -74,16 +74,28 @@ internal fun classifyHistoryPage(html: String): HistoryPage {
 }
 
 /**
- * 「检测 Cookie」的结论：四种结局各一句人能看懂的话，带一句原因。
+ * 「检测 Cookie」的结论：每种结局一句人能看懂的话，带一句原因。
  *
- * 红线：[Unreachable]（没够着）绝不能显示成"没有历史数据"（够着了才谈得上有没有）。
+ * 红线：① [Unreachable]（没够着）绝不能显示成"没有历史数据"（够着了才谈得上有没有）；
+ * ② 2026-10-02 加了一条更硬的：**未登录 / 未授权京东 / 渠道要人机验证是三件事**，
+ * 不许再压成同一句「登录态无效或已过期」——实测里用户明明登录有效，只是没授权京东，
+ * 却被这句提示引去重新登录，白折腾。
  */
 sealed interface CookieProbe {
 
     /** Cookie 换到了数据：探针商品的历史价格点（[points] 非空） */
     data class Ok(val points: List<ManmanbuyApi.PricePoint>) : CookieProbe
 
-    /** 被弹到人机验证 / 登录态失效——Cookie 没换来数据 */
+    /** 慢慢买判定"未登录"：Cookie 空缺或登录态已失效 */
+    data class LoggedOut(val reason: String) : CookieProbe
+
+    /** 登录有效，但账号**没有授权京东** —— 慢慢买只对已授权账号返回京东历史价 */
+    data class JdNotAuthorized(val authUrl: String, val reason: String) : CookieProbe
+
+    /** 登录有效且已授权京东：数据要在网页里取（移动页那条通道对程序化请求一律要人机验证） */
+    data class Ready(val reason: String) : CookieProbe
+
+    /** 被弹到人机验证页，且这次连授权状态都没查成——不能据此断定登录失效 */
     data class Captcha(val reason: String) : CookieProbe
 
     /** 够着了页面，但这个探针商品自己没有历史价格数据 */
@@ -91,4 +103,27 @@ sealed interface CookieProbe {
 
     /** 压根没连上慢慢买（网络不可达 / 被反爬直接拒 / 空响应），与"没有数据"是两回事 */
     data class Unreachable(val reason: String) : CookieProbe
+}
+
+/**
+ * 判定优先级：**登录态 → 京东授权 → 页面**。纯函数，JVM 可测。
+ *
+ * 为什么把授权放在页面之前：移动页对任何程序化请求都会弹人机验证（实测四组对照同 4,135 字节），
+ * 于是"页面弹了验证码"对所有人都成立、对谁都说明不了问题；而 `checkJdAuth` 的 JSON 是**账号侧的事实**。
+ * 只有连账号状态都问不出来（[JdAuthState.Unknown]）时，才退回用页面现象说话。
+ */
+internal fun probeOutcome(auth: JdAuthState, page: HistoryPage?): CookieProbe = when (auth) {
+    JdAuthState.LoggedOut -> CookieProbe.LoggedOut("checkJdAuth 返回 code=0/login=0")
+    is JdAuthState.NotAuthorized ->
+        CookieProbe.JdNotAuthorized(auth.authUrl, "checkJdAuth 返回 auth=false")
+    JdAuthState.Authorized -> when (page) {
+        is HistoryPage.Points -> CookieProbe.Ok(page.points)
+        else -> CookieProbe.Ready("checkJdAuth 返回 auth=true")
+    }
+    is JdAuthState.Unknown -> when (page) {
+        is HistoryPage.Points -> CookieProbe.Ok(page.points)
+        HistoryPage.Captcha -> CookieProbe.Captcha("授权状态未知(${auth.detail})；页面弹了人机验证")
+        HistoryPage.NoData -> CookieProbe.NoData("授权状态未知(${auth.detail})；页面也没有数据")
+        null -> CookieProbe.Unreachable("授权状态未知：${auth.detail}")
+    }
 }

@@ -31,11 +31,15 @@ import java.util.concurrent.TimeUnit
 class PriceCheckWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val runner: WatchCheckRunner
+    private val runner: WatchCheckRunner,
+    private val settings: com.pricelens.data.repository.SettingsRepository
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         val outcome = runner.runOnce(applicationContext)
+        // 慢慢买 Cookie 到期提醒（文档 §2.5）：顺带看一眼，超期只发一条低优先级通知，
+        // 同一次抓取只提醒一次；失败不影响盯价本身
+        runCatching { CookieExpiryNotice.checkAndNotify(applicationContext, settings) }
         // 逐目标如实记账：无通道 / 主键非法 / 取不到现价（p.3.cn 已下线）都要有数，
         // 不再让"盯了没反应"只剩一句日志。零进展时由 WatchCheckRunner 发可点开的说明通知。
         LogT.i(

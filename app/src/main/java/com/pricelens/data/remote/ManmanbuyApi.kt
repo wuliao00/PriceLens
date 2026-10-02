@@ -56,39 +56,53 @@ class ManmanbuyApi @Inject constructor(private val client: ApiClient) {
     }
 
     /**
-     * 移动端历史价页 SSR 通道：内嵌 flot 序列 `[Date.UTC(y,m,d),price]`。
-     *
-     * 改造前这里走 `client.getHtml`（`CrawlerResult` → `String?` 的兼容桥），于是
-     * 「网络不可达」「Cookie 失效被 302 弹到人机验证页」「该商品真的没有历史数据」
-     * 三种结局全被压成同一个空列表，用户粘完 Cookie 只能看到"无曲线"。
-     * 现在改用 [ApiClient.getHtmlResult] 并把结局交给 [classifyHistoryPage] 分：
-     * 本方法只取价格点（[getHistory] 对外的 `History?` 语义因此不变），
-     * 要给用户交代"为什么没曲线"时走 [probeCookie]。
+     * 移动端历史价页 SSR 通道。**2026-10-02 实测降级为兜底**：该页对任何程序化请求都先弹
+     * 阿里云滑块（带不带 Cookie 均为 4,135 字节验证页），真正取数走 [MmbPageSeries] 那套
+     * 应用内 WebView 方案（设置页「用网页取历史价」）。这里保留原样：万一站点以后放开，
+     * `Ok` 分支能立刻拿到点，不需要再改结构。
      */
     private suspend fun fetchViaCookie(productUrl: String, cookie: String): List<PricePoint> =
         (probeHistory(productUrl, cookie) as? CookieProbe.Ok)?.points ?: emptyList()
 
-    /** 设置页「检测 Cookie」：同一个请求，但把四种结局原样交出去 */
+    /** 设置页「检测 Cookie」：把每种结局原样交出去（判定优先级见 [probeOutcome]） */
     suspend fun probeCookie(productUrl: String, cookie: String): CookieProbe =
-        if (cookie.isBlank()) CookieProbe.Unreachable("empty-cookie") else probeHistory(productUrl, cookie)
+        if (cookie.isBlank()) CookieProbe.LoggedOut("empty-cookie") else probeHistory(productUrl, cookie)
 
-    private suspend fun probeHistory(productUrl: String, cookie: String): CookieProbe {
-        val url = HISTORY_URL_PREFIX + java.net.URLEncoder.encode(productUrl, "UTF-8")
-        return when (val result = client.getHtmlResult(url, referer = HISTORY_REFERER, cookie = cookie)) {
-            is CrawlerResult.Success ->
-                when (val page = classifyHistoryPage(result.data)) {
-                    is HistoryPage.Points -> CookieProbe.Ok(page.points)
-                    is HistoryPage.Captcha ->
-                        CookieProbe.Captcha("aliVal/AliyunCaptcha markers, body=${result.data.length}")
-                    is HistoryPage.NoData ->
-                        CookieProbe.NoData("no Date.UTC series, body=${result.data.length}")
-                }
-            is CrawlerResult.Blocked -> CookieProbe.Unreachable("blocked: ${result.reason}")
-            is CrawlerResult.Empty -> CookieProbe.Unreachable("empty body")
-            is CrawlerResult.Network ->
-                CookieProbe.Unreachable("network: ${result.cause.javaClass.simpleName}")
+    /**
+     * 账号侧的**权威**判定：登录了吗？授权京东了吗？
+     *
+     * 这条 JSON 是 2026-10-02 实测出来的（页面脚本自己就这么调）：
+     * 已登录+已授权 `{"data":{"auth":true}}`；未授权 `{"code":1,"msg":"未授权",…authUrl}`；
+     * 未登录 `{"code":0,"msg":"请先登录","data":{"login":0}}`。
+     * 网络层失败一律 [JdAuthState.Unknown]——**不许把"问不到"说成任何一种结论**。
+     */
+    suspend fun checkJdAuth(cookie: String): JdAuthState {
+        if (cookie.isBlank()) return JdAuthState.LoggedOut
+        return when (val result = client.getHtmlResult(JD_AUTH_CHECK_URL, referer = HISTORY_REFERER, cookie = cookie)) {
+            is CrawlerResult.Success -> parseJdAuthState(result.data)
+            is CrawlerResult.Blocked -> JdAuthState.Unknown("blocked: ${result.reason}")
+            is CrawlerResult.Empty -> JdAuthState.Unknown("empty body")
+            is CrawlerResult.Network -> JdAuthState.Unknown("network: ${result.cause.javaClass.simpleName}")
         }
     }
+
+    private suspend fun probeHistory(productUrl: String, cookie: String): CookieProbe {
+        val auth = checkJdAuth(cookie)
+        // 未登录 / 未授权：结论已由账号侧给出，不必再跑那条"注定被弹验证码"的移动页
+        // （少一次请求，也少一次把用户引向错误归因的机会）
+        if (auth is JdAuthState.LoggedOut || auth is JdAuthState.NotAuthorized) return probeOutcome(auth, null)
+        val page = when (val result = client.getHtmlResult(mobileUrl(productUrl), referer = HISTORY_REFERER, cookie = cookie)) {
+            is CrawlerResult.Success -> classifyHistoryPage(result.data)
+            is CrawlerResult.Blocked -> return CookieProbe.Unreachable("blocked: ${result.reason}")
+            is CrawlerResult.Empty -> return CookieProbe.Unreachable("empty body")
+            is CrawlerResult.Network ->
+                return CookieProbe.Unreachable("network: ${result.cause.javaClass.simpleName}")
+        }
+        return probeOutcome(auth, page)
+    }
+
+    private fun mobileUrl(productUrl: String): String =
+        HISTORY_URL_PREFIX + java.net.URLEncoder.encode(productUrl, "UTF-8")
 
     companion object {
         /** 2026-09-30 真机验证过能打开的京东商品页；探针 URL 固定，两次检测的结论才可比 */
@@ -97,6 +111,10 @@ class ManmanbuyApi @Inject constructor(private val client: ApiClient) {
         private const val HISTORY_URL_PREFIX =
             "https://tool.manmanbuy.com/m/history.aspx?type=history_mobile_tool&url="
         private const val HISTORY_REFERER = "https://tool.manmanbuy.com/HistoryLowest.aspx"
+
+        /** 账号侧权威判定：登录/授权京东的状态（2026-10-02 实测，页面脚本自己就是这条） */
+        private const val JD_AUTH_CHECK_URL =
+            "https://tool.manmanbuy.com/HistoryLowest.aspx?action=checkJdAuth"
     }
 
     private fun finalize(points: List<PricePoint>): History {

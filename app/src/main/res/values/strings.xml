@@ -116,9 +116,54 @@
     <string name="settings_mmb_probe_running">检测中…</string>
     <string name="settings_mmb_probe_idle">点「检测 Cookie」验证粘贴的 Cookie 能否换到历史数据（探针：京东 100012043978）</string>
     <string name="settings_mmb_probe_ok">Cookie 有效：探针商品拿到 %1$d 个历史价格点</string>
-    <string name="settings_mmb_probe_captcha">Cookie 没换到数据：被弹到慢慢买的人机验证页（登录态无效或已过期）· %1$s</string>
+    <string name="settings_mmb_probe_captcha">Cookie 没换到数据：被弹到慢慢买的人机验证页；这次连账号状态都没问成，不能据此断定登录失效 · %1$s</string>
+    <string name="settings_mmb_probe_logged_out">Cookie 没换到数据：慢慢买判定「未登录」（Cookie 为空或登录态已失效）。点「登录自动抓取」重新登录一次即可 · %1$s</string>
+    <string name="settings_mmb_probe_need_jd_auth">Cookie 的登录态是好的，但账号「还没授权京东」——慢慢买只对已授权账号返回京东历史价。这跟登录有效期无关，点下面的「去授权并取历史价」按网页提示完成一次授权后就能取数 · %1$s</string>
+    <string name="settings_mmb_probe_ready">已登录且「已授权京东」。慢慢买移动端那条通道对程序化请求一律要人机验证（与账号状态无关），历史数据请点下面的「用网页取历史价」在本机浏览器里取一次，取到后会自动写进本机曲线 · %1$s</string>
     <string name="settings_mmb_probe_no_data">连上了慢慢买、Cookie 也在，但探针商品自己没有历史价格数据，据此还不能判定 Cookie · %1$s</string>
     <string name="settings_mmb_probe_unreachable">没能连上慢慢买，这条结论不作数（不等于「该商品没有历史数据」）· %1$s</string>
+    <string name="settings_mmb_fetch_open">用网页取历史价</string>
+    <string name="settings_mmb_fetch_open_auth">去授权并取历史价</string>
+    <string name="settings_mmb_fetch_hint">在本机网页里取数：先按网页提示完成「京东授权」（只需一次），页面渲染出历史曲线后会自动写进本机。这一页不代过人机验证、也不代点授权，卡住时按网页提示操作即可。</string>
+
+    <!-- 慢慢买 Cookie 到期提醒（文档 §2.5）：登录态通常 7~30 天，到期现象是静默的 -->
+    <string name="cookie_expiry_title">慢慢买登录可能快到期了</string>
+    <string name="cookie_expiry_text">Cookie 已抓取 %1$d 天（登录态通常 7~30 天）。点开重新登录抓取一次，历史曲线才不会断。</string>
+    <string name="cookie_expiry_big">慢慢买 Cookie 已抓取 %1$d 天，登录态通常 7~30 天有效。到期后历史曲线与取数会静默失败，点这条通知回设置页，点「登录自动抓取」重新登录一次即可。</string>
+
+    <!-- 凭证默认掩码显示（文档 §2.3）：截图/录屏不该带出会话凭证 -->
+    <string name="settings_secret_show">显示</string>
+    <string name="settings_secret_hide">隐藏</string>
+    <string name="settings_secret_stored_encrypted">本机加密存储（Android Keystore），换机/重装后需重新登录抓取</string>
+
+    <!-- 入口管道（文档 §4）：剪贴板识别开关 + 回前台横条 -->
+    <string name="settings_clipboard_title">剪贴板识别商品链接</string>
+    <string name="settings_clipboard_desc">回到前台时读一次剪贴板；认出京东/淘宝/拼多多链接就在概览页顶部提示「去比价」。只在本机判断，同一段内容只提示一次；关掉后不再读剪贴板。</string>
+    <string name="clipboard_banner_text">剪贴板里有%1$s商品链接</string>
+    <string name="clipboard_banner_unknown">商品</string>
+    <string name="clipboard_banner_go">去比价</string>
+    <string name="clipboard_banner_ignore">忽略</string>
+
+    <!-- 购买建议（文档 §10）：分位徽章 -->
+    <string name="advice_hist_low">接近历史最低，可入手</string>
+    <string name="advice_good">好价区间，适合入手</string>
+    <string name="advice_fair">价格居中，可再等等</string>
+    <string name="advice_high">高于历史多数时候，建议等促销</string>
+    <string name="advice_unknown">采样点还不够，暂不给建议</string>
+    <string name="advice_percentile">当前价处于历史 %1$d%% 分位</string>
+
+    <!-- 慢慢买网页取数页（MmbHistoryActivity）：状态文案一律说清"现在在哪一步、下一步点哪" -->
+    <string name="mmb_fetch_title">用慢慢买网页取历史价</string>
+    <string name="mmb_fetch_reload">重新取数</string>
+    <string name="mmb_fetch_done">完成</string>
+    <string name="mmb_fetch_status_loading">正在打开慢慢买历史页…页面会先检查京东授权、再取数。若弹出授权窗口，请按提示完成一次授权。</string>
+    <string name="mmb_fetch_status_one_point">页面目前只给出 1 个日点（%1$s）。折线至少要两个日点 —— 可以过一会儿点「重新取数」。</string>
+    <string name="mmb_fetch_status_need_auth">页面上是「京东授权」引导：请按页面里的提示扫码/授权，完成后回到这里点「重新取数」。</string>
+    <string name="mmb_fetch_status_crawling">慢慢买正在抓取该商品的历史价（这是他们服务器在抓，不是本机在等）：稍等片刻再点「重新取数」。</string>
+    <string name="mmb_fetch_status_no_series">页面没有给出历史序列：可能是该商品真的没有数据，也可能停在授权/验证页 —— 以上面的网页内容为准，这条结论不猜。</string>
+    <string name="mmb_fetch_status_saving">取到 %1$d 个日点，正在写入本机曲线…</string>
+    <string name="mmb_fetch_status_saved">已写入本机曲线：%1$d 个日点（最低 ¥%2$s / 最高 ¥%3$s）。回「盯价」页即可看到。</string>
+    <string name="mmb_fetch_status_save_failed">取到了数据，但写入本机曲线失败（不影响下次重试）。</string>
 
     <!-- 找券页 -->
     <string name="coupon_empty_title">未发现优惠券</string>

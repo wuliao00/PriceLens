@@ -82,6 +82,7 @@ fun SettingsScreen(settings: SettingsRepository, updateRepository: UpdateReposit
             AppearanceSection(settings)
             PermissionSection()
             DataSection(
+                settings = settings,
                 cacheStats = cacheStats,
                 onRefresh = { profileViewModel.refreshCacheStats() },
                 onClear = { profileViewModel.clearCache() }

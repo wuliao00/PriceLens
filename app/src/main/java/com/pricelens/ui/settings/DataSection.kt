@@ -11,6 +11,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,16 +32,23 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
 import com.pricelens.data.remote.CookieProbe
+import com.pricelens.data.remote.ManmanbuyApi
 import com.pricelens.ui.components.SectionHeader
 import com.pricelens.ui.theme.Dims
 import com.pricelens.update.UpdateRepository
 import com.pricelens.update.UpdateState
+import com.pricelens.util.SecretMask
 
 /**
  * 设置页 · 数据区块：缓存占用查看 / 刷新 / 清理。
  */
 @Composable
-fun DataSection(cacheStats: String, onRefresh: () -> Unit, onClear: () -> Unit) {
+fun DataSection(
+    settings: com.pricelens.data.repository.SettingsRepository,
+    cacheStats: String,
+    onRefresh: () -> Unit,
+    onClear: () -> Unit
+) {
     SectionHeader(stringResource(R.string.settings_section_data))
     SettingsRow(
         title = stringResource(R.string.settings_cache_title),
@@ -52,6 +60,16 @@ fun DataSection(cacheStats: String, onRefresh: () -> Unit, onClear: () -> Unit) 
         Button(onClick = onClear, shape = MaterialTheme.shapes.small) {
             Text(stringResource(R.string.settings_cache_clear))
         }
+    }
+    // 剪贴板识别开关：读剪贴板是敏感能力，必须有开关与说明（文档 §4.2 的合规要求）
+    SettingsRow(
+        title = stringResource(R.string.settings_clipboard_title),
+        desc = stringResource(R.string.settings_clipboard_desc)
+    ) {
+        Switch(
+            checked = settings.clipboardDetectEnabled,
+            onCheckedChange = { settings.setClipboardDetectEnabled(it) }
+        )
     }
 }
 
@@ -67,6 +85,10 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
     var apiKey by remember { mutableStateOf(settings.linkstarsApiKey) }
     var cookie by remember { mutableStateOf(settings.manmanbuyCookie) }
     var saved by remember { mutableStateOf(false) }
+    // 默认掩码显示（文档 §2.3）：截图发出去 = 凭证泄露，2026-10-02 的真事。
+    // 「显示」后才可编辑/复制；掩码态下只读，避免"在掩码上编辑"这种半吊子状态。
+    var revealApiKey by remember { mutableStateOf(false) }
+    var revealCookie by remember { mutableStateOf(false) }
     // 「检测 Cookie」用输入框当前值（不是已保存值）打探针，故状态与 ViewModel 都留在本区块
     val probeVm: CookieProbeViewModel = hiltViewModel()
     val probeUi by probeVm.ui.collectAsStateWithLifecycle()
@@ -94,23 +116,47 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
 
     Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
-            value = apiKey,
+            value = if (revealApiKey) apiKey else SecretMask.mask(apiKey),
             onValueChange = {
-                apiKey = it
-                saved = false
+                if (revealApiKey) {
+                    apiKey = it
+                    saved = false
+                }
             },
+            readOnly = !revealApiKey,
             label = { Text(stringResource(R.string.settings_linkstars_key)) },
             singleLine = true,
+            trailingIcon = {
+                TextButton(onClick = { revealApiKey = !revealApiKey }) {
+                    Text(
+                        stringResource(
+                            if (revealApiKey) R.string.settings_secret_hide else R.string.settings_secret_show
+                        )
+                    )
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(Dims.SpacingS))
         OutlinedTextField(
-            value = cookie,
+            value = if (revealCookie) cookie else SecretMask.mask(cookie),
             onValueChange = {
-                cookie = it
-                saved = false
+                if (revealCookie) {
+                    cookie = it
+                    saved = false
+                }
             },
+            readOnly = !revealCookie,
             label = { Text(stringResource(R.string.settings_mmb_cookie)) },
+            trailingIcon = {
+                TextButton(onClick = { revealCookie = !revealCookie }) {
+                    Text(
+                        stringResource(
+                            if (revealCookie) R.string.settings_secret_hide else R.string.settings_secret_show
+                        )
+                    )
+                }
+            },
             modifier = Modifier.fillMaxWidth().height(120.dp)
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -175,12 +221,48 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
                 color = MaterialTheme.colorScheme.primary
             )
         }
+
+        // 结论指向"账号没授权京东 / 已授权可取数"时，给一个能走到位的入口：
+        // 打开应用内网页，由站点自己完成授权检查与取数。**不代过验证码、不代点授权**，
+        // 卡住时页面会原样呈现，状态栏只负责说清"现在在哪一步、下一步点哪"。
+        val probeResult = (probeUi as? CookieProbeViewModel.Ui.Result)?.probe
+        if (cookie.isNotBlank() && (probeResult is CookieProbe.JdNotAuthorized || probeResult is CookieProbe.Ready)) {
+            Spacer(Modifier.height(Dims.SpacingS))
+            Button(
+                onClick = {
+                    context.startActivity(
+                        Intent(context, MmbHistoryActivity::class.java).apply {
+                            putExtra(MmbHistoryActivity.EXTRA_PRODUCT_URL, ManmanbuyApi.PROBE_PRODUCT_URL)
+                        }
+                    )
+                },
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    stringResource(
+                        if (probeResult is CookieProbe.JdNotAuthorized) {
+                            R.string.settings_mmb_fetch_open_auth
+                        } else {
+                            R.string.settings_mmb_fetch_open
+                        }
+                    )
+                )
+            }
+            Text(
+                stringResource(R.string.settings_mmb_fetch_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
 /** 结论 → 文案资源 id（纯映射，无 Compose 依赖，可在 JVM 单测里直接断言） */
 internal fun mmbProbeStringRes(probe: CookieProbe): Int = when (probe) {
     is CookieProbe.Ok -> R.string.settings_mmb_probe_ok
+    is CookieProbe.LoggedOut -> R.string.settings_mmb_probe_logged_out
+    is CookieProbe.JdNotAuthorized -> R.string.settings_mmb_probe_need_jd_auth
+    is CookieProbe.Ready -> R.string.settings_mmb_probe_ready
     is CookieProbe.Captcha -> R.string.settings_mmb_probe_captcha
     is CookieProbe.NoData -> R.string.settings_mmb_probe_no_data
     is CookieProbe.Unreachable -> R.string.settings_mmb_probe_unreachable
@@ -189,6 +271,9 @@ internal fun mmbProbeStringRes(probe: CookieProbe): Int = when (probe) {
 /** 结论 → 填充参数：Ok 填价格点数（%1$d），其余填技术原因（%1$s） */
 internal fun mmbProbeArg(probe: CookieProbe): Any = when (probe) {
     is CookieProbe.Ok -> probe.points.size
+    is CookieProbe.LoggedOut -> probe.reason
+    is CookieProbe.JdNotAuthorized -> probe.reason
+    is CookieProbe.Ready -> probe.reason
     is CookieProbe.Captcha -> probe.reason
     is CookieProbe.NoData -> probe.reason
     is CookieProbe.Unreachable -> probe.reason
