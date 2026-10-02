@@ -132,6 +132,8 @@
     <string name="cookie_expiry_big">慢慢买 Cookie 已抓取 %1$d 天，登录态通常 7~30 天有效。到期后历史曲线与取数会静默失败，点这条通知回设置页，点「登录自动抓取」重新登录一次即可。</string>
 
     <!-- 凭证默认掩码显示（文档 §2.3）：截图/录屏不该带出会话凭证 -->
+    <string name="settings_linkstars_apply">去星罗好货申请 apikey</string>
+    <string name="settings_linkstars_apply_hint">申请入口在星罗好货的「提报系统」（不是 openapi.linkstars.com，那只是接口主机）：手机号 + 图形码 + 短信码注册，提交后要人工审核（通常要等一段时间）；通过后登录 → 个人中心 → 「申请APIKEY」，把显示的 key 复制回来粘贴到这里。审核要等，急不来。</string>
     <string name="settings_secret_show">显示</string>
     <string name="settings_secret_hide">隐藏</string>
     <string name="settings_secret_stored_encrypted">本机加密存储（Android Keystore），换机/重装后需重新登录抓取</string>

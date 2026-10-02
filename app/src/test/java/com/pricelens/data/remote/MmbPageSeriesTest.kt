@@ -49,6 +49,15 @@ class MmbPageSeriesTest {
     }
 
     @Test
+    fun `second-level timestamps are rejected instead of folding into 1970`() {
+        // 秒级时间戳（10 位）会被当成 1970-01-20；折完两个点同一天，collapse 后只剩 1 点却照样落库
+        val seconds = "[[1696118400,199],[1696204800,299]]"
+        assertTrue(MmbPageSeries.parseFlotData(seconds).isEmpty())
+        // 毫秒级同一时刻（2023-10-01 前后）必须通过
+        assertTrue(MmbPageSeries.parseFlotData("[[1696118400000,199]]").isNotEmpty())
+    }
+
+    @Test
     fun `non-positive prices and bogus timestamps are skipped like the page does`() {
         val ts = tsOf(2026, 9, 25)
         val json = "[[$ts,0],[$ts,-3],[[],100],[0,88],[$ts,249.0]]"

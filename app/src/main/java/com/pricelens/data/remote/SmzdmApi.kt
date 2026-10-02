@@ -69,7 +69,7 @@ class SmzdmApi @Inject constructor(private val client: ApiClient) {
 
                 // 标题节点内常含价格高亮 span；有则用之，无则从标题文本提取（"5999元"）
                 val priceEl = item.selectFirst(".z-highlight, .feed-block-title .z-highlight")
-                val price = priceEl?.text()?.replace(Regex("[^\\d.]"), "")?.toDoubleOrNull()
+                val price = parsePriceText(priceEl?.text())
                     ?: extractPrice(title)
 
                 val img = item.selectFirst("img")
@@ -91,6 +91,29 @@ class SmzdmApi @Inject constructor(private val client: ApiClient) {
                 if (posts.size >= 10) break
             }
             return posts
+        }
+
+        /**
+         * 价格高亮 span 的文本 → 价格。**不要**再"把非数字字符全删掉再 toDouble" ——
+         * 2026-10-02 真机事故：值得买的 `z-highlight` 里会带括号说明，
+         * `"284元（淘金币可抵37.14元起）"` 删完变成 `"28437.14"`，
+         * 于是一副 284 元的耳机在概览页显示成 **¥28,437.14**。
+         *
+         * 规则（按顺序，取第一个能确定含义的数）：
+         *  1. 第一个「数字 + 元」—— `284元（…）` → 284；`226.1元（需用券）` → 226.1；
+         *  2. 没有「元」就取开头那个数（`¥1,299.00` / `1299`）；
+         *  3. 都认不出 → null（宁可不给价，也不给错价）。
+         */
+        internal fun parsePriceText(raw: String?): Double? {
+            val text = raw?.trim().orEmpty()
+            if (text.isEmpty()) return null
+            Regex("([0-9][0-9,]*(?:\\.[0-9]{1,2})?)\\s*元").find(text)?.let { m ->
+                return m.groupValues[1].replace(",", "").toDoubleOrNull()
+            }
+            Regex("^[¥￥]?\\s*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)").find(text)?.let { m ->
+                return m.groupValues[1].replace(",", "").toDoubleOrNull()
+            }
+            return null
         }
 
         /** "iPhone 16 128g 5999元" → 5999（与桌面版 extractPrice 同规则） */

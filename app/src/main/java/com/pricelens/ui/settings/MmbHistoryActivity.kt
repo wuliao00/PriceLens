@@ -157,9 +157,16 @@ class MmbHistoryActivity : ComponentActivity() {
         // ⚠ 真机实测（2026-10-02）：`setCookie(host, "a=1; b=2; c=3")` 只会存下**第一条**，
         // 于是登录 Cookie（60014_mmmuser / mmbuser_ext）全丢，页面看起来像"未登录"。
         // 必须逐条拆开注入 —— 拉到 WebView 的 cookie 库里数过条目才发现。
-        val pairs = cookie.split(';').map { it.trim() }.filter { it.contains('=') }
+        val saved = cookie.split(';').map { it.trim() }.filter { it.contains('=') }
+            .associateBy { it.substringBefore('=') }
         for (host in COOKIE_HOSTS) {
-            for (pair in pairs) manager.setCookie(host, pair)
+            // 只补 WebView 里没有的名字：站点会在会话里轮换部分 cookie（如 60014_mmmuser），
+            // 无脑覆盖会把更新鲜的会话值顶掉 —— 那是"昨天还好好的、今天又要重新登录"的成因。
+            val live = manager.getCookie(host).orEmpty().split(';').map { it.trim() }
+                .filter { it.contains('=') }.associateBy { it.substringBefore('=') }
+            for ((name, pair) in saved) {
+                if (!live.containsKey(name)) manager.setCookie(host, pair)
+            }
         }
         manager.flush()
     }
@@ -217,7 +224,12 @@ class MmbHistoryActivity : ComponentActivity() {
             }.getOrDefault(false)
             status.text = if (ok) {
                 MmbHistoryFetch.succeed(productId, collapsed.size, history.lowest, history.highest)
-                getString(R.string.mmb_fetch_status_saved, collapsed.size, history.lowest, history.highest)
+                getString(
+                    R.string.mmb_fetch_status_saved,
+                    collapsed.size,
+                    com.pricelens.util.PriceFormatter.formatRaw(history.lowest),
+                    com.pricelens.util.PriceFormatter.formatRaw(history.highest)
+                )
             } else {
                 MmbHistoryFetch.fail(productId)
                 getString(R.string.mmb_fetch_status_save_failed)

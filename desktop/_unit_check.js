@@ -24,6 +24,7 @@ const { extractCoupon } = require('./src/main/crawlers/gwdang');
 const { parseItemPage } = require('./src/main/crawlers/jd');
 const { productFromCandidate } = require('./src/main/crawlers/index');
 const linkstars = require('./src/main/crawlers/linkstars');
+const { parsePriceText } = require('./src/main/crawlers/smzdm');
 
 const FIXTURES = path.join(__dirname, '..', 'app', 'src', 'test', 'resources', 'fixtures');
 const fixture = (name) => fs.readFileSync(path.join(FIXTURES, name), 'utf8');
@@ -278,3 +279,14 @@ check('没有候选时给出全零占位，不抛异常', () => {
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项${process.exitCode ? '（存在失败项）' : '，全部通过'}`);
+
+// ---------- 值得买价格高亮：括号说明不许被吞进数字（与安卓 SmzdmParserTest 同用例）----------
+console.log('\n== 值得买价格高亮解析（与安卓同用例）==');
+check('284元（淘金币可抵37.14元起） → 284', () => assert.strictEqual(parsePriceText('284元（淘金币可抵37.14元起）'), 284));
+check('209元（需用券） → 209', () => assert.strictEqual(parsePriceText('209元（需用券）'), 209));
+check('226.1元（需用券） → 226.1', () => assert.strictEqual(parsePriceText('226.1元（需用券）'), 226.1));
+check('¥1,299.00 → 1299', () => assert.strictEqual(parsePriceText('¥1,299.00'), 1299));
+check('认不出 → null', () => {
+  assert.strictEqual(parsePriceText('暂无报价'), null);
+  assert.strictEqual(parsePriceText(''), null);
+});

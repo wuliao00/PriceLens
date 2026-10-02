@@ -418,8 +418,14 @@ class PriceRepository @Inject constructor(
             )
         }
 
-        val points = history.points.map { pointFor(it.date, it.price) }
-            .filter { it.date < today } + pointFor(today, history.current)
+        // 曲线点：**照原样写**（含"今天"那一行），不再无脑补一行"今天 = history.current"——
+        // 2026-10-02 复查：旧写法在序列本身不含今天时，会把"最后一个历史价"当成今天的价写进去
+        // （慢慢买桌面页的序列常常停在几周前的最后一个点），凭空造出一条今天的观测；
+        // 同时若序列已含今天，旧写法还会把今天写两遍。现在只有序列确实没有今天时才用
+        // [ManmanbuyApi.History.current] 兜底（星罗那条"今日现价"通道仍然成立）。
+        val hasToday = history.points.any { it.date == today }
+        val points = history.points.filter { it.date <= today }.map { pointFor(it.date, it.price) } +
+            if (hasToday) emptyList() else listOf(pointFor(today, history.current))
         db.priceHistoryDao().insertAll(points)
     }
 

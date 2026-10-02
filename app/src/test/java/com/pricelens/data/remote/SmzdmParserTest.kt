@@ -23,6 +23,22 @@ class SmzdmParserTest {
     }
 
     @Test
+    fun `a price highlight with a parenthetical note never fuses into a bigger number`() {
+        // 2026-10-02 真机事故原文：值得买 z-highlight 里是「284元（淘金币可抵37.14元起）」，
+        // 旧实现把非数字字符全删掉再 toDouble → 28437.14，一副 284 元的耳机显示成 ¥28,437.14。
+        assertEquals(284.0, SmzdmApi.parsePriceText("284元（淘金币可抵37.14元起）") ?: 0.0, 0.001)
+        assertEquals(209.0, SmzdmApi.parsePriceText("209元（需用券）") ?: 0.0, 0.001)
+        assertEquals(226.1, SmzdmApi.parsePriceText("226.1元（需用券）") ?: 0.0, 0.001)
+        assertEquals(287.07, SmzdmApi.parsePriceText("287.07元") ?: 0.0, 0.001)
+        // 带千分位与货币符、没有「元」的写法
+        assertEquals(1299.0, SmzdmApi.parsePriceText("¥1,299.00") ?: 0.0, 0.001)
+        // 认不出就不给价（宁可不给，也不给错）
+        assertEquals(null, SmzdmApi.parsePriceText("暂无报价"))
+        assertEquals(null, SmzdmApi.parsePriceText(""))
+        assertEquals(null, SmzdmApi.parsePriceText(null))
+    }
+
+    @Test
     fun `relevance filter keeps only matching device deals`() {
         val posts = SmzdmApi.parseSearchPage(fixture("smzdm_faxian.html"))
         val relevant = posts.filter { QueryRelevance.isRelevant("iPhone 15", it.title) }

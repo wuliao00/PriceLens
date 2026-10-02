@@ -20,6 +20,9 @@ import java.util.Locale
  */
 object MmbPageSeries {
 
+    /** 时间戳下界：2000-01-01T00:00:00Z。低于它的多半是秒级时间戳或脏数据 */
+    const val MIN_VALID_TS_MS: Long = 946_684_800_000L
+
     /** 与网页 `new Date(parseInt(nS))` 对齐：毫秒时间戳 → 本地时区的 `yyyy-MM-dd` */
     private val DAY_FORMAT: ThreadLocal<SimpleDateFormat> =
         ThreadLocal.withInitial { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
@@ -79,7 +82,9 @@ object MmbPageSeries {
             val row = array.optJSONArray(i) ?: array.optJSONObject(i)?.optJSONArray("value") ?: continue
             val ts = row.optLong(0, 0L)
             val price = row.optDouble(1, 0.0)
-            if (ts <= 0L || price <= 0.0) continue
+            // 时间戳只认 2000-01-01 之后的毫秒值：秒级时间戳（10 位）会被当成 1970 年，
+            // 折出一天假点、还会让"按日折叠"把整条序列折成同一天（2026-10-02 审计发现）。
+            if (ts < MIN_VALID_TS_MS || price <= 0.0) continue
             result += ManmanbuyApi.PricePoint(DAY_FORMAT.get()!!.format(Date(ts)), price)
         }
         return result

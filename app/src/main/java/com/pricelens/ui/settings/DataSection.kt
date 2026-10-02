@@ -137,6 +137,22 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
             },
             modifier = Modifier.fillMaxWidth()
         )
+        // 星罗好货的 apikey 只能从「提报系统」申请（手机号+验证码 → **人工审核** → 个人中心申请 key）。
+        // 这里给一条直达入口，省得用户被 openapi.linkstars.com（那只是 API 主机）误导。
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://xl.linkstars.com/admin/#/login"))
+                )
+            }) {
+                Text(stringResource(R.string.settings_linkstars_apply))
+            }
+        }
+        Text(
+            stringResource(R.string.settings_linkstars_apply_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(Dims.SpacingS))
         OutlinedTextField(
             value = if (revealCookie) cookie else SecretMask.mask(cookie),

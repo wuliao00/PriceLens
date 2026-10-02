@@ -36,6 +36,22 @@ function parseTimeText(text) {
   return 0;
 }
 
+/**
+ * 价格高亮 span 的文本 → 价格。**不要**再"把非数字字符全删掉再 Number"——
+ * 2026-10-02 真机事故（安卓端同源）：`"284元（淘金币可抵37.14元起）"` 删完变成 `"28437.14"`，
+ * 一副 284 元的耳机显示成 ¥28,437.14。
+ * 规则：① 第一个「数字+元」；② 没有「元」就取开头那个数；③ 认不出 → null。
+ */
+function parsePriceText(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  let m = text.match(/([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元/);
+  if (!m) m = text.match(/^[¥￥]?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/);
+  if (!m) return null;
+  const n = Number(m[1].replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
 /** 从爆料标题中提取价格（如 "iPhone 16 128g 5999元" → 5999） */
 function extractPrice(text) {
   const m = String(text || '').match(/(?:¥|￥|\s)(\d{2,6}(?:\.\d{1,2})?)(?:元|\b)/);
@@ -71,8 +87,7 @@ async function searchDeals(q) {
     if (!title) continue;
     // 标题节点内常含价格高亮 span，剥离后重新提取价格
     const priceEl = node.find('.z-highlight, .feed-block-title .z-highlight').first();
-    const price = priceEl.length ? Number(stripTags(priceEl.text()).replace(/[^\d.]/g, '')) || null
-      : extractPrice(title);
+    const price = priceEl.length ? parsePriceText(stripTags(priceEl.text())) : extractPrice(title);
     const img = node.find('img').first();
     const mall = stripTags(node.find('.feed-block-info a.z-highlight, .feed-block-extras span').first().text());
     const timeText = node.find('.feed-block-info time').first().text()
@@ -154,4 +169,4 @@ async function getCommunity(q) {
   return { deals, comments: meta.comments, ratio: meta.ratio };
 }
 
-module.exports = { searchDeals, getCommunity };
+module.exports = { searchDeals, getCommunity, parsePriceText };
