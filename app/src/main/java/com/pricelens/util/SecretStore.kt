@@ -15,6 +15,11 @@ object SecretKeys {
     const val COOKIE_MMB = "mmb_cookie"
     const val APIKEY_XL = "xingluo_apikey"
     const val COOKIE_FETCHED_AT = "cookie_fetched_at"
+
+    // §五 WebDAV 备份：地址/账号/密码一律走加密存储（绝不入库、绝不进备份 JSON）
+    const val WEBDAV_URL = "webdav_url"
+    const val WEBDAV_USER = "webdav_user"
+    const val WEBDAV_PASSWORD = "webdav_password"
 }
 
 /**

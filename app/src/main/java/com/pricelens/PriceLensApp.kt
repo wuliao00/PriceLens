@@ -54,6 +54,8 @@ class PriceLensApp : Application(), Configuration.Provider {
         CacheCleanupWorker.scheduleDaily(this)
         // §8 后台盯价：每 30 分钟
         PriceCheckWorker.schedule(this)
+        // §五 每周自动备份（仅已配置 WebDAV 时真正执行；未配置空转）
+        com.pricelens.worker.WebDavBackupWorker.schedule(this)
         // 选择器规则（v2.8.0）：先本地装载（磁盘已校验 > 内置 assets，只读几 KB），
         // 再让 Worker 做远端同步（规则没装载前判定管线自动走纯启发式，行为同改造前）
         runCatching { ruleSyncRepository.loadAndInstallLocal() }

@@ -121,6 +121,40 @@ class SettingsRepository @Inject constructor(
     val manmanbuyCookieFetchedAt: Long
         get() = SecretStore.getString(context, SecretKeys.COOKIE_FETCHED_AT)?.toLongOrNull() ?: 0L
 
+    // ---------- §五 WebDAV 备份：地址/账号/密码（全部加密存储，绝不入库、绝不进备份 JSON） ----------
+
+    /** WebDAV 服务器地址（如 `https://dav.example.com/dav/`）；空 = 未配置 */
+    val webdavUrl: String
+        get() = SecretStore.getString(context, SecretKeys.WEBDAV_URL).orEmpty()
+
+    fun setWebdavUrl(value: String) {
+        SecretStore.putString(context, SecretKeys.WEBDAV_URL, value.trim())
+    }
+
+    /** WebDAV 账号（Basic Auth；可留空表示匿名） */
+    val webdavUser: String
+        get() = SecretStore.getString(context, SecretKeys.WEBDAV_USER).orEmpty()
+
+    fun setWebdavUser(value: String) {
+        SecretStore.putString(context, SecretKeys.WEBDAV_USER, value.trim())
+    }
+
+    /** WebDAV 密码（Basic Auth；与账号同生命周期，换机恢复后读回空串按"没配"处理） */
+    val webdavPassword: String
+        get() = SecretStore.getString(context, SecretKeys.WEBDAV_PASSWORD).orEmpty()
+
+    fun setWebdavPassword(value: String) {
+        SecretStore.putString(context, SecretKeys.WEBDAV_PASSWORD, value)
+    }
+
+    /**
+     * 上次**成功**备份的时刻（毫秒）；0 = 从未成功。
+     * 每周自动备份的"是否到期"（> 6.5 天）就按这个判断（见 WebDavBackupWorker）。
+     */
+    var webdavLastBackupAtMs: Long
+        get() = prefs.getLong("webdav_last_backup_at_ms", 0L)
+        set(value) = prefs.edit().putLong("webdav_last_backup_at_ms", value).apply()
+
     /** 这个 fetchedAt 是否已经提醒过到期（同一次抓取只提醒一次） */
     var cookieExpiryNotifiedFor: Long
         get() = prefs.getLong("cookie_expiry_notified_for", 0L)

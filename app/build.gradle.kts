@@ -143,4 +143,9 @@ dependencies {
     // Android 单元测试下 org.json 是"未实现桩"（方法抛 not mocked），
     // 解析器夹具测试需要真实实现 → 引入参考实现供 test 源集使用
     testImplementation("org.json:json:20240303")
+    // §五 WebDAV 单测：假服务器（版本与 implementation 的 okhttp 4.12.0 对齐）
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    // §五 PROPFIND 解析夹具：JVM 单测里 org.xmlpull.v1.XmlPullParserFactory 是 android.jar 桩，
+    // 与 org.json 同理引入真实实现（kxml2 = Android 平台同款解析器实现）
+    testImplementation("net.sf.kxml:kxml2:2.3.0")
 }

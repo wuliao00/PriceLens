@@ -96,6 +96,8 @@ fun SettingsScreen(
                 onRefresh = { profileViewModel.refreshCacheStats() },
                 onClear = { profileViewModel.clearCache() }
             )
+            // §五 备份与恢复（WebDAV 主路径 + SAF 本地导出兜底）
+            BackupSection(settings)
             CredentialsSection(settings)
             NotifySection(settings)
             DiagnosticsSection()
