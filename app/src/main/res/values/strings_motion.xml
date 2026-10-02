@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  §2.4「丝滑动画」批次新增的可见文案，单独放一个文件（不动 strings.xml / strings_ux.xml /
+  strings_product.xml），以免和并行的 UI 代理撞 key。
+-->
+<resources>
+    <!-- 盯价曲线卡的主价格行标签（价格数字滚动的落点） -->
+    <string name="motion_price_current">当前价</string>
+</resources>

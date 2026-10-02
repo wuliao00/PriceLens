@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
+import com.pricelens.domain.EnterReplayGuard
 import com.pricelens.domain.PrefillReason
 import com.pricelens.domain.PrefillSource
 import com.pricelens.domain.RejectReason
@@ -54,6 +56,8 @@ import com.pricelens.ui.components.EmptyState
 import com.pricelens.ui.components.PriceBadge
 import com.pricelens.ui.components.PriceCard
 import com.pricelens.ui.components.ShimmerList
+import com.pricelens.ui.components.SkeletonCrossfade
+import com.pricelens.ui.components.enterReveal
 import com.pricelens.ui.overview.SearchViewModel
 import com.pricelens.ui.theme.BadgeTone
 import com.pricelens.ui.theme.Dims
@@ -70,6 +74,13 @@ import java.util.Locale
  * 当前价脉冲点、最低/最高虚线、大促节点灰竖线；
  * 长按 → BottomSheet「复制当前价 / 导出图片」（长按同时触发卡片浮起）。
  * 阶段4：AsyncValue 三态渲染（加载骨架 / 空态引导 / 失败提示+旧数据兜底）。
+ *
+ * §2.4 丝滑动画（2026-10-02）：
+ *  - 骨架→内容 200ms 交叉淡入（[SkeletonCrossfade]，只走 alpha）；
+ *  - 区块/身份行按索引阶梯入场（[enterReveal]，alpha + translateY）；
+ *  - 当前价数字滚动（[RollingPriceText] + domain/NumberRoll，tnum 等宽 + 占位格 → 宽度不抖）；
+ *  - 曲线描线入场 350ms（[PriceChartCanvas] + 纯函数 [curveReveal]）；
+ *  - 以上"播几次"由屏幕级 [EnterReplayGuard] 判，入场键见 [PriceEnterKeys]，只用稳定标识。
  *
  * 2026-09 盯价链路修复（A3）：
  *  - 入口不再写死"只要有 skuId 就显示按钮"：能否盯、以什么平台 + 商品 ID 盯，
@@ -102,6 +113,9 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
     var showSheet by remember { mutableStateOf(false) }
     var showWatchDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    // §2.4 入场守卫：挂在**屏幕级** remember —— 骨架分支 return 掉整个内容组合后，
+    // 守卫还活着，所以交叉淡入和阶梯入场都只在首次数据到达时播一次（键见 PriceEnterKeys）。
+    val enterGuard = remember { EnterReplayGuard() }
 
     // 盯价入口判定（纯函数）：候选的 SKU / 链接决定平台与商品 ID，绝不默认京东
     val decision = remember(product?.skuId, product?.url) {
@@ -171,239 +185,274 @@ fun PriceScreen(searchViewModel: SearchViewModel, watchViewModel: PriceWatchView
     // B9：盯价页卡片最多（曲线卡 + 盯价入口 + 检查状态卡），小屏/大字号下旧实现会直接画到屏幕外，
     // 且没滚动事件 → MainActivity 的 enterAlways 顶栏在这一 tab 永不收起。
     // 卡片数量有限，不必改 LazyColumn；图表面定高 200dp、无自定义手势，不与此纵向滚动争抢。
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(Dims.SpacingXL)
+    // §2.4 骨架 → 内容：首次数据到达时交叉淡入（200ms，只走 alpha；防重播判据见 SkeletonCrossfade）
+    SkeletonCrossfade(
+        guard = enterGuard,
+        enterKey = PriceEnterKeys.Content,
+        modifier = Modifier.fillMaxSize(),
+        skeleton = { ShimmerList() }
     ) {
-        // 失败但持有旧数据：顶部提示，曲线照常展示
-        if (historyAsync is AsyncValue.Error<*>) {
-            EmptyState(
-                icon = Icons.Filled.Warning,
-                title = stringResource(R.string.error_load_failed),
-                desc = stringResource(R.string.error_retry_hint)
-            )
-            Spacer(Modifier.height(Dims.SpacingM))
-        }
-        // 三种"没有曲线"的成因分开说，否则用户按提示去做的事是白做：
-        //  ① 取历史失败（Error）② 还没搜过（关键词为空）
-        //  ③ 搜过了但候选归属不到京东 SKU（SearchViewModel 此时把 history 置回 Idle）
-        if (history == null) {
-            val failed = historyAsync is AsyncValue.Error<*>
-            val searched = keyword.isNotBlank()
-            EmptyState(
-                icon = when {
-                    failed -> Icons.Filled.Warning
-                    searched -> Icons.Filled.Info
-                    else -> Icons.Filled.QueryStats
-                },
-                title = stringResource(
-                    when {
-                        failed -> R.string.error_load_failed
-                        searched -> R.string.watch_no_curve_title
-                        else -> R.string.empty_search_first
-                    }
-                ),
-                desc = stringResource(
-                    when {
-                        failed -> R.string.error_retry_hint
-                        searched -> R.string.watch_no_curve_desc
-                        else -> R.string.price_empty_hint
-                    }
-                ),
-                modifier = Modifier.padding(vertical = Dims.SpacingXL)
-            )
-        } else {
-            PriceCard(
-                modifier = Modifier.fillMaxWidth(),
-                onLongClick = { showSheet = true }
-            ) {
-                Row {
-                    Text(
-                        stringResource(R.string.price_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.weight(1f)
-                    )
-                    PriceBadge(
-                        judgment.label,
-                        tone = when (judgment) {
-                            is PriceJudgment.LOW -> BadgeTone.POSITIVE
-                            is PriceJudgment.SUSPICIOUS -> BadgeTone.NEGATIVE
-                            else -> BadgeTone.NEUTRAL
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(Dims.SpacingXL)
+        ) {
+            // 失败但持有旧数据：顶部提示，曲线照常展示
+            if (historyAsync is AsyncValue.Error<*>) {
+                EmptyState(
+                    icon = Icons.Filled.Warning,
+                    title = stringResource(R.string.error_load_failed),
+                    desc = stringResource(R.string.error_retry_hint)
+                )
+                Spacer(Modifier.height(Dims.SpacingM))
+            }
+            // 三种"没有曲线"的成因分开说，否则用户按提示去做的事是白做：
+            //  ① 取历史失败（Error）② 还没搜过（关键词为空）
+            //  ③ 搜过了但候选归属不到京东 SKU（SearchViewModel 此时把 history 置回 Idle）
+            if (history == null) {
+                val failed = historyAsync is AsyncValue.Error<*>
+                val searched = keyword.isNotBlank()
+                EmptyState(
+                    icon = when {
+                        failed -> Icons.Filled.Warning
+                        searched -> Icons.Filled.Info
+                        else -> Icons.Filled.QueryStats
+                    },
+                    title = stringResource(
+                        when {
+                            failed -> R.string.error_load_failed
+                            searched -> R.string.watch_no_curve_title
+                            else -> R.string.empty_search_first
                         }
-                    )
-                }
-                Spacer(Modifier.height(Dims.SpacingM))
-                if (history.points.size < 2) {
-                    // 只有 1 个采样日时不画那块 200dp 的空白：空框看起来像"又显示错了"，
-                    // 而实情是点还没攒够 —— 折线至少要两个日点。把已有的那一点如实说出来。
-                    val only = history.points.firstOrNull()
-                    val singleDayText: String = if (only == null) {
-                        stringResource(R.string.watch_curve_source_none)
-                    } else {
-                        stringResource(R.string.watch_curve_one_point, only.date, PriceFormatter.format(only.price))
-                    }
-                    Text(
-                        singleDayText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    PriceChartCanvas(
-                        history = history,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                    )
-                }
-                Spacer(Modifier.height(Dims.SpacingM))
-                Row {
-                    Text(
-                        stringResource(R.string.price_lowest, PriceFormatter.format(history.lowest)),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        stringResource(R.string.price_highest, PriceFormatter.format(history.highest)),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(Modifier.height(Dims.SpacingS))
-                // 购买建议（文档 §10）：把"当前价处在历史什么位置"翻成一句能拍板的话。
-                // UNKNOWN（采样点不够）不显示 —— 徽章位不摆"暂无判断"这种废话。
-                val adviceNow = adviceState
-                if (adviceNow != null && adviceNow != com.pricelens.domain.PriceAdvice.Advice.UNKNOWN) {
-                    val pct = advicePercentile
-                    Text(
-                        text = if (pct != null) {
-                            stringResource(R.string.advice_percentile, pct) + " · " +
-                                stringResource(adviceStringRes(adviceNow))
-                        } else {
-                            stringResource(adviceStringRes(adviceNow))
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.height(Dims.SpacingS))
-                }
-                // 曲线出处脚注（2026-09-30 盯价自采）：这条线是本机一轮轮攒的还是慢慢买给的，
-                // 必须看得出来 —— 否则"历史最低"到底是谁的低点就没人说得清。
-                val curveDays = curveProvenance?.dayPairsText().orEmpty()
-                if (curveDays.isBlank()) {
-                    Text(
-                        stringResource(R.string.watch_curve_source_none),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    Text(
-                        stringResource(R.string.watch_curve_source_footnote, curveDays),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (curveProvenance?.isSelfCollected == true) {
+                    ),
+                    desc = stringResource(
+                        when {
+                            failed -> R.string.error_retry_hint
+                            searched -> R.string.watch_no_curve_desc
+                            else -> R.string.price_empty_hint
+                        }
+                    ),
+                    modifier = Modifier
+                        .padding(vertical = Dims.SpacingXL)
+                        .enterReveal(0, enterGuard, PriceEnterKeys.Curve)
+                )
+            } else {
+                PriceCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .enterReveal(0, enterGuard, PriceEnterKeys.Curve),
+                    onLongClick = { showSheet = true }
+                ) {
+                    Row {
                         Text(
-                            stringResource(R.string.watch_curve_source_self_hint),
+                            stringResource(R.string.price_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        PriceBadge(
+                            judgment.label,
+                            tone = when (judgment) {
+                                is PriceJudgment.LOW -> BadgeTone.POSITIVE
+                                is PriceJudgment.SUSPICIOUS -> BadgeTone.NEGATIVE
+                                else -> BadgeTone.NEUTRAL
+                            }
+                        )
+                    }
+                    // §2.3 主价格：从"上一次展示到的值"滚到当前价（首次数据到达 = 从 0 countUp）。
+                    // 只在 current>0 时占这一行 —— 有历史但取不到现价时摆个 ¥0 比不摆更误导。
+                    if (history.current > 0) {
+                        Spacer(Modifier.height(Dims.SpacingS))
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                stringResource(R.string.motion_price_current),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = Dims.SpacingS)
+                            )
+                            Spacer(Modifier.width(Dims.SpacingS))
+                            RollingPriceText(value = history.current)
+                        }
+                    }
+                    Spacer(Modifier.height(Dims.SpacingM))
+                    if (history.points.size < 2) {
+                        // 只有 1 个采样日时不画那块 200dp 的空白：空框看起来像"又显示错了"，
+                        // 而实情是点还没攒够 —— 折线至少要两个日点。把已有的那一点如实说出来。
+                        val only = history.points.firstOrNull()
+                        val singleDayText: String = if (only == null) {
+                            stringResource(R.string.watch_curve_source_none)
+                        } else {
+                            stringResource(R.string.watch_curve_one_point, only.date, PriceFormatter.format(only.price))
+                        }
+                        Text(
+                            singleDayText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        PriceChartCanvas(
+                            history = history,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(Dims.SpacingM))
+                    Row {
+                        Text(
+                            stringResource(R.string.price_lowest, PriceFormatter.format(history.lowest)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            stringResource(R.string.price_highest, PriceFormatter.format(history.highest)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(Dims.SpacingM))
-        // 盯价入口：可盯 → 按钮；不可盯 → 明确写出原因（旧实现直接隐藏入口，用户以为功能坏了）
-        if (watchable != null) {
-            Button(
-                onClick = { showWatchDialog = true },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    stringResource(
-                        if (watchedTarget != null) R.string.watch_button_update else R.string.price_watch_button
-                    )
-                )
-            }
-            Spacer(Modifier.height(Dims.SpacingS))
-            if (watchedTarget != null) {
-                Text(
-                    stringResource(R.string.watch_already_tracked, PriceFormatter.format(watchedTarget.targetPrice)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            // 通道实况：p.3.cn 公开查价已下线，没有星罗 Key 时先讲清楚可能取不到价
-            Text(
-                stringResource(
-                    if (watchViewModel.jdCredentialMissing()) {
-                        R.string.watch_channel_jd_degraded
-                    } else {
-                        R.string.watch_channel_credential_ready
+                    Spacer(Modifier.height(Dims.SpacingS))
+                    // 购买建议（文档 §10）：把"当前价处在历史什么位置"翻成一句能拍板的话。
+                    // UNKNOWN（采样点不够）不显示 —— 徽章位不摆"暂无判断"这种废话。
+                    val adviceNow = adviceState
+                    if (adviceNow != null && adviceNow != com.pricelens.domain.PriceAdvice.Advice.UNKNOWN) {
+                        val pct = advicePercentile
+                        Text(
+                            text = if (pct != null) {
+                                stringResource(R.string.advice_percentile, pct) + " · " +
+                                    stringResource(adviceStringRes(adviceNow))
+                            } else {
+                                stringResource(adviceStringRes(adviceNow))
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(Dims.SpacingS))
                     }
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else if (product != null && decision is WatchDecision.Rejected) {
-            // 有候选但不可盯：把原因摊开讲（旧实现直接不渲染入口，用户只看到"没有盯价按钮"）
-            Text(
-                watchRejectionText(context, decision),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Spacer(Modifier.height(Dims.SpacingM))
-        // §免凭证曲线：浮窗确认过的身份（本机自采曲线的管理入口；列表为空整节不出现，不留空占位）
-        if (identities.isNotEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(Dims.SpacingM)) {
-                    Text(
-                        stringResource(R.string.watch_identity_section_title),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    identities.forEach { identity ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = Dims.SpacingS)
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-
-                                    identity.title,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    stringResource(R.string.watch_identity_days, identityDays[identity.productId] ?: 0),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            TextButton(onClick = { watchViewModel.cancelIdentity(identity.productId) }) {
-                                Text(
-                                    stringResource(R.string.watch_identity_cancel),
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
+                    // 曲线出处脚注（2026-09-30 盯价自采）：这条线是本机一轮轮攒的还是慢慢买给的，
+                    // 必须看得出来 —— 否则"历史最低"到底是谁的低点就没人说得清。
+                    val curveDays = curveProvenance?.dayPairsText().orEmpty()
+                    if (curveDays.isBlank()) {
+                        Text(
+                            stringResource(R.string.watch_curve_source_none),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            stringResource(R.string.watch_curve_source_footnote, curveDays),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (curveProvenance?.isSelfCollected == true) {
+                            Text(
+                                stringResource(R.string.watch_curve_source_self_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
             }
+
             Spacer(Modifier.height(Dims.SpacingM))
+            // 盯价入口：可盯 → 按钮；不可盯 → 明确写出原因（旧实现直接隐藏入口，用户以为功能坏了）
+            if (watchable != null) {
+                Button(
+                    onClick = { showWatchDialog = true },
+                    // 说明文字保持静态，只有按钮参加阶梯：它们是附属说明，不是一个列表项
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .enterReveal(1, enterGuard, PriceEnterKeys.Watch)
+                ) {
+                    Text(
+                        stringResource(
+                            if (watchedTarget != null) R.string.watch_button_update else R.string.price_watch_button
+                        )
+                    )
+                }
+                Spacer(Modifier.height(Dims.SpacingS))
+                if (watchedTarget != null) {
+                    Text(
+                        stringResource(R.string.watch_already_tracked, PriceFormatter.format(watchedTarget.targetPrice)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                // 通道实况：p.3.cn 公开查价已下线，没有星罗 Key 时先讲清楚可能取不到价
+                Text(
+                    stringResource(
+                        if (watchViewModel.jdCredentialMissing()) {
+                            R.string.watch_channel_jd_degraded
+                        } else {
+                            R.string.watch_channel_credential_ready
+                        }
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else if (product != null && decision is WatchDecision.Rejected) {
+                // 有候选但不可盯：把原因摊开讲（旧实现直接不渲染入口，用户只看到"没有盯价按钮"）
+                Text(
+                    watchRejectionText(context, decision),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.height(Dims.SpacingM))
+            // §免凭证曲线：浮窗确认过的身份（本机自采曲线的管理入口；列表为空整节不出现，不留空占位）
+            if (identities.isNotEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(Dims.SpacingM)) {
+                        Text(
+                            stringResource(R.string.watch_identity_section_title),
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        // 列表项入场（§2.4）：按行索引阶梯，key 用身份自己的 productId（稳定标识），
+                        // 所以同一条目滚出滚回、或它的天数/标题刷新都不会重播一次
+                        identities.forEachIndexed { index, identity ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .padding(top = Dims.SpacingS)
+                                    .enterReveal(index, enterGuard, PriceEnterKeys.IdentityPrefix + identity.productId)
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+
+                                        identity.title,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        stringResource(R.string.watch_identity_days, identityDays[identity.productId] ?: 0),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                TextButton(onClick = { watchViewModel.cancelIdentity(identity.productId) }) {
+                                    Text(
+                                        stringResource(R.string.watch_identity_cancel),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(Dims.SpacingM))
+            }
+            WatchStatusCard(
+                summary = lastRound,
+                untrackableCount = untrackable.size,
+                activeTargetCount = targets.count { it.active },
+                checking = checking,
+                guard = enterGuard,
+                onCheckNow = { watchViewModel.checkNow() }
+            )
         }
-        WatchStatusCard(
-            summary = lastRound,
-            untrackableCount = untrackable.size,
-            activeTargetCount = targets.count { it.active },
-            checking = checking,
-            onCheckNow = { watchViewModel.checkNow() }
-        )
     }
 
     if (showWatchDialog && watchable != null) {
@@ -559,9 +608,17 @@ private fun WatchStatusCard(
     untrackableCount: Int,
     activeTargetCount: Int,
     checking: Boolean,
-    onCheckNow: () -> Unit
+    guard: EnterReplayGuard,
+    onCheckNow: () -> Unit,
+    enterKey: String = PriceEnterKeys.Status,
+    enterIndex: Int = 2
 ) {
-    PriceCard(modifier = Modifier.fillMaxWidth()) {
+    // §2.4 区块入场：本卡排阶梯第 3 级（enterIndex=2 → 80ms 起播），只走 graphicsLayer
+    PriceCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .enterReveal(enterIndex, guard, enterKey)
+    ) {
         Text(stringResource(R.string.watch_status_title), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(Dims.SpacingS))
         if (summary == null) {
@@ -687,3 +744,16 @@ private fun platformLabelRes(platform: String): Int = when (platform) {
 
 /** 「下次检查」时间格式（与盯价轮次同口径：HH:mm） */
 private val NEXT_CHECK_FORMAT = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+/**
+ * §2.4 入场键：必须与数据无关且**稳定** —— 拿数据当 key 就等于"每次刷新都重播一次入场"
+ * （[EnterReplayGuard] 只按 key 放行一次，键一变它又被当成首次，详见 domain/MotionEnter.kt）。
+ * 列表项用条目自己的稳定标识（身份行 = [IdentityPrefix] + productId）。
+ */
+private object PriceEnterKeys {
+    const val Content = "price:content"
+    const val Curve = "price:block:curve"
+    const val Watch = "price:block:watch"
+    const val Status = "price:block:status"
+    const val IdentityPrefix = "price:identity:"
+}
