@@ -21,6 +21,12 @@ class BiliApi @Inject constructor(private val client: ApiClient) {
         val play: Long,
         val pic: String,
         val bvid: String,
+        /**
+         * 发布时间（epoch 秒）。§十一 详情页的「近半年」筛选要用它。
+         * 接口没给（或走 L2 缓存的旧条目没有该字段）时为 0 —— 0 的含义是"不知道"，
+         * 不是"1970 年"：筛选逻辑必须保留 0，否则开关一按列表就空。
+         */
+        val pubdate: Long = 0,
         /** 内容风险判定（诚实豆沙包思路轻量版：商单/夸大宣传标记） */
         val risk: ContentRisk = ContentRisk.NONE
     )
@@ -108,6 +114,8 @@ class BiliApi @Inject constructor(private val client: ApiClient) {
                     pic = if (item.optString("pic").startsWith("http"))
                         item.optString("pic") else "https:${item.optString("pic")}",
                     bvid = item.optString("bvid"),
+                    // §十一 详情页「近半年」筛选：接口没给 pubdate 时落 0（"不知道"，不是 1970）
+                    pubdate = item.optLong("pubdate"),
                     risk = ContentRiskRules.assess("$rawTitle $tags", union)
                 )
             }
