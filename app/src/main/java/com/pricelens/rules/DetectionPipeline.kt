@@ -104,11 +104,17 @@ object DetectionPipeline {
      *
      * 真机已验证：加载完成后的京东树规则标题本来就是对的（[RealDumpTitleTest] 第二条用例），
      * 所以这里只在"规则抓到外壳文案"时才多跑一次 [extractTitle]，正常路径不付额外开销。
+     *
+     * 第二棵真机树（10:42 雷神猎刃S）补掉了这道闸的第二个形态：规则抓到
+     * `已选：【免费升级24G】猎刃S 14代i5HX|…`（SKU 选择态，带冒号），而那一页真正的商品名
+     * 里带「【白条24期免息】」——`免息` 在标题黑名单里，整串否决会让启发式也读不出标题。
+     * 所以闸门用的是 [PriceNodeMatcher.isDisplayableTitle]（多拒规格/选择态行），
+     * 而黑名单那一边改成"先剥掉【…】徽章段再判、剥空了才否决"（理由与"为什么不剥裸写促销语"写在 BRACKET_BADGE 上）。
      */
     private fun pickTitle(root: NodeSnapshot, platform: ShopPlatform, result: RuleExtractResult): String? {
-        val fromRule = result.title?.takeIf { PriceNodeMatcher.isPlausibleTitle(it, strict = false) }
+        val fromRule = result.title?.takeIf { PriceNodeMatcher.isDisplayableTitle(it) }
         if (fromRule != null) return fromRule
-        return extractTitle(root, platform)?.text?.takeIf { PriceNodeMatcher.isPlausibleTitle(it, strict = false) }
+        return extractTitle(root, platform)?.text?.takeIf { PriceNodeMatcher.isDisplayableTitle(it) }
     }
 
     /**

@@ -385,7 +385,7 @@ class SearchViewModel @Inject constructor(
                 // 当当/识货/什么值得买各拉一次 ~90KB HTML，还把它写进了搜索历史）。
                 // 检测侧已有一道闸（DetectionPipeline.pickTitle），这条是消费侧的第二道：
                 // 规则文件可以从远端热更，一条新规则不该能把垃圾关键词打进网络和搜索历史。
-                val title = detected.title?.takeIf { PriceNodeMatcher.isPlausibleTitle(it, strict = false) }
+                val title = detected.title?.takeIf { PriceNodeMatcher.isDisplayableTitle(it) }
                 // 网络搜索还没出结果时，先用账号实时价占位展示（@Singleton 候选已有则不覆盖，
                 // 展示层由 [product] 门控 + [staleNotice] 提示防"A 价标 B"）
                 resolver.fillFromDetection(detected.price, title)

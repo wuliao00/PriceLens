@@ -124,6 +124,19 @@ object PriceNodeMatcher {
     private val DATEISH = Regex("^[\\d\\s.,%\\-/:年月日]+$")
 
     /**
+     * 【…】徽章段。剥它而不是让它否决整串的理由（真机 2026-10-03 10:42）：
+     * 京东把「【白条24期免息】」这类徽章**写进商品名本身**
+     * （`雷神 【白条24期免息】猎刃S英特尔酷睿i7…游戏本`），而 `免息` 在标题黑名单里 ——
+     * 整串否决的结局不是"少一条脏数据"，而是这一页**读不出标题**，于是门控判"非商详"、
+     * 浮窗干脆不弹（比显示错标题更糟）。
+     *
+     * 只剥方括号段，不剥裸写的 `24期免息`：那样会把 `12期免息 满3000减300` 这类
+     * 促销句放进来（去掉免息后整句没有黑名单词了）。真机见过的分期促销都在【】里，
+     * 裸写的形态留给以后有证据再处理。剥完空了说明这串本来就是个徽章 ⇒ 仍然否决。
+     */
+    private val BRACKET_BADGE = Regex("【[^】]*】")
+
+    /**
      * 不可见控制字符：零宽空格/零宽不连/零宽连、词连接符、BOM，以及双向文本的标记符。
      * 它们**不是** Unicode 空白字符 —— `String.trim()`（按 Char.isWhitespace）与正则 `\s`
      * 都认不出来，所以必须显式删。
@@ -159,10 +172,23 @@ object PriceNodeMatcher {
         if (CURRENCY_PATTERN.containsMatchIn(text)) return false
         if (text.contains('\n')) return false
         if (DATEISH.matches(text)) return false
-        if (TITLE_BLACKLIST_WORDS.any { text.contains(it) }) return false
+        val withoutBadges = BRACKET_BADGE.replace(text, "")
+        if (withoutBadges.isBlank()) return false
+        if (TITLE_BLACKLIST_WORDS.any { withoutBadges.contains(it) }) return false
         if (strict && looksLikeSpecLine(text)) return false
         return true
     }
+
+    /**
+     * 能不能当**浮窗上那行商品名**用：过合理性闸，且不是规格/选择态行。
+     *
+     * 比 [isPlausibleTitle] 多一道 `looksLikeSpecLine`（含 `:` 或 `：`）：真机规则兜底选择器
+     * 抓到过 `已选：【免费升级24G】猎刃S 14代i5HX|5050天青色，16G/1T Pcie固态，1件`
+     * —— 那是 SKU 选择态，不是商品名（2026-10-03 10:42 真机）。三级启发式本来就因
+     * strict=true 拒它，一/二级（ID 背书）与规则路径不拒，所以这道要单独有名字给它们用。
+     */
+    fun isDisplayableTitle(text: String): Boolean =
+        isPlausibleTitle(text, strict = false) && !looksLikeSpecLine(text)
 
     /**
      * 标题候选打分 —— [extractTitle] 的三级启发式与 [com.pricelens.rules.DetectionPipeline]

@@ -40,16 +40,20 @@ import org.junit.Test
 class RealDumpTitleTest {
 
     private val jdDetail = loadRealDump(JD_DUMP)
+    private val jdMianfei = loadRealDump(JD_MIANFEI_DUMP)
     private val tbDetail = loadRealDump(TB_DUMP)
     private val jdRule = RuleSet(listOf(loadedBuiltinJdRule()))
 
     @Test
     fun `fixtures are the real device trees and are not budget-truncated`() {
         assertEquals(317, jdDetail.rawNodeCount)
+        assertEquals(224, jdMianfei.rawNodeCount)
         assertEquals(75, tbDetail.rawNodeCount)
         assertFalse(jdDetail.truncated)
+        assertFalse(jdMianfei.truncated)
         assertFalse(tbDetail.truncated)
         assertEquals(jdDetail.rawNodeCount, jdDetail.snapshotNodeCount)
+        assertEquals(jdMianfei.rawNodeCount, jdMianfei.snapshotNodeCount)
         assertEquals(tbDetail.rawNodeCount, tbDetail.snapshotNodeCount)
     }
 
@@ -139,8 +143,47 @@ class RealDumpTitleTest {
         assertEquals(DetectionPipeline.DetectionSource.HEURISTIC, detection.source)
     }
 
+    /**
+     * 第二棵真机京东树（10:42 同一台机、另一个商品：雷神猎刃S 游戏本）。
+     *
+     * 这一棵是**我自己那道闸门的反例**：规则兜底选择器抓到的是「已选：【免费升级24G】猎刃S
+     * 14代i5HX|5050天青色，16G/1T Pcie固态，1件」——一行 SKU 选择态，带冒号。
+     * 而真正的商品名「雷神 【白条24期免息】猎刃S英特尔酷睿…」里带 `24期免息`，
+     * 会被标题黑名单整串否决（`免息` 是黑名单词），于是回落启发式也读不出东西。
+     * 两个条件叠在一起 = 这一页要么显示错标题，要么干脆不弹。
+     *
+     * 断言方向：标题必须是商品名（含「猎刃S」）、绝不能是「已选：」那一行；价格 ¥10999 保持对。
+     */
+    @Test
+    fun `real jd installment-promo detail emits the product name not the selected-sku line`() {
+        val outcome = DetectionPipeline.detect(
+            jdMianfei.root, ShopPlatform.JD, JD_PACKAGE, jdRule, JD_DETAIL_ACTIVITY
+        )
+        assertTrue("这页有价有标题有立购，必须命中：$outcome", outcome is DetectionOutcome.Hit)
+        val detection = (outcome as DetectionOutcome.Hit).detection
+        println("[mianfei] title=${detection.title} price=${detection.price.rawText}")
+        assertFalse(
+            "绝不能把「已选：…」这行 SKU 选择态当商品名：『${detection.title}』",
+            detection.title!!.contains("已选")
+        )
+        assertTrue(
+            "商品名必须保住（它带【白条24期免息】促销段，不许被黑名单整串否决）：『${detection.title}』",
+            detection.title!!.contains("猎刃S")
+        )
+        assertEquals(10999.0, detection.price.value, 0.001)
+    }
+
+    /** 上面那行「已选：…」确实带规格行特征（冒号）—— 闸门靠这个信号拒它；这条钉住信号本身存在 */
+    @Test
+    fun `selected-sku line carries the spec-line signal the gate keys on`() {
+        val skuLine = "已选：【免费升级24G】猎刃S 14代i5HX|5050天青色，16G/1T Pcie固态，1件"
+        assertTrue(PriceNodeMatcher.looksLikeSpecLine(skuLine))
+        assertFalse(PriceNodeMatcher.isDisplayableTitle(skuLine))
+    }
+
     private companion object {
         const val JD_DUMP = "jd_detail_plb110_20261003.xml"
+        const val JD_MIANFEI_DUMP = "jd_detail_mianfei_plb110_20261003.xml"
         const val TB_DUMP = "tb_detail_plb110_20261003.xml"
         const val JD_PACKAGE = "com.jingdong.app.mall"
         const val TB_PACKAGE = "com.taobao.taobao"

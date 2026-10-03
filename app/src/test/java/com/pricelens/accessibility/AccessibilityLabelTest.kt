@@ -126,4 +126,21 @@ class AccessibilityLabelTest {
         assertTrue(PriceNodeMatcher.isPlausibleTitle(real, strict = false))
         assertTrue(PriceNodeMatcher.isPlausibleTitle(real, strict = true))
     }
+
+    /**
+     * 判别例（真机 10:42 第二棵树）：`免息` 在标题黑名单里，而京东把「【白条24期免息】」
+     * 写进了**商品名本身**。整串否决的结局不是"少一条脏数据"，而是这一页**读不出标题**
+     * ⇒ 门控判非商详 ⇒ 浮窗干脆不弹。所以先剥掉【…】徽章段再判黑名单，剥空了才否决。
+     * 故意**不**剥裸写的 `24期免息`：那样会把 `12期免息 满3000减300` 这类促销句放进来
+     * （去掉免息后整句就没有黑名单词了）—— 下面两条 assertFalse 就是这条边界的钉子。
+     */
+    @Test
+    fun `分期免息促销段不否决整串而裸促销语仍否决`() {
+        val real = "雷神 【白条24期免息】猎刃S英特尔酷睿i7锐龙9高性能5060独显Ai学生轻薄16英寸电竞游戏本"
+        assertTrue("带分期段的真实商品名不许被整串否决", PriceNodeMatcher.isPlausibleTitle(real, strict = false))
+        assertTrue(PriceNodeMatcher.isPlausibleTitle(real, strict = true))
+        assertTrue(PriceNodeMatcher.isDisplayableTitle(real))
+        assertFalse(PriceNodeMatcher.isPlausibleTitle("12期免息", strict = false))
+        assertFalse(PriceNodeMatcher.isPlausibleTitle("24期免息 晒单返红包", strict = false))
+    }
 }
