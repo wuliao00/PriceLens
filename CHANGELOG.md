@@ -380,3 +380,10 @@
 [Unreleased]: https://github.com/wuliao00/PriceLens/compare/v2.5.1...HEAD
 [2.5.1]: https://github.com/wuliao00/PriceLens/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/wuliao00/PriceLens/compare/v2.3.0...v2.5.0
+### 修复（发布链）
+- **`update.json` 的 `apkUrls.kind` 大小写**：2.8.0.1 回填时写成 `"APK"`/`"PAGE"`，与 CI 的字面量校验
+  （只收 `apk`/`page`）冲突，`Update Manifest & Gitee Mirror` 从发布那一刻起就是红的，
+  并连带**没跑**后面的 Gitee 镜像步。App 侧解析是 `ignoreCase`，所以真机没有任何症状——
+  这正是"宽容解析器掩盖写错的数据"。现在清单改回小写，并把 CI 的口径搬成本地门禁
+  `UpdateManifestFileContractTest`（4 条：kind 字面量 / 版本闸门自洽 / sha256 必须是小写 64 位十六进制 /
+  已出厂解析器接受已发货清单 + 第一目标必须是 Gitee 直链）

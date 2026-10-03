@@ -14,22 +14,22 @@
     {
       "label": "Gitee（国内直连）",
       "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.1.apk",
-      "kind": "APK"
+      "kind": "apk"
     },
     {
       "label": "GitHub Release",
       "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.8.0.1/PriceLens-2.8.0.1.apk",
-      "kind": "APK"
+      "kind": "apk"
     },
     {
       "label": "Gitee 发行版页",
       "url": "https://gitee.com/wuliao11541/PriceLens/releases",
-      "kind": "PAGE"
+      "kind": "page"
     },
     {
       "label": "GitHub Release 页",
       "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.1",
-      "kind": "PAGE"
+      "kind": "page"
     }
   ],
   "sha256": "2ec3c546d91bb98da284d900ca942090af920d2b0a81751a6bb781b404fa6f58",
