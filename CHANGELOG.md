@@ -30,6 +30,18 @@
   "我没参与"）、确定性跨候选共识实现（同模板重复命中不算共识；并列取较小面额；冲突保留全部取值只降置信）、
   `OnDeviceAiPolicy` 七标量纯策略（默认关 → 机型 RAM → AI 预算 → 电量 → 空闲内存 → 计费网络），
   以及 prompt 模板与 GBNF 约束解码资产。**本版不 vendor 模型或 .so**（本机编译不了也验不了机）
+- **置信三档展示**（`ProductCouponSection` + `ui/product/CouponLocalLogic.kt`）：本机识别出的券与
+  Gwdang 远端券列表**并列**展示（远端那条一行未动），按 `Tiers.of(confidence)` 分三档措辞；
+  每张券**逐槽位**显示面额/门槛/范围/状态/有效期/券码/链接，读不出的单独标"未识别"
+  （不拿别的槽位凑数，也不整张不显示），门槛 `0` 与"没写"是两种措辞；每张卡带自己的**证据句**。
+  本版没有核验层，所以 `strings_coupon.xml` 与新代码里"已核验/已确认/verified"这类词
+  由 `CouponStringsGuardTest` 扫源码钉住
+- **一键"这条不对" → 纯本地导出**（`coupon/MisreadExport.kt`）：点了只改内存清单，不弹窗、不联网、不入库；
+  导出 JSONL **逐字段照 `tools/golden/coupons.jsonl`**（能被 `tools/eval_coupons.py` 读回去），
+  落盘沿用崩溃日志那条链路（`files/couponmisreads/` + SAF 兜底），脱敏复用 `CrashLog.redact`
+  且**逐字段**做（整行脱敏会毁掉 JSON 结构）。默认不自动进 golden —— 要人工放进 `tools/golden/` 才参与回归
+- **理解层 ↔ 兜底层唯一一处接线**（`coupon/CouponFallbackBridge.kt`）：入口类型穷尽 `when`（加第四个入口时
+  这里编译失败，逼着表态），候选只搬两个金额（scope/state/expiry/url 不许兜底层碰）
 
 ### 变更
 - **浮窗尺寸收进单一真相源**（`OverlayMetrics.kt`）：窗口宽 = 内容宽 + 左右外圈**算出来**（值仍是 304），
