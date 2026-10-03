@@ -24,16 +24,21 @@ internal fun leaf(
     desc: String? = null,
     res: String? = null,
     clickable: Boolean = false,
-    cls: String = "android.widget.TextView"
-): NodeSnapshot = NodeSnapshot(text, desc, cls, res, clickable, emptyList())
+    cls: String = "android.widget.TextView",
+    bounds: NodeBounds? = null
+): NodeSnapshot = NodeSnapshot(text, desc, cls, res, clickable, emptyList(), bounds)
+
+/** 屏幕坐标快捷构造（几何判据的用例都走它，免得满屏写四元组） */
+internal fun rect(left: Int, top: Int, right: Int, bottom: Int): NodeBounds = NodeBounds(left, top, right, bottom)
 
 /** 容器节点（View/LinearLayout 形态，自身无文本） */
 internal fun container(
     res: String? = null,
     clickable: Boolean = false,
     cls: String = "android.view.ViewGroup",
+    bounds: NodeBounds? = null,
     vararg kids: NodeSnapshot
-): NodeSnapshot = NodeSnapshot(null, null, cls, res, clickable, kids.toList())
+): NodeSnapshot = NodeSnapshot(null, null, cls, res, clickable, kids.toList(), bounds)
 
 /**
  * 京东商详页（结构参照 uiautomator dump 脱敏改写）：

@@ -73,6 +73,7 @@ private const val A_DESC = "content-desc"
 private const val A_CLASS = "class"
 private const val A_RES = "resource-id"
 private const val A_CLICKABLE = "clickable"
+private const val A_BOUNDS = "bounds"
 
 internal fun parseRealDump(name: String, stream: InputStream): RealDump {
     val factory = DocumentBuilderFactory.newInstance()
@@ -103,6 +104,7 @@ private fun snapshotOf(element: Element?, depth: Int, budget: IntArray): NodeSna
     val className = attr(element, A_CLASS)
     val resourceName = attr(element, A_RES)
     val clickable = attr(element, A_CLICKABLE) == "true"
+    val bounds = parseBounds(attr(element, A_BOUNDS))
     val elements = childElements(element)
     val children = ArrayList<NodeSnapshot>(elements.size)
     if (depth < REAL_DUMP_MAX_SNAPSHOT_DEPTH && budget[0] > 0) {
@@ -112,7 +114,21 @@ private fun snapshotOf(element: Element?, depth: Int, budget: IntArray): NodeSna
             children.add(snapshotOf(child, depth + 1, budget))
         }
     }
-    return NodeSnapshot(text, desc, className, resourceName, clickable, children)
+    return NodeSnapshot(text, desc, className, resourceName, clickable, children, bounds)
+}
+
+/**
+ * uiautomator 序列化成 `bounds="[l,t][r,b]"`。
+ * 与生产侧同一口径：拿不到或空矩形给 null，**不**给 (0,0,0,0) —— 否则几何判据会把
+ * "没有位置"误当成"节点在屏幕左上角"，那正是最难查的那类假阳性。
+ */
+private val BOUNDS_PATTERN = Regex("^\\[(-?\\d+),(-?\\d+)]\\[(-?\\d+),(-?\\d+)]$")
+
+private fun parseBounds(raw: String?): NodeBounds? {
+    val matched = BOUNDS_PATTERN.matchEntire(raw?.trim().orEmpty()) ?: return null
+    val (left, top, right, bottom) = matched.destructured
+    val bounds = NodeBounds(left.toInt(), top.toInt(), right.toInt(), bottom.toInt())
+    return bounds.takeUnless { it.isEmpty }
 }
 
 /** 空串按生产语义折成 null（uiautomator 把缺失属性序列化成 `attr=""`） */

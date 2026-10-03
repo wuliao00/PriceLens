@@ -1,6 +1,29 @@
 package com.pricelens.accessibility
 
 /**
+ * 节点在**屏幕坐标系**下的矩形（px）。
+ *
+ * 为什么现在才要它（2026-10-03 晚，两次结论相反的记录都要留下）：
+ *  - **第一次**是想拿几何替换"这页是不是商详"的文案判定，量完 8 棵真机原树后**否掉了**：
+ *    首页底部导航栏与商详底栏同形，任何能收下 5 棵商详又挡掉首页的阈值都是照样本凑的
+ *    （真值表见 docs/ROADMAP-文档落地对照.md §9.4）。那次补丁留在 stash，没进主干。
+ *  - **这一次**的消费者是"把一行被拆成 4~6 个 TextView 的券文案拼回一句"
+ *    （`满` `199` `减` `50` 在无障碍树里是四个兄弟节点，整树拼文本又会把上下两行揉进一句）。
+ *    拼行只用**同一行 y 区间重叠 + x 相邻**这种相对关系，不需要任何"跨过某条线就算 X"的
+ *    拟合阈值 ⇒ 不受 §9.4 那次否证的适用范围内。
+ *
+ * 只存四个整数、不做归一化：需要视口尺寸的调用方自己显式传，
+ * 免得模型里藏一个"以为知道屏幕多大"的隐式全局。
+ */
+data class NodeBounds(val left: Int, val top: Int, val right: Int, val bottom: Int) {
+    val width: Int get() = (right - left).coerceAtLeast(0)
+    val height: Int get() = (bottom - top).coerceAtLeast(0)
+
+    /** 空矩形（节点不可见 / 拿不到坐标）—— 任何几何判据都必须先排除它，否则会把 0 当成"在左上角" */
+    val isEmpty: Boolean get() = width <= 0 || height <= 0
+}
+
+/**
  * 无障碍节点纯数据快照 + 纯函数判定层（A2 可测性改造）。
  *
  * 背景：`AccessibilityNodeInfo` 在 JVM 单测里无法构造（仓库无 mockito/Robolectric），
@@ -13,6 +36,9 @@ package com.pricelens.accessibility
  * 测试夹具说明：单测快照均**手工按结构构造**，层级参照真机 `uiautomator dump`
  * 的商详页 XML（root → 卡片容器 → TextView 叶子），文本/ID 为真实商品页 dump 的脱敏改写；
  * 本文件不 import 任何 android.* 类，保证纯 JVM 可测。
+ *
+ * @param bounds 放在**最后**并带默认值：既有 6 参位置构造（服务侧、夹具侧、leaf/container）
+ *   全部保持可编译，不会因为插入字段而静默错位。
  */
 data class NodeSnapshot(
     /** AccessibilityNodeInfo.text */
@@ -25,7 +51,9 @@ data class NodeSnapshot(
     val resourceName: String?,
     /** isClickable 或 actionList 含 ACTION_CLICK */
     val clickable: Boolean,
-    val children: List<NodeSnapshot> = emptyList()
+    val children: List<NodeSnapshot> = emptyList(),
+    /** 屏幕坐标；null = 拿不到（虚拟节点、部分 ROM）。见 [NodeBounds] 的动机说明 */
+    val bounds: NodeBounds? = null
 )
 
 /** 三个已知电商宿主（包名 → 平台映射） */
