@@ -17,6 +17,13 @@
     <!-- 本机券组标题：说清它是从当前文案里规则读出来的，与远端券列表两回事 -->
     <string name="coupon_local_header">本机从当前文案识别</string>
     <string name="coupon_local_subheader">规则从文案逐字读出，按置信分三档提示可信程度</string>
+    <!--
+      空态必须存在：搜「雷神ZERO」这类没有券形态的词时，整段消失会让用户无法区分
+      "功能没做 / 被我关了 / 这次真没识别到"。这里回显**读的是哪段文字**，
+      用户才能判断该继续还是该点"这条不对"。措辞里不许出现"声称核过/确认过"那类词
+      （CouponStringsGuardTest 扫的是整个文件文本，连注释也算）。
+    -->
+    <string name="coupon_local_empty">这句文案里没有券形态（满 / 减 / 券后 / 到手 …）。识别读的就是你搜的这句：%1$s</string>
 
     <!-- 三档措辞（高=可直接看、中=要自己点进去核、低=只是可能是券） -->
     <string name="coupon_local_tier_high">高置信 · 可直接看</string>

@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
 import com.pricelens.coupon.CouponExtractor
@@ -187,11 +188,17 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
                 }
                 Spacer(Modifier.height(Dims.SpacingM))
             }
-            // 本机识别组（B2 交付一/二）：小标题明说来源，逐卡三档+逐槽+证据句+纠错按钮
-            if (localRows.isNotEmpty()) {
-                item(key = "local_header") {
-                    LocalGroupHeader()
+            // 本机识别组（B2 交付一/二）：小标题明说来源，逐卡三档+逐槽+证据句+纠错按钮。
+            // **标题与空态不许一起藏起来**：真机 2026-10-04 搜「雷神ZERO」时整段消失，
+            // 用户无法区分"这功能没做 / 被我关了 / 这次没识别到"——静默没有正是这一批要消灭的形状。
+            item(key = "local_header") {
+                LocalGroupHeader()
+            }
+            if (localRows.isEmpty()) {
+                item(key = "local_empty") {
+                    LocalGroupEmpty(keyword)
                 }
+            } else {
                 itemsIndexed(localRows, key = { _, row -> "local:${row.index}_${row.sourceText.hashCode()}" }) { _, row ->
                     LocalCouponCard(
                         row = row,
@@ -308,6 +315,29 @@ private fun LocalGroupHeader() {
             stringResource(R.string.coupon_local_subheader),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(Dims.SpacingM))
+    }
+}
+
+/**
+ * 空态：明说"读的是哪段文字、这次没看到券形态"。
+ *
+ * 为什么不写"暂无数据"：那四个字区分不了"功能没开""网络失败""这段文案确实没券"三种情况，
+ * 而这三件事用户该做的动作完全不同。这里把**输入本身**回显出来，
+ * 用户一眼能判断"我搜的这个词本来就不该有券"还是"我贴的分享文案明明有券却没认出来"
+ * —— 后者正是"这条不对"要报的东西。
+ */
+@Composable
+private fun LocalGroupEmpty(keyword: String) {
+    val shown = keyword.trim()
+    Column {
+        Text(
+            text = stringResource(R.string.coupon_local_empty, shown),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis
         )
         Spacer(Modifier.height(Dims.SpacingM))
     }
