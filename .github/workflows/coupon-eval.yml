@@ -1,0 +1,78 @@
+name: coupon-eval
+
+# 找券准确率量具（文档 §「找券评测集」）。纯 Python 标准库，不碰 gradle / 不出包。
+#
+# 这个 workflow 的存在意义只有一个：证明**量具自己可信**。
+#   1) --self-test   —— 内置样本 + 手算可核对的 P/R/F1 断言（判据/门禁逻辑本身有没有写错）
+#   2) --lint        —— golden 每条 raw 必须逐字节存在于它声称的夹具里（金额是不是编的）
+#   3) golden vs golden —— 自反性：同一个文件对自已必须 F1=1.0，否则 golden 或脚本已经坏了
+# 这三步任何一步红，后面所有"找券准确率提升了"的话都不许说。
+on:
+  pull_request:
+    paths:
+      - "tools/golden/**"
+      - "tools/eval_coupons.py"
+      - ".github/workflows/coupon-eval.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - "tools/golden/**"
+      - "tools/eval_coupons.py"
+      - ".github/workflows/coupon-eval.yml"
+  workflow_dispatch:
+
+jobs:
+  eval:
+    name: 找券评测量具自检
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      # runner 自带 python3 也够用；显式装是为了版本可复现，且不引入任何第三方依赖。
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 1/4 量具自测（内置 6 条样本，手算 P/R/F1 断言）
+        run: python3 tools/eval_coupons.py --self-test
+
+      - name: 2/4 golden 来源核对（raw 必须逐字节来自夹具，金额不许编）
+        run: python3 tools/eval_coupons.py --lint tools/golden/coupons.jsonl
+
+      # clipboard 本轮没有券样本（仓库里的剪贴板用例全是裸链接/口令），所以**不**require 它 ——
+      # require 一个空 source 会让这一步永远红，反而掩盖真问题。golden 补上含券口令后把
+      # --require-source clipboard 加回来。
+      - name: 3/4 自反性：golden vs golden 必须 F1=1.0
+        run: |
+          mkdir -p reports
+          python3 tools/eval_coupons.py \
+            tools/golden/coupons.jsonl tools/golden/coupons.jsonl \
+            --expect-perfect --require-source page_node --require-source community \
+            --report reports/coupon-reflexive.txt
+
+      # 门禁只有 baseline 存在时才跑：baseline 必须来自一次**真实 pred** 的产出（App 侧导出），
+      # 拿 golden-vs-golden 的满分当 baseline 会让第一次真实运行直接红，那是假门禁。
+      # 生成方式见 docs/DEVELOPMENT.md：eval_coupons.py golden pred --write-baseline。
+      - name: 探测 baseline
+        id: baseline
+        run: echo "exists=$(test -f tools/golden/baseline.json && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
+
+      - name: 4/4 回归门禁（相对 baseline 任一 source F1 回退 > 0.01 即红）
+        if: steps.baseline.outputs.exists == '1'
+        run: |
+          mkdir -p reports
+          python3 tools/eval_coupons.py \
+            tools/golden/coupons.jsonl tools/golden/pred.latest.jsonl \
+            tools/golden/baseline.json --tolerance 0.01 \
+            --report reports/coupon-gate.txt
+
+      - name: 上传评测报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coupon-eval-reports
+          path: reports/
+          if-no-files-found: ignore

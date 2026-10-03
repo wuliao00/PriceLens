@@ -309,6 +309,112 @@ npm test                          # Jest 单元测试
 
 ---
 
+## 📐 找券评测集（量具，不参与 App 构建）
+
+「找券准确率」的任何改动都要先能量出「改这一条模板救回了几条、弄坏了几条」。量具是
+`tools/eval_coupons.py` + `tools/golden/coupons.jsonl`，纯 Python 标准库，**不需要 gradle、不出包**。
+CI 侧由 `.github/workflows/coupon-eval.yml` 在 `tools/golden/**` 或 `tools/eval_coupons.py` 变化时跑。
+
+### 怎么跑
+
+```bash
+python3 tools/eval_coupons.py --self-test                        # ① 量具自己有没有坏
+python3 tools/eval_coupons.py --lint tools/golden/coupons.jsonl  # ② golden 的文案/金额是不是编的
+python3 tools/eval_coupons.py golden.jsonl pred.jsonl            # ③ 纯测量（不设门禁）
+python3 tools/eval_coupons.py golden.jsonl pred.jsonl baseline.json   # ④ 带回归门禁
+```
+
+Windows 本机把 `python3` 换成 `py`（`python` 是 Microsoft Store 存根，跑了什么都不做）。
+控制台是 GBK，报告含中文时加 `--reports 路径` 另存 UTF-8 文件，或先把 stdout 转 UTF-8（脚本自己会转）。
+
+退出码：`0` 通过 / `1` 门禁红（相对 baseline 回退 > 容差，或 `--expect-perfect` 未达标）/
+`2` 输入与数据错误（文件读不到、JSON 行坏、schema 不合、pred 出现 golden 里没有的 id、重复 id）/
+`3` 自测或 `--lint` 失败。**没有"静默成功"这一档**：被跳过的行、缺失的条目、n/a 的 source 都会点名并计数。
+
+### 判据（写死，改动等于改指标定义）
+
+- **券级命中 = 面额 `discount` 与门槛 `threshold` 都精确相等**，双 `null` 视为相等。
+  `scope`/`state` 不参与命中判定，只进 slot 错误榜当诊断——一个措辞差异不该把 P/R 一起搅浑。
+- `threshold` 的 `0.0` 与 `null` 是两件事：`0.0` = 文案显式写了「无门槛」，`null` = 文案没给门槛。
+  把 `null` 当 `0` 会算出错误的到手价，所以判据上它们不等价。
+- 分母为空：`tp+fp+fn == 0` → P/R/F1 全 `None`，报告显示 `n/a`（本轮**不可判定**，不参与门禁）；
+  `tp == 0` 但有多检或漏检 → `F1 = 0.0`。用 `--require-source page_node` 声明"这个 source 本轮必须有券可测"，
+  否则把某个 source 的 golden 删空之后自反性照样全绿——这是这套东西最容易自我欺骗的地方。
+- 门禁：任一 source 的 F1 相比 baseline 回退 **> tolerance（默认 0.01）** ⇒ exit 1。恰好回退 0.01 不红（判据是 `>`）。
+  baseline 里某个 source 从有分掉成 `n/a` 也算回退。
+
+### 数据格式
+
+`golden` 与 `pred` 都是 JSONL（一行一条），`pred` 是同一格式的**子集**（`raw` 可省，其余键必须齐）：
+
+```json
+{"id":"jd-guobu-01","source":"page_node","raw":"领后减¥1500 立即领",
+ "coupons":[{"discount":1500.0,"threshold":null,"scope":"国补","state":"立即领","expiry":null,"url":null}],
+ "price":{"final":null,"list":null,"drop":null},"user_mark":null,
+ "origin":{"kind":"fixture","file":"app/src/test/resources/fixtures/jd_detail_guobu_plb110_20261003.xml"},
+ "note":"按钮行同时给了面额和领取动作；门槛没写，所以是 null 而不是 0"}
+```
+
+- `source` 只有三个取值：`page_node`（无障碍树节点文案）/ `clipboard`（剪贴板口令、短链）/ `community`（爆料与数据源正文）。
+- `coupons` 里的键**必须全部存在**，没有就用 `null` 写明——省略键会被判数据错误（退出码 2）。
+- 金额只收数字，`"8"` 这种字符串面额一律拒。`origin`/`note` 是 `--lint` 用的扩展字段，打分时忽略。
+
+### 怎么加条目
+
+1. **raw 必须是从真实文件里"取"出来的，不是抄的、更不是发明的。** 每条要写 `origin`：
+   `page_node` 指 `app/src/test/resources/fixtures/*.xml`（真机 uiautomator 树），
+   `clipboard` 指 `app/src/test/java/com/pricelens/` 下的链接解析用例，
+   `community` 指 `smzdm_*.html` / `live_candidate_pools.json` / `shihuo_search.json` 这些夹具。
+2. 标注口径（与 App §6.3「只认显式券文案、宁缺毋滥」一致）：
+   - 有确定金额（元）的券/补贴/礼金 → 记一条 coupon；
+   - **不产券**：百分比折扣（`1件8.5折`、`至高省15%`）、上限（`至高减500元`、`预估¥9535`）、
+     后返（`下单返9折券`、`最高返574京豆`）、积分抵扣（`淘金币可抵扣0.19元`）、
+     分期免息、满赠/换购、频道入口标签。这些条目 `coupons` 留 `[]`，`note` 写清为什么——
+     它们是"幻觉检测"的样本，产出一张券就是 FP。
+   - 文案有券但没金额（`领券`、`试用专享券`）→ 记一条四个槽全 `null` 的券。
+3. `id` 稳定且可读：`jd-guobu-01`、`clip-jd-short-01`、`cm-youhui-03`。id 一旦进过 pred 就别改，
+   改名等于把所有历史指标作废。
+4. 加完跑 `--lint`：它会逐字节核对每条 `raw` 确实存在于 `origin.file`，核对每个非 null 的
+   `discount`/`threshold`/`price.*` 数字都能在 raw 里找到（`threshold=0` 例外，但要求 raw 里出现「无门槛」），
+   并核对 `scope`/`state` 的字样来自那个文件本身。**lint 红就是编造，不许绕**。
+5. 再跑一次自反性（`golden golden --expect-perfect`），确认新条目自己不自相矛盾。
+
+### baseline 怎么来
+
+`baseline.json` **必须**来自一次真实 pred 的运行，不能拿 golden-vs-golden 的满分当基线（那会让第一次真实运行直接红）：
+
+```bash
+python3 tools/eval_coupons.py tools/golden/coupons.jsonl pred.jsonl --write-baseline tools/golden/baseline.json
+```
+
+同时把当次 pred 存成 `tools/golden/pred.latest.jsonl`，CI 的第 4 步（门禁）才会跑；
+这两个文件不存在时 CI 只跑前三步（量具自检），不会假装门禁过了。
+
+### 错例上报包（与 golden 同格式）
+
+用户从「我的 → 数据」导出的错例包用的就是**上面那套 JSONL**，多一个 `user_mark` 字段（其余键完全相同）：
+`user_mark` 是用户在 App 里对这条结果点的标记（`null` = 没标；其余取值是"券不对"/"没找到券"之类的用户动作），
+它不参与判分，只告诉标注人哪条最值得先看。
+
+- **每周人工注入**：把导出包里的 `raw`/`user_mark` 与 pred 结果对齐后人工补 `coupons` 标注，
+  过 `--lint` + 自反性，再作为新条目进 `tools/golden/coupons.jsonl`（id 按上面的命名给新的，不改历史条目）。
+- **隐私口径（必须保持）**：这个 App **不上传任何数据**。上报数据只来自**用户本机导出的文件**，
+  由用户自己决定要不要发出来；仓库侧的 golden 只保留文案与金额，不含账号、设备标识、地理位置、Cookie。
+  进 golden 前先看一眼 raw 里有没有用户名/手机号/订单号，有就删掉这条而不是打码。
+
+### 当前 golden 的已知缺口（别把量具当成全知）
+
+- `clipboard` 12 条**全是零券样本**：仓库里现有的剪贴板用例（`LinkParserTest`）只有裸链接与纯口令，
+  文案里没有任何金额，所以这个 source 的 F1 恒为 `n/a`，只能测幻觉（产一张券即 P=0）。
+  要让它可判分，得先攒"分享文案里带满 X 减 Y"的真样本。
+- `tb_detail_plb110_20261003.xml` 里没有任何券/促销文案（半屏未加载完），所以 golden 里没有淘宝页面树条目。
+- `url` 与 `expiry` 两个槽首批全部 `null`：夹具里 URL 与我抄的正文没有可机器核对的对应关系，
+  凭印象填会让"来源可查"这条保证失效，所以宁可不标。
+- `community` 有 1 条口径待定：`参与补贴15%起减500元` 按"比例+上限"判为不产券（`cm-faxian-04`）。
+  如果以后确认它其实是确定减 500，改标注要连带重生成 baseline。
+
+---
+
 ## 🚀 发布流程
 
 ### Android 发布
