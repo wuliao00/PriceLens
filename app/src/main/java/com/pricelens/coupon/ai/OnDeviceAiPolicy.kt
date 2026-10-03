@@ -106,13 +106,13 @@ object OnDeviceAiPolicy {
         deviceRamMb: Long,
         cacheBudgetMb: Long
     ): AiDecision {
-        if (!userEnabled) return Refused(ReasonOff)
-        if (!deviceRamSupported(deviceRamMb)) return Refused(ReasonDeviceRam)
-        if (!modelDownloaded && !budgetFitsModel(cacheBudgetMb)) return Refused(ReasonCacheBudget)
-        if (!batterySupported(batteryPercent)) return QueueUntilIdle
-        if (!freeRamSupported(freeRamMb)) return QueueUntilIdle
-        if (!modelDownloaded && onMeteredNetwork) return QueueUntilIdle
-        return Run
+        if (!userEnabled) return AiDecision.Refused(ReasonOff)
+        if (!deviceRamSupported(deviceRamMb)) return AiDecision.Refused(ReasonDeviceRam)
+        if (!modelDownloaded && !budgetFitsModel(cacheBudgetMb)) return AiDecision.Refused(ReasonCacheBudget)
+        if (!batterySupported(batteryPercent)) return AiDecision.QueueUntilIdle
+        if (!freeRamSupported(freeRamMb)) return AiDecision.QueueUntilIdle
+        if (!modelDownloaded && onMeteredNetwork) return AiDecision.QueueUntilIdle
+        return AiDecision.Run
     }
 
     // 下面四条判据都写成"正向支持"谓词：阈值边界是 `>=`，变异探针（把 >= 改成 >）
