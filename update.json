@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-02T11:30:00Z",
+  "generatedAt": "2026-10-03T06:05:00Z",
   "channel": "stable",
   "latest": {
-    "versionCode": 21,
-    "versionName": "2.8.0",
-    "releaseDate": "2026-10-02"
+    "versionCode": 22,
+    "versionName": "2.8.0.1",
+    "releaseDate": "2026-10-03"
   },
   "minSupportedVersionCode": 14,
   "forceBelow": 13,
@@ -13,36 +13,36 @@
   "apkUrls": [
     {
       "label": "Gitee（国内直连）",
-      "kind": "apk",
-      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.apk"
+      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.1.apk",
+      "kind": "APK"
     },
     {
       "label": "GitHub Release",
-      "kind": "apk",
-      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.8.0/PriceLens-2.8.0.apk"
+      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.8.0.1/PriceLens-2.8.0.1.apk",
+      "kind": "APK"
     },
     {
       "label": "Gitee 发行版页",
-      "kind": "page",
-      "url": "https://gitee.com/wuliao11541/PriceLens/releases"
+      "url": "https://gitee.com/wuliao11541/PriceLens/releases",
+      "kind": "PAGE"
     },
     {
       "label": "GitHub Release 页",
-      "kind": "page",
-      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0"
+      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.1",
+      "kind": "PAGE"
     }
   ],
-  "sha256": "a635e873ac2dbcdf370c2a34e9295834519c4b593a267d5b4e94c755c53995ee",
-  "sizeBytes": 2336587,
+  "sha256": "2ec3c546d91bb98da284d900ca942090af920d2b0a81751a6bb781b404fa6f58",
+  "sizeBytes": 3236149,
   "notes": [
-    "⚠️ 签名密钥：从 ≤2.6.5 升级需卸载重装一次（应用内数据会清空）；2.7.0 及以上可直接覆盖升级",
-    "新增：选择器规则远程订阅（GKD 式热更）—— 商详页「哪里是标题、哪里是价格、怎么确认是商品页」改为 JSON 规则、可从远端热更，京东改版不再等发版；规则不可用时自动回落原启发式（行为与旧版一致）",
-    "新增：纯本地崩溃日志 —— 设置页「诊断」区可导出/清空；只写本机、绝不上传，导出文本自动对 Cookie/Authorization 等敏感串打码",
-    "新增：国产 ROM 保活引导页（设置 → 权限）—— 能自动判定的替你判定（通知、电池优化白名单），判不了的如实写「系统不给查」；含分品牌设置步骤与安全跳转",
-    "新增：慢慢买「京东授权」三态判定 + 应用内网页取历史价；凭证改为 Keystore 加密存储 + 设置页默认掩码显示",
-    "新增：系统分享 / 浏览器 / 剪贴板三条入口直达搜索；盯价购买建议（按历史分位给一句话结论）",
-    "修复：值得买带括号说明的价格被拼成天文数字（284元（淘金币可抵37.14元起）→ ¥28,437.14）；慢慢买回写不再凭空造「今天」的观测，秒级时间戳不再折成 1970 年",
-    "修复：设置页「检测 Cookie」归因修正 —— 未授权京东 ≠ 登录失效；人机验证页对任何人都成立，不再被当成账号问题"
+    "⚠️ 本版最该升的理由是两条已发布版本就存在的崩溃：「我的」页收藏与盯价目标 key 撞车直接崩；Android 12+ 上常驻通知启动被拒且没人接异常 → 打开电商 App 就崩、崩完被拉起再崩（陷入崩溃循环）",
+    "新增：商品详情页 —— B站评测与找券收进页内分段，底部导航从 6 个收敛为 4 个（概览 / 盯价 / 社区 / 我的）；评测段加「近半年」筛选，装了 B站 时点视频直达播放器",
+    "新增：价格浮窗可收起为一枚可拖动的小圆球（松手吸附左右边缘并记住位置，点球展开回面板）；球只显现价与 ↑/↓ 百分数",
+    "修复：浮窗把界面提示当商品名（京东商详加载中那一帧的「继续滑动查看图文详情」、SKU 选择态「已选：…」、促销行「叠加以旧换新…」），并被当关键词发起全网搜索、写进搜索历史；现改为规则标题与启发式标题比分后取可信者，两边都不可信就宁可不弹",
+    "修复：京东国补商品的完整商详页底栏写「领取补贴购买」而非「立即购买」，导致那一页浮窗不弹（同一商品的迷你页却会弹，看起来像随机失灵）",
+    "新增：WebDAV 备份/恢复（收藏+盯价目标，凭证绝不进备份文件）与系统文件选择器导出兜底；桌面小组件与下拉栏磁贴「立即检查」；降价通知带迷你曲线缩略图与「查看/忽略」动作；通知闸门（仅 WiFi + 免打扰时段）",
+    "变更：概览与「我的/设置」信息密度重排、历史曲线连续描线入场、价格数字滚动、二级页推进退回转场等动效批",
+    "签名：与 2.7.0/2.8.0 同一枚密钥，可直接覆盖升级，本机数据不丢；停在 ≤2.6.5 的用户需卸载重装一次"
   ],
   "cooldownHours": 24
 }
