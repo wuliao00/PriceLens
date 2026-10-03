@@ -222,7 +222,7 @@
 }
 .product-info { flex: 1; min-width: 0; }
 .product-title {
-  font-size: 16px;
+  font-size: var(--fs-subtitle);
   font-weight: var(--fw-title);
   line-height: 1.4;
   margin-bottom: var(--sp-2);
@@ -367,7 +367,7 @@
 }
 .stat-item .s-label { font-size: var(--fs-label); color: var(--text-tertiary); }
 .stat-item .s-value {
-  font-size: 20px;
+  font-size: var(--fs-title);
   font-weight: var(--fw-title);
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
@@ -415,7 +415,7 @@
 }
 .final-price-label { font-size: var(--fs-caption); color: var(--text-tertiary); }
 .final-price {
-  font-size: 40px;
+  font-size: var(--fs-hero);
   font-weight: var(--fw-display);
   color: var(--danger);
   font-variant-numeric: tabular-nums;
@@ -439,7 +439,7 @@
   min-width: 96px;
   text-align: center;
   color: var(--danger);
-  font-size: 24px;
+  font-size: var(--fs-amount);
   font-weight: var(--fw-display);
   font-variant-numeric: tabular-nums;
 }
@@ -465,7 +465,7 @@
   display: flex; gap: var(--sp-3);
 }
 .deal-item .d-price {
-  font-size: 18px;
+  font-size: var(--fs-price);
   font-weight: var(--fw-title);
   color: var(--danger);
   font-variant-numeric: tabular-nums;

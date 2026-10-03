@@ -8,6 +8,7 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
@@ -63,6 +64,9 @@ class WatchWidget : GlanceAppWidget() {
 @Composable
 private fun WatchWidgetContent(snapshot: WidgetSnapshot) {
     val context = LocalContext.current
+    // 行数按**当前窗口高度**算：SizeMode.Exact 会把用户拖出来的尺寸原样报给我们，
+    // 拖扁时宁可少显一行，也不要第三行被裁半截（判据与推导见 WidgetLayout）
+    val rows = WidgetLayout.rowsFor(LocalSize.current.height.value)
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
@@ -78,16 +82,20 @@ private fun WatchWidgetContent(snapshot: WidgetSnapshot) {
             style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp, color = GlanceTheme.colors.onSurface),
             maxLines = 1
         )
-        Text(
-            text = context.getString(R.string.widget_dropped, snapshot.dropped),
-            style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.onSurface),
-            maxLines = 1
-        )
-        Text(
-            text = context.getString(R.string.widget_last_check, WidgetStats.clockText(snapshot.lastCheckAt)),
-            style = TextStyle(fontSize = 12.sp, color = GlanceTheme.colors.onSurfaceVariant),
-            maxLines = 1
-        )
+        if (rows >= 2) {
+            Text(
+                text = context.getString(R.string.widget_dropped, snapshot.dropped),
+                style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.onSurface),
+                maxLines = 1
+            )
+        }
+        if (rows >= 3) {
+            Text(
+                text = context.getString(R.string.widget_last_check, WidgetStats.clockText(snapshot.lastCheckAt)),
+                style = TextStyle(fontSize = 12.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                maxLines = 1
+            )
+        }
     }
 }
 

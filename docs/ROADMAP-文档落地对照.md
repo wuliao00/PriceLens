@@ -269,3 +269,51 @@ extract/confirm。变异自证：把 `detect()` 里那句 `rule?.vocabulary ?: D
 要补的话需要：淘宝商详**加载完成后**一棵、拼多多商详一棵，各自的 `text`/`content-desc` 原样进夹具，
 再按 `BuiltinRuleTest` 那三条一致性闸门（assets 与 rules/ 逐字节一致、manifest sha256、真机树命中/
 反向不命中）一起进 CI。
+
+### 9.5 第四批之二（2026-10-03 晚）——设计债落地：令牌化、自适应布局、桌面端字号收口
+
+承接 §9.4 的"僵硬化"批评，这一批做的是**能被测试钉住的**那部分，做不到的地方写清楚为什么不做。
+
+**一、浮窗尺寸从"两文件各写一份"变成一个真相源（`OverlayMetrics.kt`）**
+最实的债不是颜色，是跨文件一致性只靠注释维持：`OverlayManager` 写 `PANEL_MAX_WIDTH_DP = 304f
+// = widthIn(max = 280.dp) + 左右各 12dp`，而 280 和 12 在 `PriceOverlay` 里各写一遍。
+改 UI 的人看不见那条注释 ⇒ 窗口仍按 304 算，面板右边缘被**静默裁掉**，且只在数据最长时露出来。
+现在关系是函数（`panelWindowMaxWidthDp()`），`OverlayMetricsTest` 里先钉等值（304/60/24 一个都没变，
+证明这只是搬家），再钉不变量：`60..2000dp` 每一档都断言"面板+外圈不得超过窗口""胶囊不得比面板宽"。
+胶囊圆角也改成 `capsuleCornerDp() = 高度 / 2`，pill 形不可能再被写死成 24。
+`PriceOverlay` 的 29 处裸 dp 与 2 处裸时长一并归口（`Elevations.OverlayTonal/Capsule/Panel`、
+`MotionDurations.ShimmerSweep/PriceRoll/Standard`）；`AnimatedVisibility` 不再吃系统默认时长。
+变异自证：把两处 `minOf` 上限摘掉 ⇒ 恰好 3 条用例红（panel / capsule / invariants），其余仍绿。
+
+**二、自适应布局有了第一版分档（`ui/layout/Adaptive.kt`）**
+全仓 `WindowSizeClass` 出现 0 次是这次审计查出来的事实：折叠屏展开、平板、分屏下 App 用的还是手机排版。
+分档下界用 Material 3 官方的 600dp / 840dp，**不是我自己调的数**（这正是"别僵硬化"要的做法：
+引用现成标准而不是照着手里的样本凑阈值）。消费方式保守：COMPACT 返回 `null`（不是"一个大数"，
+因为 `widthIn(max = 很大)` 与"不挂这条 modifier"在 Compose 里不等价），保证 360~500dp 的手机
+与改造前逐像素一致；MEDIUM 限宽 600dp 居中，EXPANDED 限宽 840dp 居中。
+`AdaptiveTest` 里"主流手机宽度全部留在 COMPACT"是这条改动**不许动手机形态**的钉子。
+
+**三、小组件按高度决定行数（`WidgetLayout.kt`）**
+`SizeMode.Exact` 早就开了，但内容是**三行写死**：拖成 2x1 时第三行被窗口裁半截，拖大是一片空白。
+现在行数由 `rowsFor(heightDp)` 算，阈值从"内边距 12dp ×2 + 一行 16sp 粗体 24dp"派生（同
+`RowBudget` 的写法：可查的数推出来的，不是拍的）。`android:minHeight=110dp` 那条 4x2 承诺代入
+⇒ 仍然 3 行，所以已验收的默认尺寸零变化；读不到尺寸（`Dp.Unspecified`=NaN）时回默认 3 行而不是猜。
+变异自证：`>=` 写成 `>` ⇒ 边界用例当场红。
+
+**四、桌面端字号令牌收口**
+`components.css` 里 5 个裸 `font-size`（16/18/20/24/40px）原先游离在 `--fs-*` 五档之外——
+调字阶的人改 tokens 看不见它们，等于两套字号真相。新增 `--fs-hero/amount/price/subtitle` 四档
+（值照搬，不改观感）并全部换成 `var()`；脚本核过：60 个定义、52 个引用、**没有一个引用指向未定义变量**，
+新加的四档各自"定义 1 次、引用 1 次"（不留没消费者的令牌）。
+`@media` 断点这一批**没加**，理由是可查的：Electron 主窗口 `minWidth: 760`（`src/main/index.js`），
+窄于 760 的场景根本到不了，最窄时内容区仍有 760−200(侧栏)=560px；在没有可视验证手段之前，
+为了"看起来自适应"塞断点是加分歧不是减风险。
+
+**五、两条审计项核实后否掉，没有动手**
+- "球上是裸『收』字要换成图标"：实际是 `ovl_ball_collapse=「收起」` 两个字的 TextButton，不是单字；
+- "吸边动画"：小圆球拖拽手感是用户本人 13:45 在 PLB110 上刚复验通过的，而这一刻 `adb devices` 是空的，
+  改完无法验手感 ⇒ 按"不许把没验过的东西写成完成"留着。
+
+**没做到的（如实记）**：以上分档与限宽的**接线部分（MainActivity / WatchWidget 的 Compose 侧）没有测试覆盖**——
+纯函数测的是判据，判据接到底层树之后长什么样，本机既起不了模拟器（无 hypervisor）也没有连着的大屏设备，
+看不到。`npm run lint` 也不校验 CSS 令牌。这一条与任务 #53 是同一件事，等用户那台平板模拟器起来再补渲染证据。

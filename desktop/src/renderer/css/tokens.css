@@ -10,6 +10,12 @@
 
   /* ── 字号 / 字重 ── */
   --fs-display:  28px; --fw-display: 700;
+  /* 展示档（2026-10-03 令牌收口）：这四个数原先是散在 components.css 里的裸 px，
+     调字阶的人改上面五档看不到它们，等于两套字号真相。值一律照搬原样，不改观感。 */
+  --fs-hero:     40px;   /* 到手价大数字（.final-price） */
+  --fs-amount:   24px;   /* 券面额（.coupon-amount） */
+  --fs-price:    18px;   /* 列表里的成交价（.deal-item .d-price） */
+  --fs-subtitle: 16px;   /* 商品主标题（.product-title） */
   --fs-title:    20px; --fw-title:   600;
   --fs-body:     14px; --fw-body:    400;
   --fs-caption:  12px; --fw-caption: 400;

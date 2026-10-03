@@ -18,10 +18,13 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -68,6 +71,8 @@ import com.pricelens.data.repository.SettingsRepository
 import com.pricelens.ui.components.AppTopBar
 import com.pricelens.ui.components.PageTransition
 import com.pricelens.ui.components.StripReveal
+import com.pricelens.ui.layout.Adaptive
+import com.pricelens.ui.layout.rememberWindowWidthBucket
 import com.pricelens.ui.onboarding.OnboardingFlow
 import com.pricelens.ui.onboarding.SetupHintBar
 import com.pricelens.ui.onboarding.rememberPermissionStates
@@ -355,7 +360,16 @@ fun MainScreen(
             }
         }
     ) { inner ->
-        Column(Modifier.padding(inner).fillMaxSize()) {
+        // 自适应布局（2026-10-03）：折叠屏展开 / 平板 / 桌面自由窗口下把内容限宽并水平居中，
+        // 手机竖屏（COMPACT）拿到的还是"没有上限"，与改造前逐像素一致。
+        val contentMaxDp = Adaptive.contentMaxWidthDp(rememberWindowWidthBucket())
+        Column(
+            modifier = Modifier
+                .padding(inner)
+                .then(if (contentMaxDp == null) Modifier else Modifier.widthIn(max = contentMaxDp.dp))
+                .fillMaxHeight()
+                .wrapContentWidth(androidx.compose.ui.Alignment.CenterHorizontally)
+        ) {
             // 剪贴板横条：只在概览页、只在认出商品链接时出现；「忽略」= 同一段内容不再提示
             val detected = clipboardLink
             // 淡出期间 detected 已经被置 null：内容读这份快照，否则横条会在退场动画中途先空成一格
