@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  详情页「本机识别券组」文案（任务书 B2，独立文件，不塞进 strings.xml）。
+  命名统一 coupon_local_ 前缀；Gwdang 远端券的旧 key（coupon_ 开头）原样保留，两组并列且区分。
+
+  三档语义边界（措辞必须与档位对应；本版没有核验层，任何文案都不许声称核过或确认过，
+  CouponStringsGuardTest 逐词盯着这份文件）：
+   - 高（置信 ≥ 0.85，闭区间下界）：可直接看；
+   - 中（置信 ≥ 0.6）：要自己点进去核；
+   - 低（不足 0.6）：只是"可能是券"，也可能根本不是券。
+
+  逐槽展示口径：读不出的槽位写"未识别"，绝不拿别的槽位的数凑；门槛 0 与 null 是两件事
+  （0 是文案显式写了无门槛，null 是没写）。
+-->
+<resources>
+
+    <!-- 本机券组标题：说清它是从当前文案里规则读出来的，与远端券列表两回事 -->
+    <string name="coupon_local_header">本机从当前文案识别</string>
+    <string name="coupon_local_subheader">规则从文案逐字读出，按置信分三档提示可信程度</string>
+
+    <!-- 三档措辞（高=可直接看、中=要自己点进去核、低=只是可能是券） -->
+    <string name="coupon_local_tier_high">高置信 · 可直接看</string>
+    <string name="coupon_local_tier_medium">中置信 · 自己点进去核</string>
+    <string name="coupon_local_tier_low">低置信 · 只是可能是券</string>
+
+    <!-- 槽位标签（固定七格，顺序与 LocalCouponRow.cells 一致） -->
+    <string name="coupon_local_slot_discount">面额</string>
+    <string name="coupon_local_slot_threshold">门槛</string>
+    <string name="coupon_local_slot_scope">范围</string>
+    <string name="coupon_local_slot_state">状态</string>
+    <string name="coupon_local_slot_expiry">有效期</string>
+    <string name="coupon_local_slot_code">券码</string>
+    <string name="coupon_local_slot_link">链接</string>
+
+    <!-- 读不出就是这个，空白与猜值都不许 -->
+    <string name="coupon_local_unrecognized">未识别</string>
+
+    <!-- 槽位值的格式化外壳（数字由 PriceFormatter 格式化好传入，这里只管措辞） -->
+    <string name="coupon_local_value_amount">¥%1$s</string>
+    <string name="coupon_local_value_threshold">满 %1$s</string>
+    <string name="coupon_local_value_text">%1$s</string>
+
+    <!-- 范围（CouponScope 枚举的词面） -->
+    <string name="coupon_local_scope_item">单品</string>
+    <string name="coupon_local_scope_shop">店铺</string>
+    <string name="coupon_local_scope_category">品类</string>
+    <string name="coupon_local_scope_platform">平台</string>
+    <string name="coupon_local_scope_member">会员</string>
+
+    <!-- 状态（CouponState 枚举的词面；不是 UNKNOWN 就必须显示出来） -->
+    <string name="coupon_local_state_claimable">可领</string>
+    <string name="coupon_local_state_claimed">已领</string>
+    <string name="coupon_local_state_expired">过期</string>
+    <string name="coupon_local_state_sold_out">已领完</string>
+    <string name="coupon_local_state_member_only">会员专享</string>
+    <string name="coupon_local_state_region_limited">限地区</string>
+
+    <!-- 证据句：这张券自己的 sourceText（不是整段输入），用户靠它判断识别错在哪 -->
+    <string name="coupon_local_source_line">这句里读出来的：%1$s</string>
+
+    <!-- 一键"这条不对"：只加内存清单，不弹窗、不上传 -->
+    <string name="coupon_local_mark_wrong">这条不对</string>
+    <string name="coupon_local_marked">已进待纠错清单（只在内存，没上传）</string>
+
+    <!-- 导出：纯本地文件，逐行兼容 tools/golden/coupons.jsonl；要人工放进评测集才会参与回归 -->
+    <string name="coupon_local_export">导出标记的错例（%1$d 条）</string>
+    <string name="coupon_local_export_saf">另存到所选位置</string>
+    <string name="coupon_local_export_saved">%1$d 条已写到本机文件 %2$s，没有上传</string>
+    <string name="coupon_local_export_failed">导出失败，文件没有写出</string>
+    <string name="coupon_local_export_note">文件逐行兼容评测集，须人工放进 tools/golden/ 才会参与回归</string>
+
+    <!-- 读屏句子：档位、逐槽读数、证据句拼成一句可念的话（不是标题串位） -->
+    <string name="coupon_local_cd_slot">%1$s：%2$s</string>
+    <string name="coupon_local_cd_row">本机识别的券，%1$s。%2$s。这句里读出来的：%3$s</string>
+
+</resources>
