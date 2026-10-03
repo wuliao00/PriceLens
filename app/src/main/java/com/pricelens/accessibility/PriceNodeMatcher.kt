@@ -135,18 +135,24 @@ object PriceNodeMatcher {
      * 见 `InvisibleTextSanitizingTest` 的取证说明），再 trim + 连续空白压缩为单空格；空返回 null
      */
     fun cleanTitle(raw: String?): String? {
-        val t = raw?.replace(INVISIBLE, "")?.trim()?.replace('\u00A0', ' ')?.replace(Regex("\\s+"), " ")
-        return t?.takeIf { it.isNotEmpty() }
+        // 先剥读屏角色后缀（"购物车20，按钮" → "购物车20"）：这类串来自 contentDescription，
+        // 不是页面原文（真机取证见 AccessibilityLabel 的注释）
+        val deRolled = AccessibilityLabel.stripRoles(raw ?: return null)
+        val t = deRolled.replace(INVISIBLE, "").trim().replace('\u00A0', ' ').replace(Regex("\\s+"), " ")
+        return t.takeIf { it.isNotEmpty() }
     }
 
     /**
      * 标题合理性：
      *  - strict=false（一/二级，ID 已背书）：≥6 字、无货币符号、无换行、不在黑名单；
      *  - strict=true（三级启发式）：>8 字（旧阈值保留）、≤80、无冒号规格行特征、非纯数字/日期。
+     *  - **两级都拒绝导航/工具位**（"购物车20"、"首页"、"消息3"）：一/二级只看 ID 语义，
+     *    而淘宝把这些节点的 contentDescription 也做成了语义化 id，长度门槛 6 字挡不住（真机脏数据见 AccessibilityLabel）。
      */
     fun isPlausibleTitle(text: String, strict: Boolean): Boolean {
         val minLen = if (strict) 9 else 6
         if (text.length < minLen || text.length > if (strict) 80 else 120) return false
+        if (AccessibilityLabel.looksLikeNavLabel(text)) return false
         if (CURRENCY_PATTERN.containsMatchIn(text)) return false
         if (text.contains('\n')) return false
         if (DATEISH.matches(text)) return false
