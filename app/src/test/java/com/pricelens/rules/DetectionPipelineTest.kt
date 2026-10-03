@@ -139,7 +139,11 @@ class DetectionPipelineTest {
     fun `matchedBy names the rule id version and selector`() {
         val outcome = DetectionPipeline.detect(instock.root, ShopPlatform.JD, JD_PKG, builtinRules)
         val matchedBy = (outcome as DetectionOutcome.Hit).detection.matchedBy
-        assertTrue("日志必须写明是规则命中：$matchedBy", matchedBy.startsWith("规则 jd@v1/product_detail"))
+        // 版本号从规则本身取：每次改规则 gen_rules_manifest.py 都会递增它（2026-10-03
+        // 收「领取补贴购买」时 1→2），把数字写死在这里只会让这条日志格式的闸门每次改规则都红一次。
+        // "版本号到底是多少"由 BuiltinRuleTest 钉，"日志有没有把来源写清楚"由这条钉。
+        val version = requireNotNull(builtinRules.ruleFor(JD_PKG)).version
+        assertTrue("日志必须写明是规则命中：$matchedBy", matchedBy.startsWith("规则 jd@v$version/product_detail"))
         assertTrue("日志必须写明字段命中来源：$matchedBy", matchedBy.contains("price=textRegex:"))
         assertTrue(matchedBy.contains("title=textRegex:"))
     }

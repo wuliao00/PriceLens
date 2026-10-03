@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "jd",
-  "version": 1,
+  "version": 2,
   "description": "京东 App 商详页选择器（现货 / 预约两种底栏文案都覆盖）。规则说明见 docs/API.md「选择器规则远程订阅」。",
   "packages": [
     "com.jingdong"
@@ -39,7 +39,7 @@
         "buyNow": [
           {
             "by": "textRegex",
-            "value": "立即购买|领券购买|现在购买|马上抢|立即预约|单独购买"
+            "value": "立即购买|领券购买|现在购买|马上抢|立即预约|单独购买|领取补贴购买"
           }
         ],
         "checkout": [

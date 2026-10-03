@@ -258,7 +258,12 @@ object PriceNodeMatcher {
      * `RealDumpGatingTest."home feed reservation wording never reads as a bottom-bar buy action"`。
      */
     private val BUY_NOW_WORDS = listOf(
-        "立即购买", "领券购买", "马上抢", "现在购买", "单独购买", "立即预约"
+        "立即购买", "领券购买", "马上抢", "现在购买", "单独购买", "立即预约",
+        // 真机 2026-10-03 11:45：京东**国补商品**的完整商详页底栏把「立即购买」换成了
+        // 「领取补贴购买」（同一商品的迷你沉浸页仍是「立即购买」），resource-id 仍是
+        // feature:id/b34 —— 文案变了 ID 没变，词表必须收它，否则这一页判不成商详。
+        // 收的是**完整底栏文案**而不是「补贴购买」这类短子串（同「立即预约」的红线，见下）。
+        "领取补贴购买"
     )
     /**
      * 商详专属分区标记（列表页卡片的"查看详情"按钮不算）。

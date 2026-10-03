@@ -151,6 +151,28 @@ class RealDumpGatingTest {
         assertEquals(REAL_DUMP_MAX_SNAPSHOT_DEPTH + 1, deep.snapshotNodeCount)
     }
 
+    /**
+     * 「领取补贴购买」加词哨兵（2026-10-03 真机：京东国补商品的**完整商详页**底栏用它替换了
+     * 「立即购买」，resource-id 仍是 `feature:id/b34`，不加词这一页就判不成商详、浮窗不弹）。
+     *
+     * 加词前核对过：这五个字只出现在商详底栏，**首页与搜索页的真机树里一次都没有**。
+     * 这条就是那个核对的固化 —— 哪天京东把它搬进首页信息流，这里先红，提示重新校准词表，
+     * 而不是等用户发现"首页也弹浮窗了"。
+     */
+    @Test
+    fun `subsidy buy wording is absent from the real home and search dumps`() {
+        for (dump in listOf(home, search)) {
+            val texts = dumpTexts(dump.root)
+            assertFalse(
+                "${dump.name} 出现「领取补贴购买」→ 收进立购词表会让这一页误判成商详，需重新校准",
+                texts.any { it.contains("领取补贴购买") }
+            )
+        }
+        assertTrue(PriceNodeMatcher.isBuyNowAction("领取补贴购买"))
+        assertTrue("真机底栏整串是「国补后¥9399 领取补贴购买」，含价格前缀也要认",
+            PriceNodeMatcher.isBuyNowAction("国补后¥9399 领取补贴购买"))
+    }
+
     // ---------- 诊断辅助（只读，不参与判定） ----------
 
     /** 门控逐项判据：isProductPage 的每个分支都摊开打印，假阳性时直接看出卡在哪一关 */

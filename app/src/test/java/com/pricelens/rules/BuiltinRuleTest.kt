@@ -51,7 +51,10 @@ class BuiltinRuleTest {
     fun `builtin rule parses and declares jd package prefix`() {
         val rule = loadedBuiltinJdRule()
         assertEquals("jd", rule.id)
-        assertEquals(1, rule.version)
+        // 2 = 2026-10-03 把国补底栏文案「领取补贴购买」收进 buyNow 正则时由
+        // tools/gen_rules_manifest.py 自动递增的（改内容不改版本号 = 这条会红，
+        // 逼着一起重算 sha256，见下面两条一致性闸门）
+        assertEquals(2, rule.version)
         assertEquals(listOf("com.jingdong"), rule.packages)
         assertTrue(rule.covers("com.jingdong.app.mall"))
         assertEquals(1, rule.pages.size)
