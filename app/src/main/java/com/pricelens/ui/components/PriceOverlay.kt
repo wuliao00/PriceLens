@@ -512,20 +512,25 @@ private fun PanelForm(
                     when (overlayActionFor(detected, identity, OverlayIdentityPolicy.canConfirm(detected.title, detected.platform))) {
                         OverlayAction.VIEW_HISTORY -> PrimaryCta(stringResource(R.string.overlay_cta), onCompare)
                         OverlayAction.COMPARE_ONLY -> PrimaryCta(stringResource(R.string.ovl_title_only_cta), onCompare)
-                        OverlayAction.CONFIRM_AND_COMPARE -> Row(horizontalArrangement = Arrangement.spacedBy(ROW_GAP_DP.dp)) {
-                            OutlinedButton(
-                                onClick = onCompare,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(Dims.ButtonCorner)
-                            ) {
-                                Text(stringResource(R.string.ovl_title_only_cta), style = MaterialTheme.typography.labelSmall, maxLines = 2)
-                            }
+                        OverlayAction.CONFIRM_AND_COMPARE -> Column(verticalArrangement = Arrangement.spacedBy(ROW_GAP_DP.dp)) {
+                            // 两个 CTA **竖排各占一行**，不并排。真机取证（2026-10-04 PLB110）：
+                            // 并排 + weight(1f/1.4f) 时两条 14~16 字的中文文案在 280dp 面板里
+                            // 各自折成两行、还在词中间断开（"识别到标 / 题 · 点击"），
+                            // 而那个 1 : 1.4 的权重比本身就是没人复核过的凑数。
+                            // 竖排后每条都有一整行宽度，一行放得下，主次也由"填充 vs 描边 + 谁在上面"表达。
                             Button(
                                 onClick = onConfirmIdentity,
-                                modifier = Modifier.weight(1.4f),
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(Dims.ButtonCorner)
                             ) {
-                                Text(stringResource(R.string.ovl_confirm_cta), style = MaterialTheme.typography.labelSmall, maxLines = 2)
+                                Text(stringResource(R.string.ovl_confirm_cta), style = MaterialTheme.typography.labelLarge)
+                            }
+                            OutlinedButton(
+                                onClick = onCompare,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(Dims.ButtonCorner)
+                            ) {
+                                Text(stringResource(R.string.ovl_title_only_cta), style = MaterialTheme.typography.labelMedium)
                             }
                         }
                         OverlayAction.CONFIRMED -> Column {

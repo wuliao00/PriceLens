@@ -459,4 +459,63 @@ v2→v3（远端与内置不同版，才分辨得出是谁在生效）。要把�
 | 真机验证（大窗居中 / 浮窗胶囊 / 标题 / 生效=[jd@v4]） | **待新包**：设备上现装的 `2.8.0.1-dev`（APK 00:04:44）不含居中修复 `8cc2a44`（提交 00:08:24） |
 | 设备状态还欠 | `wm density` 仍是 280 覆盖（基线 Physical 560）；无障碍服务列表当前为 `null`（gkd / SelectToSpeak / PriceLens 都没开），验完要按基线复位并向用户交代 |
 
-**坑三（进行中）：还没编译过的交付，不能因为"看起来对"就并进 feat 分支。**
+### 9.8 第五批之二（2026-10-04 凌晨）——真机把"我以为修好了的居中"又判了一次
+
+**一、居中这条修了两版，前两版都是错的，第三版才有证据。**
+同一台 PLB110、同一个 `wm density 280`（窗口 1256px ⇒ 717dp ⇒ MEDIUM 档，限宽 600dp = 1050px）：
+
+| 写法 | 量到的内容列 bounds | 结论 |
+|------|---------------------|------|
+| `widthIn → fillMaxHeight → wrapContentWidth`（8cc2a44 之前） | `[0,252][1050,2592]` | 限宽成立、贴左 |
+| `wrapContentWidth → widthIn`（**8cc2a44 自称的修复**） | `[0,252][1050,2592]` | **一模一样，还是贴左** |
+| `fillMaxWidth → wrapContentWidth → widthIn`（dab1020） | `[103,...][1153,...]`，左右余量各 103px | 居中成立 |
+
+根因：`wrapContentWidth(align)` 是"把内容包紧，再在**自己占到的宽度**里对齐"。没有谁逼它占满父宽时，
+它占到的就等于内容宽 ⇒ 对齐量恒为 0。`fillMaxWidth()` 先撑到父给的最大宽，后面才有 206px 可以分。
+这条在 8cc2a44 的提交信息里被我写成"顺序反过来就对了"，**而且写进了代码注释**——
+一个自信的错注释比没注释更贵：下一个改这里的人会照它再错一遍。现在注释里放的是上面这张表。
+
+EXPANDED 档也顺手量了：`wm density 200` ⇒ 窗口 1004dp ⇒ 限宽 840dp = 1050px，
+同一份 dump 按 840dp@200dpi 口径判 ⇒ `left=103 / right_margin=103`。
+（这里有个巧合要写明白：600dp@280dpi 与 840dp@200dpi 都等于 1050px，所以量具必须**显式传档**，
+用默认参数会"碰巧对"——把 `measure_centering.py` 按 600dp@200dpi 判同一份 dump 就会报出
+"居中不成立"，因为它挑中的是另一个 750px 节点。）
+
+**二、量自己 App 的几何，必须先把自家无障碍服务关掉。**
+本 App 的 `PriceMonitorService` 一旦 Bound，`uiautomator dump` 对**自己的** MainActivity 也拿不到根节点
+（`ERROR: null root node returned by UiTestAutomationBridge`，`--compressed` 同样失败，
+`mCurrentFocus` 确认就是它、屏幕 Awake）。`settings delete secure enabled_accessibility_services` 之后
+立刻 dump 成功。机制未定性（服务抢了 UiAutomation，还是它自己的悬浮窗成了 active window），
+但操作规则确定：**几何用关服务的时机量，浮窗用开服务的时机截图**。
+
+**三、这条量具自己骗过我一次，所以加了两道闸。**
+`am start -n com.pricelens.dev/com.pricelens.MainActivity` 的组件名是错的（真名 `.ui.main.MainActivity`），
+而输出被 `>/dev/null` 吃掉 ⇒ 前台还是留在屏幕上的**京东商详页**，我却据此打印出一条自信的"居中不成立"。
+现在 ① `verify-final.sh center` 先回读 `topResumedActivity` 必须含 `.dev`；
+② `measure_centering.py` 扫 `resource-id` 的包名前缀，见到别家包名直接 `exit 3`。
+写 ② 时先按 `pkg/id/` 匹配过——**uiautomator 的格式是 `pkg:id/`（冒号）**，
+那个正则会让这道闸静默失效，是拿一份真·京东 dump 做正对照才暴露的。
+
+**四、浮窗两条 CTA 并排会把中文文案折成"识别到标 / 题 · 点击"。**
+真机截图（`E:/dev/pl-builds/shots/jd_panel_expanded.png`）里两条 14~16 字的按钮在 280dp 面板里
+各折两行、还在词中间断开；`weight(1f)`/`weight(1.4f)` 那个比例是当初凑的，没人复核过。
+改成竖排各占一行（主行动填充在上、次行动描边在下），一行放得下，主次由形态与位置表达。
+面板窗口两个方向都是 `WRAP_CONTENT`（`OverlayManager.kt:519-520`），所以变高不会被裁。
+
+**五、回到真机原生分辨率，才发现 b1b9c8f 那次"胶囊挤压修复"只是把病灶换了个位置。**
+上面第三、四条的取证全在 `wm density 280`（717dp 窗口）下做，胶囊在那里是**正常**的。
+把设备恢复成原生 560dpi（360dp 手机本档）再进同一条商详页，实拍 `shots/detail_after_back.png`：
+胶囊里价格那格被挤成一个 **"…"**，只剩「收起 ×」两个动作。
+成因链完整摊开是这样：
+1. 折叠胶囊宽度上限的老规则是 `min(280dp, 屏宽 × 0.4)` —— 那个 **0.4 是当年随手写的凑数比例**，
+   在 360dp 上把胶囊压到 144dp；
+2. 而"页面价 ¥11,579 + 收起 + ×"实际需要 ~200dp；
+3. b1b9c8f 给价格 `weight(1f, fill = false)` 是为了"宽度不够时先缩价格，别把按钮挤出可视区"——
+   它确实保住了按钮，但也让价格**可以被缩到零**，于是症状从"按钮被裁"变成"价格变省略号"；
+4. 最扎心的是这条在 CI 与本地门禁里都是**绿的**：`OverlayMetricsTest` 当年把
+   `capsuleMaxWidthDp(360) == 144` 当成期望值钉住了。**测试钉住的正是病灶本身。**
+
+处置：折叠态与展开态**共用同一条宽度上限**（`capsuleMaxWidthDp` 直接委托 `panelContentMaxWidthDp`），
+0.4 那个比例删掉；测试改成钉"360dp 拿到 280、240dp 窗口跟着收到 216、两态永远相等"。
+连带一条纪律：**响应式规则不许只在伪报的大分辨率下看过**——那正好掩盖手机本档；
+以后凡是改 `*MaxWidthDp` 这类按窗口宽走的判据，必须"原生档 + 伪报档"各拍一张。

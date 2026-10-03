@@ -35,12 +35,19 @@ class OverlayMetricsTest {
     }
 
     @Test
-    fun `capsule width follows the screen only up to the panel content width`() {
-        assertEquals(144, capsuleMaxWidthDp(360))
-        // 平板上不再跟着整块屏长：旧写法这里是 512
+    fun `capsule shares the panel's width budget so the price is never squeezed to an ellipsis`() {
+        // 这条测试**曾经钉着的是病灶**：旧规则 `min(280, 屏宽×0.4)` 在 360dp 手机上给 144dp，
+        // 而"页面价 ¥11,579 + 收起 + ×"需要 ~200dp ⇒ 真机把价格挤成一个"…"
+        // （2026-10-04 PLB110 实拍 shots/detail_after_back.png）。当时这条是**绿的**。
+        // 现在折叠态与展开态共用 [panelContentMaxWidthDp]：手机本档拿到的是设计上限 280。
+        assertEquals(PANEL_CONTENT_MAX_DP, capsuleMaxWidthDp(360))
         assertEquals(PANEL_CONTENT_MAX_DP, capsuleMaxWidthDp(1280))
-        // 窄到 0.4 倍屏宽都不够放一枚胶囊时按下限走，不留空条
-        assertEquals(120, capsuleMaxWidthDp(240))
+        // 窗口真的窄时跟着收（分屏/折叠半屏），与面板同一条曲线，不留两个版本
+        assertEquals(216, capsuleMaxWidthDp(240))
+        assertEquals(capsuleMaxWidthDp(240), panelContentMaxWidthDp(240))
+        assertEquals(capsuleMaxWidthDp(360), panelContentMaxWidthDp(360))
+        // 再窄也留可读下限，而不是算出 0 或负数
+        assertEquals(120, capsuleMaxWidthDp(120))
     }
 
     @Test

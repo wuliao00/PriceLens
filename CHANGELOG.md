@@ -18,6 +18,18 @@
   折叠屏展开与平板下内容限宽居中；手机档返回"没有上限"而不是"一个很大的上限"，排版逐像素不变
 - **小组件按高度决定行数**（`WidgetLayout.kt`）：`SizeMode.Exact` 下拖扁不再把第三行裁半截；
   阈值由"内距 12dp×2 + 16sp 行高 24dp"派生，4x2 承诺形态（minHeight 110dp）仍是 3 行
+- **找券统一理解层**（`com.pricelens.coupon`，V1）：`CouponSlot`（券）与 `PriceSlots`（商品价格）
+  **拆成两个类型**，"到手价被当成券面额"从类型上不可能再发生；金额角色只看"数字之前、离数字最近的词"
+  （`满4999减300` 两个数字各自判对）；状态/范围按词表判、判不出返回 UNKNOWN 而**不默认**；
+  三入口（剪贴板 / 社区帖 / 无障碍节点）产出同一个 `Extraction`，只有节点入口带 `nodePath`。
+  本版**不上任何模型**，`ExtractorKind` 只产出 RULE
+- **找券评测量具**（`tools/eval_coupons.py` + `tools/golden/coupons.jsonl` 54 条 + CI 门禁）：
+  按 source 出 P/R/F1 与 slot 错误 TOP；CI 跑"golden vs golden 自反性 F1=1.0"，
+  golden 的 raw 只允许从已有真机夹具里逐字节取（控制面复核：54 条全部可溯源，0 条编造）
+- **端侧 AI 的接缝与准入策略**（`coupon/ai/`）：`FallbackExtractor` 契约（`extract` 返回 null 只表示
+  "我没参与"）、确定性跨候选共识实现（同模板重复命中不算共识；并列取较小面额；冲突保留全部取值只降置信）、
+  `OnDeviceAiPolicy` 七标量纯策略（默认关 → 机型 RAM → AI 预算 → 电量 → 空闲内存 → 计费网络），
+  以及 prompt 模板与 GBNF 约束解码资产。**本版不 vendor 模型或 .so**（本机编译不了也验不了机）
 
 ### 变更
 - **浮窗尺寸收进单一真相源**（`OverlayMetrics.kt`）：窗口宽 = 内容宽 + 左右外圈**算出来**（值仍是 304），
@@ -27,6 +39,19 @@
   到手价数字滚动从 500ms 收进 `PriceRoll`(350ms)，骨架 1500ms 有令牌 `ShimmerSweep`（`Motion.kt` 的
   "唯一仍在的历史例外"那条注释随之作废）
 - 桌面端 `components.css` 5 个游离在 `--fs-*` 之外的裸字号并入令牌（新增 `--fs-hero/amount/price/subtitle`，值不变）
+- **折叠胶囊与展开面板共用同一条宽度上限**：`capsuleMaxWidthDp` 不再自己算 `屏宽 × 0.4`
+  （那个 0.4 是没人复核过的凑数比例，在 360dp 手机上把胶囊压到 144dp，而"页面价 ¥11,579 + 收起 + ×"
+  需要 ~200dp ⇒ 价格被挤成一个"…"）。现在两态恒等，窄窗口一起收
+- **浮窗两条 CTA 从并排改竖排各占一行**：并排 + `weight(1f)/weight(1.4f)` 时两条 14~16 字中文
+  在 280dp 面板里各折两行、还在词中间断开（"识别到标 / 题 · 点击"）；主次改由"填充在上 / 描边在下"表达，
+  那个 1 : 1.4 的权重比随之删掉
+
+### 修正的既有说法（同一批里我自己写错的部分）
+- "MEDIUM 限宽 600dp **居中**"这句在 §9.5 里是错的：真机只支持"限宽"这一半。
+  居中连修两版都不成立（`widthIn→…→wrapContentWidth` 与 `wrapContentWidth→widthIn` 量到同一条
+  `[0,…][1050,…]`），第三版 `fillMaxWidth` 在前才成立（`left=103 / right_margin=103`）。
+  而 8cc2a44 的提交信息与代码注释都自信地写着"顺序反过来就对了" —— 详见 §9.8
+- `OverlayMetricsTest` 里 `capsuleMaxWidthDp(360) == 144` 这条**绿的断言钉的是病灶**，已改
 
 ### 修正的审计结论（写下来免得下次又照着做）
 - 几何（bounds）判据"商详页结构优先"**被 8 棵真机原树否掉**：首页底部导航栏与商详底栏同形，

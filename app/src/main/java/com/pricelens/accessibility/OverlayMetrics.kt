@@ -1,7 +1,5 @@
 package com.pricelens.accessibility
 
-import kotlin.math.roundToInt
-
 /**
  * 浮窗（面板 / 胶囊 / 小圆球）的**尺寸真相源**：纯数字 + 纯函数，零 Compose / WindowManager 依赖。
  *
@@ -75,13 +73,19 @@ fun capsuleCornerDp(): Int = CAPSULE_MAX_HEIGHT_DP / 2
 /**
  * 折叠态胶囊的宽度上限（dp）。
  *
- * 旧写法是 `screenWidthDp * 0.4f` 一个表达式写完：在小屏（320dp）上它比内容需要窄很多，
- * 在平板/分屏上又跟着**整块屏幕**长（`LocalConfiguration` 给的是设备屏宽，不是本窗口的宽），
- * 于是"窗口 304dp、胶囊按 1280×0.4=512dp 排"这种自己跟自己打架的形态。
- * 现在两个上界都取：屏宽比例 与 [PANEL_CONTENT_MAX_DP] 里的较小者。
+ * **与展开面板共用同一条上限**（[panelContentMaxWidthDp]），这里不再单独定规则 —— 理由是真机撞出来的：
+ * 旧写法是 `minOf(PANEL_CONTENT_MAX_DP, screenWidthDp * 0.4f)`，那个 0.4 是从没人复核过的凑数比例，
+ * 在 360dp 手机上它把胶囊压到 **144dp**，而"页面价 ¥11,579 + 收起 + ×"需要 ~200dp，
+ * 于是价格那格被 `weight(fill=false)` 一路挤成一个"…"（2026-10-04 PLB110 实拍，
+ * `E:/dev/pl-builds/shots/detail_after_back.png`）。
+ * 更讽刺的是这条**在我自己写的单测里是绿的**：`OverlayMetricsTest` 当年把
+ * `capsuleMaxWidthDp(360) == 144` 钉成了"期望值"——量具钉住了病灶。
+ *
+ * 顺带一条取证纪律：这一批在 `wm density 280`（717dp 窗口）下看胶囊是**正常**的，
+ * 因为 0.4×717=286 已经撞到 280 上限；**伪报大分辨率会掩盖手机本档的问题**，
+ * 所以响应式规则必须在本档（真机原生 density）也看一次。
  */
-fun capsuleMaxWidthDp(screenWidthDp: Int): Int =
-    minOf(PANEL_CONTENT_MAX_DP, (screenWidthDp * 0.4f).roundToInt()).coerceAtLeast(120)
+fun capsuleMaxWidthDp(screenWidthDp: Int): Int = panelContentMaxWidthDp(screenWidthDp)
 
 /**
  * 展开面板在本窗口里最多能占多宽（dp）。
