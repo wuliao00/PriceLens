@@ -13,9 +13,9 @@ import androidx.compose.ui.unit.dp
  *     Canvas 描线进度、drawBehind 高光、Surface.shadowElevation。绝不喂宽高/间距/weight 等布局属性。
  *  2. 单次转场时长 ≤ 350ms：下面每个令牌都在铁律内。
  *     - 曲线入场的旧 500ms 例外已收到 [MotionDurations.ChartReveal] = 350ms，不再是例外；
- *     - 唯一仍在的历史例外：ui/coupon/CouponScreen.NetPriceHeader 到手价 countUp = **500ms**
- *       （该区本批次归其他代理，只读未改；收口时改用 [MotionDurations.PriceRoll]）；
- *     - 循环指示类不算转场：骨架 shimmer 是 1500ms 无限循环（ShimmerSkeleton），
+ *     - 到手价 countUp 的 500ms 例外已在 2026-10-03 收进 [PriceRoll]（`ui/product/ProductCouponSection`），
+ *       清单里从此没有"转场超时"的例外；
+ *     - 循环指示类不算转场：骨架 shimmer 是 [ShimmerSweep]=1500ms 无限循环（有令牌但不受 ≤350 约束），
  *       图片占位→成图由 Coil 自己 crossfade（默认 300ms，也在上限内）。
  *  3. 禁 bounce/overshoot：转场一律 [PriceLensEasing]（FastOutSlowIn）或同曲线的别名 [RevealEasing]；
  *     唯一的非转场例外是骨架高光的 LinearEasing（匀速平移，本就没有加减速，谈不上弹跳）。
@@ -47,6 +47,15 @@ object MotionDurations {
 
     /** 列表项 stagger 参与累加的级数上限：第 8 项之后延迟封顶（最迟 280ms 起播） */
     const val StaggerCap = 8
+
+    /**
+     * 骨架高光的**循环**周期：1500ms。
+     *
+     * 它不受上面"单次转场 ≤350ms"的铁律约束，因为它根本不是转场 —— 匀速平移一整遍骨架，
+     * 停了就没有下一轮。单独给个名字是为了让 `ShimmerSkeleton` 里没有裸数字，
+     * 而不是为了把它当成转场时长来调（改它只会让骨架看起来更忙或更呆）。
+     */
+    const val ShimmerSweep = 1500
 }
 
 /**
@@ -79,4 +88,16 @@ object Elevations {
 
     /** 悬浮层（价格悬浮窗/覆盖层）：最高层级 */
     val Overlay: Dp = 12.dp
+
+    /**
+     * 悬浮层的**着色**高度（tonalElevation）：胶囊 / 展开面板 / 小圆球三处一直是同一个 4dp，
+     * 以前各写一份字面量。注意它和 [Overlay] 不是一回事：Overlay 是投影，这个是表面染色。
+     */
+    val OverlayTonal: Dp = 4.dp
+
+    /** 折叠胶囊的投影：比展开面板浅一档，折叠态不该抢视线 */
+    val OverlayCapsule: Dp = 6.dp
+
+    /** 展开面板的投影：内容多、要读，比胶囊重一档但仍低于小圆球 [Overlay] */
+    val OverlayPanel: Dp = 8.dp
 }

@@ -66,12 +66,27 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pricelens.R
 import com.pricelens.accessibility.BALL_DIAMETER_DP
+import com.pricelens.accessibility.BALL_H_PADDING_DP
+import com.pricelens.accessibility.BALL_V_PADDING_DP
+import com.pricelens.accessibility.CAPSULE_ICON_DP
+import com.pricelens.accessibility.CAPSULE_MAX_HEIGHT_DP
+import com.pricelens.accessibility.CHIP_GAP_DP
+import com.pricelens.accessibility.CHIP_H_PADDING_DP
+import com.pricelens.accessibility.CHIP_V_PADDING_DP
+import com.pricelens.accessibility.COLLAPSE_BUTTON_CORNER_DP
+import com.pricelens.accessibility.FORM_ENTER_OFFSET_DP
 import com.pricelens.accessibility.OverlayMode
 import com.pricelens.accessibility.PriceBasis
 import com.pricelens.accessibility.PriceEvents
+import com.pricelens.accessibility.ROW_GAP_DP
 import com.pricelens.accessibility.ShopPlatform
+import com.pricelens.accessibility.WINDOW_GUTTER_DP
 import com.pricelens.accessibility.ballLabel
+import com.pricelens.accessibility.capsuleBandDp
+import com.pricelens.accessibility.capsuleCornerDp
+import com.pricelens.accessibility.capsuleMaxWidthDp
 import com.pricelens.accessibility.isDrag
+import com.pricelens.accessibility.panelContentMaxWidthDp
 import com.pricelens.data.local.entity.WatchIdentityEntity
 import com.pricelens.data.remote.ManmanbuyApi
 import com.pricelens.data.repository.OverlayBundle
@@ -207,7 +222,7 @@ fun PriceOverlay(
             val scale = 0.45f + 0.55f * v
             scaleX = scale
             scaleY = scale
-            translationY = (1f - progress) * 12.dp.toPx()
+            translationY = (1f - progress) * FORM_ENTER_OFFSET_DP.dp.toPx()
         }
     ) {
         when (shown) {
@@ -292,28 +307,33 @@ private fun PanelForm(
                 }
             }
             .pointerInput(Unit) {
-                val capsuleBandPx = (12.dp + 48.dp).toPx()
+                val capsuleBandPx = capsuleBandDp().dp.toPx()
                 detectTapGestures(onTap = { offset ->
                     // 只认胶囊那一条（含 12dp 外圈）；面板区域的点击仍归面板内控件
                     if (offset.y <= capsuleBandPx) onToggleExpanded(!expanded)
                 })
             }
-            .padding(12.dp)
+            .padding(WINDOW_GUTTER_DP.dp)
     ) {
         // ---------- 折叠胶囊（常驻，无 15s 自动消失；手动 X 关闭，「收起」变小球） ----------
-        val capsuleMaxWidth = (LocalConfiguration.current.screenWidthDp * 0.4f).dp
+        val viewportWidthDp = LocalConfiguration.current.screenWidthDp
         Surface(
             modifier = Modifier
-                .widthIn(max = capsuleMaxWidth)
-                .heightIn(max = 48.dp),
-            shape = RoundedCornerShape(24.dp),
+                .widthIn(max = capsuleMaxWidthDp(viewportWidthDp).dp)
+                .heightIn(max = CAPSULE_MAX_HEIGHT_DP.dp),
+            shape = RoundedCornerShape(capsuleCornerDp().dp),
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 4.dp,
-            shadowElevation = 6.dp
+            tonalElevation = Elevations.OverlayTonal,
+            shadowElevation = Elevations.OverlayCapsule
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
+                modifier = Modifier.padding(
+                    start = Dims.SpacingM,
+                    end = Dims.SpacingXS,
+                    top = ROW_GAP_DP.dp,
+                    bottom = ROW_GAP_DP.dp
+                )
             ) {
                 Text(
                     text = "$basisLabel ${PriceFormatter.format(detected.price)}",
@@ -323,13 +343,13 @@ private fun PanelForm(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.width(2.dp))
+                Spacer(Modifier.width(CHIP_GAP_DP.dp))
                 // PL-29 收起入口：始终在这一条里（展开/折叠都在），不新增设置开关
                 TextButton(
                     onClick = onCollapse,
                     modifier = Modifier.minimumInteractiveComponentSize(),
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    contentPadding = PaddingValues(horizontal = CHIP_H_PADDING_DP.dp, vertical = 0.dp),
+                    shape = RoundedCornerShape(COLLAPSE_BUTTON_CORNER_DP.dp)
                 ) {
                     Text(stringResource(R.string.ovl_ball_collapse), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
@@ -337,7 +357,7 @@ private fun PanelForm(
                     Icon(
                         Icons.Filled.Close,
                         contentDescription = stringResource(R.string.ovl_cd_close),
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(CAPSULE_ICON_DP.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -347,19 +367,19 @@ private fun PanelForm(
         // ---------- 展开 5 行面板：缺数据的行整行不出现 ----------
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
+            enter = fadeIn(tween(MotionDurations.Standard)) + expandVertically(tween(MotionDurations.Standard)),
+            exit = fadeOut(tween(MotionDurations.Standard)) + shrinkVertically(tween(MotionDurations.Standard))
         ) {
             Surface(
                 modifier = Modifier
-                    .padding(top = 6.dp)
-                    .widthIn(max = 280.dp),
+                    .padding(top = ROW_GAP_DP.dp)
+                    .widthIn(max = panelContentMaxWidthDp(viewportWidthDp).dp),
                 shape = RoundedCornerShape(Dims.CardCorner),
                 color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 4.dp,
-                shadowElevation = 8.dp
+                tonalElevation = Elevations.OverlayTonal,
+                shadowElevation = Elevations.OverlayPanel
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(Dims.SpacingM)) {
                     // ① 口径 + 价格 + 标题
                     Text(
                         text = "$basisLabel ${PriceFormatter.format(detected.price)}",
@@ -373,7 +393,7 @@ private fun PanelForm(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(ROW_GAP_DP.dp))
 
                     // ② 历史位置（防错配硬规则：仅确定性 ID 才允许出现）
                     val low = if (detected.itemId != null) lowestWithinDays(bundle?.history, 90) else null
@@ -389,7 +409,7 @@ private fun PanelForm(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(Dims.SpacingXS))
                     }
 
                     // ③ 多平台同款 3 枚胶囊（同上，仅确定性 ID）
@@ -401,22 +421,22 @@ private fun PanelForm(
                             color = MaterialTheme.colorScheme.outline
                         )
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.padding(top = 2.dp)
+                            horizontalArrangement = Arrangement.spacedBy(ROW_GAP_DP.dp),
+                            modifier = Modifier.padding(top = CHIP_GAP_DP.dp)
                         ) {
                             OverlayChip("$ownPlatform ${PriceFormatter.format(detected.price)}", MaterialTheme.colorScheme.primary)
                             platforms.take(2).forEach {
                                 OverlayChip("${it.platform} ${PriceFormatter.format(it.price)}", MaterialTheme.colorScheme.tertiary)
                             }
                         }
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(ROW_GAP_DP.dp))
                     }
 
                     // ④ 券（门槛 0 = "无门槛"；TITLE_ONLY 命中时同样标仅供参考）
                     val coupons = bundle?.coupons.orEmpty()
                     if (coupons.isNotEmpty()) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(ROW_GAP_DP.dp)
                         ) {
                             coupons.take(2).forEach { c ->
                                 val cond = if (c.threshold <= 0) {
@@ -435,10 +455,10 @@ private fun PanelForm(
                                 text = stringResource(R.string.ovl_platforms_note),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.padding(top = 2.dp)
+                                modifier = Modifier.padding(top = CHIP_GAP_DP.dp)
                             )
                         }
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(ROW_GAP_DP.dp))
                     }
 
                     // ⑤ 底部灰字：来源 + 数据时间 + 非实时（必须项；stale 再补一行降级提示）
@@ -479,13 +499,13 @@ private fun PanelForm(
                             color = MaterialTheme.colorScheme.outline
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Dims.SpacingS))
 
                     // CTA：确定性 ID → 查历史价；仅标题命中 → 降级为"在 App 内搜索"
                     when (overlayActionFor(detected, identity, OverlayIdentityPolicy.canConfirm(detected.title, detected.platform))) {
                         OverlayAction.VIEW_HISTORY -> PrimaryCta(stringResource(R.string.overlay_cta), onCompare)
                         OverlayAction.COMPARE_ONLY -> PrimaryCta(stringResource(R.string.ovl_title_only_cta), onCompare)
-                        OverlayAction.CONFIRM_AND_COMPARE -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OverlayAction.CONFIRM_AND_COMPARE -> Row(horizontalArrangement = Arrangement.spacedBy(ROW_GAP_DP.dp)) {
                             OutlinedButton(
                                 onClick = onCompare,
                                 modifier = Modifier.weight(1f),
@@ -623,13 +643,13 @@ private fun BallForm(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.primary.copy(alpha = BALL_SURFACE_ALPHA),
             contentColor = MaterialTheme.colorScheme.onPrimary,
-            tonalElevation = 4.dp,
+            tonalElevation = Elevations.OverlayTonal,
             shadowElevation = Elevations.Overlay
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(horizontal = 3.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = BALL_H_PADDING_DP.dp, vertical = BALL_V_PADDING_DP.dp)
             ) {
                 Text(
                     text = priceLine,
@@ -673,7 +693,7 @@ private fun OverlayChip(text: String, tone: Color) {
             text = text,
             style = MaterialTheme.typography.labelSmall,
             color = tone,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = Dims.SpacingS, vertical = CHIP_V_PADDING_DP.dp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

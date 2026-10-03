@@ -53,7 +53,7 @@ fun ShimmerSkeleton(modifier: Modifier = Modifier) {
         initialValue = -1f,
         targetValue = 2f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
+            animation = tween(MotionDurations.ShimmerSweep, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         )
     )

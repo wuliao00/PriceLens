@@ -66,8 +66,13 @@ import kotlinx.coroutines.withContext
  */
 object OverlayManager {
 
-    /** 面板窗口的宽度上限（dp）= PriceOverlay 的 `widthIn(max = 280.dp)` + 左右各 12dp 外圈 */
-    private const val PANEL_MAX_WIDTH_DP = 304f
+    /**
+     * 面板窗口的宽度上限（dp）。**不再是这里手写的一个数**：
+     * 它由 [panelWindowMaxWidthDp] 从"内容最宽 + 左右外圈"算出来，而那两个输入同时是
+     * `PriceOverlay` 排版用的数 —— 以前这条关系只活在注释里，改 UI 侧看不见，
+     * 窗口就会把面板右边缘静默裁掉（只在数据最长的时候露出来）。
+     */
+    private val PANEL_MAX_WIDTH_DP: Float = panelWindowMaxWidthDp().toFloat()
 
     /** 球形态下"离开商详"的宽限期：门控一闪即断不立刻拆窗（见 [onLeftProductPage]） */
     private const val TEARDOWN_GRACE_MS = 1500L

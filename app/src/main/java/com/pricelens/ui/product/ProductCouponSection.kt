@@ -47,6 +47,8 @@ import com.pricelens.ui.components.ShimmerList
 import com.pricelens.ui.overview.SearchViewModel
 import com.pricelens.ui.theme.Dims
 import com.pricelens.ui.theme.LocalSemanticColors
+import com.pricelens.ui.theme.MotionDurations
+import com.pricelens.ui.theme.PriceLensEasing
 import com.pricelens.ui.theme.PriceType
 import com.pricelens.util.PriceFormatter
 import kotlinx.coroutines.launch
@@ -147,7 +149,7 @@ private fun NetPriceHeader(netPrice: Double) {
     LaunchedEffect(netPrice) { target = 1f }
     val progress by animateFloatAsState(
         targetValue = target,
-        animationSpec = tween(500),
+        animationSpec = tween(MotionDurations.PriceRoll, easing = PriceLensEasing),
         label = "netPriceCountUp"
     )
     val display = netPrice * progress
