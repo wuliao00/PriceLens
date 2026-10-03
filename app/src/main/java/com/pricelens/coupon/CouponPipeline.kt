@@ -29,7 +29,8 @@ import com.pricelens.coupon.slots.of
  *     —— 治金额槽位混淆：`本单可减1500` 走 `减` ⇒ DISCOUNT，不会被当成降幅，
  *     而 `到手价¥92.9` 走 `到手` ⇒ FINAL，永远不会变成券面额；
  *  3. DISCOUNT / THRESHOLD ⇒ 券槽位；FINAL / LIST / DROP ⇒ 价格槽位（两个类型物理分开）；
- *  4. 一句里出现多个面额 ⇒ 拆成多张券，门槛按"左邻"绑定（治多券混并）；
+ *  4. 一句里出现多个面额 ⇒ 拆成多张券，门槛按"左邻"绑定（治多券混并）；每张券的**范围只看自己那一段**
+ *     （见 [scopeOf]：否则"店铺券满199减20，品类券满300减50"拆成两张后仍共用"店铺"这个范围）；
  *  5. 状态 / 范围按词表判（治状态词失明）；
  *  6. 判不出角色的数字**不产生任何槽位**（宁缺毋滥），低置信也**不丢弃**。
  *
@@ -91,7 +92,7 @@ internal object CouponPipeline {
         val hits = templates.match(clause.text)
         val declared = hits.flatMap { it.amounts }.associateBy { it.start }
         val state = stateOf(hits, clause, vocabulary)
-        val scope = ScopeWords.of(clause.text, clause.ancestors, vocabulary)
+        val clauseScope = ScopeWords.of(clause.text, clause.ancestors, vocabulary)
         val expiry = expiryOf(clause.text)
         val code = CODE.find(clause.text)?.groupValues?.get(1)
         val url = Links.decode(clause.text).firstOrNull()?.value
@@ -102,13 +103,13 @@ internal object CouponPipeline {
                 val start = found.range.first
                 val value = found.value.replace(",", "").toDoubleOrNull() ?: continue
                 when (val role = declared[start]?.role ?: AmountRole.of(clause.text, start, vocabulary)) {
-                    AmountRole.DISCOUNT, AmountRole.THRESHOLD -> discounts.add(AmountValue(value, start, role))
-                    AmountRole.FINAL, AmountRole.LIST, AmountRole.DROP -> prices.add(AmountValue(value, start, role))
+                    AmountRole.DISCOUNT, AmountRole.THRESHOLD -> discounts.add(AmountValue(value, start, found.range.last + 1, role))
+                    AmountRole.FINAL, AmountRole.LIST, AmountRole.DROP -> prices.add(AmountValue(value, start, found.range.last + 1, role))
                     null -> Unit
                 }
             }
         }
-        val slots = slotsOf(discounts, clause, state, scope, expiry, code, url, vocabulary, hits)
+        val slots = slotsOf(discounts, clause, state, clauseScope, expiry, code, url, vocabulary, hits)
         return ClauseOutcome(slots, priceOf(prices), confidenceOf(hits, slots))
     }
 
@@ -121,7 +122,7 @@ internal object CouponPipeline {
         values: List<AmountValue>,
         clause: Clause,
         state: CouponState,
-        scope: CouponScope,
+        clauseScope: CouponScope,
         expiry: String?,
         code: String?,
         url: String?,
@@ -130,30 +131,73 @@ internal object CouponPipeline {
     ): List<CouponSlot> {
         val out = ArrayList<CouponSlot>()
         var pending: AmountValue? = null
+        var consumedEnd = 0
         for (value in values.sortedBy { it.start }) {
             if (value.role == AmountRole.THRESHOLD) {
-                pending?.let { out.add(slotOf(null, it.value, clause, state, scope, expiry, code, url)) }
+                pending?.let {
+                    val segment = segmentOf(clause, consumedEnd, it.end)
+                    val scope = scopeOf(segment, clauseScope, vocabulary)
+                    out.add(slotOf(null, it.value, clause, segment, state, scope, expiry, code, url))
+                }
                 pending = value
                 continue
             }
-            out.add(slotOf(value.value, pending?.value, clause, state, scope, expiry, code, url))
+            val stop = maxOf(value.end, pending?.end ?: value.end)
+            val segment = segmentOf(clause, consumedEnd, stop)
+            val scope = scopeOf(segment, clauseScope, vocabulary)
+            out.add(slotOf(value.value, pending?.value, clause, segment, state, scope, expiry, code, url))
+            consumedEnd = stop
             pending = null
         }
         val evidence = hits.isNotEmpty() || CouponHints.looksLikeCouponText(clause.text, vocabulary)
-        pending?.let { if (evidence) out.add(slotOf(null, it.value, clause, state, scope, expiry, code, url)) }
+        pending?.let {
+            if (evidence) {
+                val segment = segmentOf(clause, consumedEnd, it.end)
+                val scope = scopeOf(segment, clauseScope, vocabulary)
+                out.add(slotOf(null, it.value, clause, segment, state, scope, expiry, code, url))
+            }
+        }
         return out
+    }
+
+    /** 这张券**自己那一段**原文（上一张券结束处 → 本张券最后一个数字） */
+    private fun segmentOf(clause: Clause, from: Int, to: Int): String {
+        val length = clause.text.length
+        val start = from.coerceIn(0, length)
+        val stop = to.coerceIn(start, length)
+        val segment = clause.text.substring(start, stop).trim().trimStart('，', ',', '、', '；', ';')
+        // 段为空（两张券的数字紧挨着）时退回整句：宁可给长一点的证据，也不给空串，
+        // 因为空串在展示层与错例导出里都会被读成"这句没内容"而不是"这段没内容"。
+        // 剥掉段首的标点：它是**上一张券留下的分隔符**，不属于这张券，留在证据句里
+        // 会让展示层出现"，品类券满300减50"这种半截句（用户会以为抽错了句子）。
+        return if (segment.isEmpty()) clause.text else segment
+    }
+
+    /**
+     * 这张券的范围：只看**它自己那一段**（上一张券之后到本张券的最后一个数字），段里判得出就用段的。
+     *
+     * 为什么不能整句判：`店铺券满199减20，品类券满300减50，平台券满500减100` 已经被数字配对拆成
+     * 三张独立的券了，但按整句判范围时第一个词（店铺）会染到后两张 —— 范围错的券和没拆开的券
+     * 一样会误导"能不能叠"。段里判不出（范围词写在数字后面，如 `满199减20的店铺券`）才退回整句，
+     * 保证"拆多张"不会把单张券的范围从 SHOP 判成 UNKNOWN（正/反例见 CouponPipelineTest）。
+     */
+    private fun scopeOf(segment: String, clauseScope: CouponScope, vocabulary: CouponVocabulary): CouponScope {
+        if (segment.isBlank()) return clauseScope
+        val local = ScopeWords.of(segment, emptyList(), vocabulary)
+        return if (local == CouponScope.UNKNOWN) clauseScope else local
     }
 
     private fun slotOf(
         discount: Double?,
         threshold: Double?,
         clause: Clause,
+        segment: String,
         state: CouponState,
         scope: CouponScope,
         expiry: String?,
         code: String?,
         url: String?
-    ): CouponSlot = CouponSlot(discount, threshold, scope, state, expiry, code, url, clause.nodePath)
+    ): CouponSlot = CouponSlot(discount, threshold, scope, state, expiry, code, url, segment, clause.nodePath)
 
     /** 状态：模板命中的状态词优先（有 id 可追溯），没有再按词表判整句 + 上下文 */
     private fun stateOf(hits: List<TemplateHit>, clause: Clause, vocabulary: CouponVocabulary): CouponState {
@@ -203,8 +247,8 @@ internal object CouponPipeline {
     /** 一句的处理结果（三个字段分别进 [Extraction.coupons] / [Extraction.price] / 置信） */
     internal data class ClauseOutcome(val slots: List<CouponSlot>, val price: PriceSlots, val confidence: Double)
 
-    /** 句内一个带角色的数字 */
-    internal data class AmountValue(val value: Double, val start: Int, val role: AmountRole)
+    /** 句内一个带角色的数字（[end] 是"数字之后第一个下标"，配对时用它切出每张券自己的那段） */
+    internal data class AmountValue(val value: Double, val start: Int, val end: Int, val role: AmountRole)
 }
 
 /** 来源可靠度：剪贴板是用户自己复制的原文，节点树是二手呈现，社区帖是别人写的 */

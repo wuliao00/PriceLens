@@ -102,6 +102,13 @@ enum class CouponState {
  * @param nodePath 从无障碍树 root 到该券节点的**子索引链**（只有 PAGE_NODE 入口填）：
  *   核验层要沿路径回点复探（券还在不在、按钮文字变没变），所以这条链必须随槽位一起产出。
  *   文本入口固定为空表 —— 用"只有节点入口非空"这个事实，可以反证三入口确实是同一条流水线。
+ * @param sourceText 抽出这张券的**那一句原文**（规整之后、分句那一段本身）。
+ *   两个下游离不开它：① 展示层要说"这句里读出来的"，用户才知道自己在否掉什么；
+ *   ② 本地错例导出（一键"这条不对"）要写成与 `tools/golden/coupons.jsonl` 同格式的 JSONL，
+ *     而那份格式的第一字段就是原文 —— 没有这个字段，导出的错例回灌不进评测集，
+ *     整条"用户纠错 → golden → 回归门禁"的链子就断在这里。
+ *   注意存的是**规整后**的文本（全角已转半角、零宽已删），与 golden 里逐字节可溯源的 raw 不同，
+ *   导出时要连同入口与 nodePath 一起存，便于回查原树。
  * @param expiry `yyyy-MM-dd`，解析不出来就是 null（**不许猜年份**：真机文案只写"10月8日"时，
  *   补 2026 还是 2027 都是编造，展示层按"期限未知"处理）
  */
@@ -113,6 +120,7 @@ data class CouponSlot(
     val expiry: String?,
     val code: String?,
     val url: String?,
+    val sourceText: String,
     val nodePath: List<Int>
 )
 

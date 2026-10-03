@@ -15,11 +15,23 @@ import com.pricelens.coupon.model.CouponState
  */
 
 /**
- * 判 [numberStart] 处那个数字的角色：**只看数字之前的上下文**，取"离数字最近"的词。
+ * 判 [numberStart] 处那个数字的角色：**只看数字之前、离它最近的那个词**，
+ * 并且**要求那个词与数字之间只隔着"不构成新语义"的字符**。
  *
- * 为什么是"之前 + 最近"而不是"整句里有没有减/满"：`满4999减300` 一句里同时有 THRESHOLD 和
- * DISCOUNT 两个信号，整句判法只能给一个标签，两个数字必有一个被判错。
- * 按"结束下标最大"取词，同下标取**长词**（`无门槛` 压 `门槛`，见词表注释）。
+ * 为什么必须加"只隔着连接符"这一条（2026-10-04 由测试自己撞出来）：
+ * 只按"结束下标最大"取词、不限量距离时，句子里**任何**一个早先出现的角色词会把后面所有数字全认领走 ——
+ * `2026-10-08到期，店铺券满199减20 券码：ABCD1234` 里的 1234 因为 20 多字之前有个 `减`
+ * 被判成 DISCOUNT，凭空多出一张"¥1234 的券"。这不是理论风险：真机券文案里"券码/口令/编号"跟在
+ * 金额后面是常见排版，而多出一张券比少抽一张券更难被发现（它会带着正确的 scope/state 一起出现）。
+ *
+ * 为什么是**字符类**而不是"距离 ≤ N 个字"：距离阈值是照样本凑出来的数（"为什么不是 3？"答不上来），
+ * 而"词与数字之间允许出现什么"是可以逐字列清的 —— 空白、货币符号、`了/至/到/价` 这类连接字。
+ * `券码：ABCD` 里有 `券`、`码`、`：`、字母，任何一条都不在该类里 ⇒ 直接判不出。
+ *
+ * 其余判据不变：
+ *  - `满4999减300` 一句里同时有 THRESHOLD 与 DISCOUNT 两个信号，整句判法只能给一个标签，
+ *    两个数字必有一个被判错 ⇒ 按"离每个数字最近"各自判。
+ *  - 同下标取**长词**（`无门槛` 压 `门槛`，见词表注释）。
  *
  * @param numberStart 数字在 [clause] 中的起始下标（模板命中时就是捕获组的 range.first）
  * @return 判不出返回 null —— 调用方（`CouponPipeline`）据此**不产生**券槽位
@@ -41,8 +53,17 @@ fun AmountRole.Companion.of(clause: String, numberStart: Int, vocabulary: Coupon
             }
         }
     }
-    return best
+    if (best == null) return null
+    return if (ROLE_NUMBER_GLUE.matches(clause.substring(bestEnd, numberStart))) best else null
 }
+
+/**
+ * 角色词与它修饰的数字之间允许出现的字符（**空白、货币符号、连接字**）。
+ *
+ * 这里是字符类而不是词表，所以刻意不进 `CouponVocabulary`：远端规则包该能改"哪些词算面额"，
+ * 但不该能改"词与数字之间能隔什么" —— 后者是本判据不认领远处数字的唯一保证。
+ */
+private val ROLE_NUMBER_GLUE = Regex("[\\s¥￥了至到价]*")
 
 /**
  * 券状态判定：先判整句，判不出再判祖先/同层文案（[ancestors]）。
@@ -97,8 +118,9 @@ object CouponHints {
 
     /**
      * 这句话里的数字**能不能采信**：`12期免息` `晒单返50元红包` `最高返659京豆` 里的数字
-     * 既不是券面额也不是价格（真机京东商详页三种都有，见夹具 jd_detail_*_plb110_20261003.xml）。
-     * 口径与 `PriceNodeMatcher.isPriceExcludedText` 一致并按真机补齐（京豆/销量/库存）。
+     * 既不是券面额也不是价格（真机京东商详页三种都有，见夹具 jd_detail_plb110_20261003.xml）。
+     * 词表与 `PriceNodeMatcher.isPriceExcludedText` **共用同一份**（`PRICE_TEXT_EXCLUDE_WORDS`，
+     * 已转 internal），本包只声明增量：京豆/销量/库存 —— 见 [CouponVocabulary.excludedNumberWords]。
      */
     fun numbersUsable(text: String, vocabulary: CouponVocabulary = CouponVocabulary.DEFAULT): Boolean =
         vocabulary.excludedNumberWords.none { text.contains(it) }
