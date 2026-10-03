@@ -9,7 +9,7 @@ package com.pricelens.coupon.ai
 enum class ExtractionInputKind {
     CLIPBOARD,
     COMMUNITY_POST,
-    PAGE_CLAUSES,
+    PAGE_CLAUSES
 }
 
 /**

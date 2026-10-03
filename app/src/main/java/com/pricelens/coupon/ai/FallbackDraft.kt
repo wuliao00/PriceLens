@@ -36,5 +36,5 @@ enum class ConsensusVerdict {
     FLAT,
 
     /** 槽位有分歧：降置信，并把 [FallbackDraft.conflict] 透出到展示层 */
-    DOWNWEIGHT,
+    DOWNWEIGHT
 }
