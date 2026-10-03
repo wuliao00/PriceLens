@@ -41,6 +41,7 @@ class RealDumpTitleTest {
 
     private val jdDetail = loadRealDump(JD_DUMP)
     private val jdMianfei = loadRealDump(JD_MIANFEI_DUMP)
+    private val guobu = loadRealDump(JD_GUOBU_DUMP)
     private val tbDetail = loadRealDump(TB_DUMP)
     private val jdRule = RuleSet(listOf(loadedBuiltinJdRule()))
 
@@ -48,12 +49,15 @@ class RealDumpTitleTest {
     fun `fixtures are the real device trees and are not budget-truncated`() {
         assertEquals(317, jdDetail.rawNodeCount)
         assertEquals(224, jdMianfei.rawNodeCount)
+        assertEquals(264, guobu.rawNodeCount)
         assertEquals(75, tbDetail.rawNodeCount)
         assertFalse(jdDetail.truncated)
         assertFalse(jdMianfei.truncated)
+        assertFalse(guobu.truncated)
         assertFalse(tbDetail.truncated)
         assertEquals(jdDetail.rawNodeCount, jdDetail.snapshotNodeCount)
         assertEquals(jdMianfei.rawNodeCount, jdMianfei.snapshotNodeCount)
+        assertEquals(guobu.rawNodeCount, guobu.snapshotNodeCount)
         assertEquals(tbDetail.rawNodeCount, tbDetail.snapshotNodeCount)
     }
 
@@ -181,9 +185,35 @@ class RealDumpTitleTest {
         assertFalse(PriceNodeMatcher.isDisplayableTitle(skuLine))
     }
 
+    /**
+     * 第四棵真机树（13:29 雷神 MIX 国补页，264 节点）—— 打脸"规则标题可以无条件优先"。
+     *
+     * 这条页面上规则路径确实命中了（`jd@v2`，也就是「领取补贴购买」收词生效），
+     * 但它抓到的是**促销行** `叠加以旧换新下单，可再减1964元`：17 字、不含冒号、
+     * 不含任何黑名单词，所以 `isDisplayableTitle` 放行。而同一棵树上启发式按分数抓到的是
+     * 真商品名 `自营雷神（ThundeRobot）MIX-G 高性能游戏电竞设计台式电脑mini迷你主机…`。
+     *
+     * 结论：兜底选择器 `^[^¥￥]{10,80}$` 的"BFS 第一个匹配"是**按树序猜**，不是按质量猜；
+     * 规则标题必须与启发式标题比分数（同一把尺 [PriceNodeMatcher.titleScore]）再决定用谁。
+     */
+    @Test
+    fun `real jd subsidy detail prefers the product name over a promo line`() {
+        val outcome = DetectionPipeline.detect(
+            guobu.root, ShopPlatform.JD, JD_PACKAGE, jdRule, JD_DETAIL_ACTIVITY
+        )
+        assertTrue("国补页必须命中（这条同时也是「领取补贴购买」收词的真机判据）：$outcome",
+            outcome is DetectionOutcome.Hit)
+        val detection = (outcome as DetectionOutcome.Hit).detection
+        println("[guobu] 来源=${detection.source.label} 标题=${detection.title}")
+        assertFalse("不许把促销行当商品名：『${detection.title}』", detection.title!!.contains("以旧换新"))
+        assertTrue("必须是商品名：『${detection.title}』", detection.title!!.contains("MIX-G"))
+        assertEquals(11499.0, detection.price.value, 0.001)
+    }
+
     private companion object {
         const val JD_DUMP = "jd_detail_plb110_20261003.xml"
         const val JD_MIANFEI_DUMP = "jd_detail_mianfei_plb110_20261003.xml"
+        const val JD_GUOBU_DUMP = "jd_detail_guobu_plb110_20261003.xml"
         const val TB_DUMP = "tb_detail_plb110_20261003.xml"
         const val JD_PACKAGE = "com.jingdong.app.mall"
         const val TB_PACKAGE = "com.taobao.taobao"

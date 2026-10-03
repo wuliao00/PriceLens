@@ -102,19 +102,30 @@ object DetectionPipeline {
      * 整条规则判为未命中 —— 与启发式路径同一条口径："读不出可信标题就不算这一页有可展示的
      * 单商品"，宁可晚一帧再弹，也不弹一个错标题。
      *
-     * 真机已验证：加载完成后的京东树规则标题本来就是对的（[RealDumpTitleTest] 第二条用例），
-     * 所以这里只在"规则抓到外壳文案"时才多跑一次 [extractTitle]，正常路径不付额外开销。
-     *
      * 第二棵真机树（10:42 雷神猎刃S）补掉了这道闸的第二个形态：规则抓到
      * `已选：【免费升级24G】猎刃S 14代i5HX|…`（SKU 选择态，带冒号），而那一页真正的商品名
      * 里带「【白条24期免息】」——`免息` 在标题黑名单里，整串否决会让启发式也读不出标题。
      * 所以闸门用的是 [PriceNodeMatcher.isDisplayableTitle]（多拒规格/选择态行），
      * 而黑名单那一边改成"先剥掉【…】徽章段再判、剥空了才否决"（理由与"为什么不剥裸写促销语"写在 BRACKET_BADGE 上）。
+     *
+     * 第三刀（第四棵真机树，13:29 雷神 MIX 国补页）：那道闸**放行了促销行**。规则抓到
+     * `叠加以旧换新下单，可再减1964元` —— 17 字、无冒号、不含黑名单词，闸门管不着；
+     * 同一棵树上启发式按分数抓到的是真商品名 `自营雷神（ThundeRobot）MIX-G 高性能…`。
+     * 所以"过闸就赢"还不够，规则标题要与启发式结果用**同一把尺**
+     * [PriceNodeMatcher.titleScore] 比完再定 —— 兜底选择器 `^[^¥￥]{10,80}$` 给的是
+     * "BFS 里第一个像句子的东西"，那是树序的巧合，不是质量判断。
+     *
+     * 代价（改口：先前写的"正常路径不付额外开销"已经不成立）：现在每次规则命中都会跑一遍
+     * [extractTitle]。它是一次 O(节点数) 的纯内存扫描，而 emit 前有签名去重、
+     * 不是每个 a11y 事件都会走到这里，可以接受。
      */
     private fun pickTitle(root: NodeSnapshot, platform: ShopPlatform, result: RuleExtractResult): String? {
         val fromRule = result.title?.takeIf { PriceNodeMatcher.isDisplayableTitle(it) }
-        if (fromRule != null) return fromRule
-        return extractTitle(root, platform)?.text?.takeIf { PriceNodeMatcher.isDisplayableTitle(it) }
+        val fromHeuristic = extractTitle(root, platform)?.text?.takeIf { PriceNodeMatcher.isDisplayableTitle(it) }
+        if (fromRule == null) return fromHeuristic
+        if (fromHeuristic == null) return fromRule
+        // 平手取规则那份：maxByOrNull 返回**第一个**最大值，而 fromRule 排在前面
+        return listOf(fromRule, fromHeuristic).maxByOrNull { PriceNodeMatcher.titleScore(it) }
     }
 
     /**
