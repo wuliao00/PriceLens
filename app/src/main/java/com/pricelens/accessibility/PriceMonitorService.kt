@@ -40,6 +40,12 @@ class PriceMonitorService : AccessibilityService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    /**
+     * 取 bounds 用的复用矩形。只在主线程的事件处理里用（onAccessibilityEvent 由系统在主线程回调），
+     * 且每次都是"读完立刻转成不可变 [NodeBounds] 再递归"，所以单实例安全。
+     */
+    private val scratchRect = android.graphics.Rect()
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         // 服务就绪后开始订阅价格事件并管理浮窗
@@ -163,6 +169,7 @@ class PriceMonitorService : AccessibilityService() {
         val resourceName = node.viewIdResourceName
         val clickable = node.isClickable ||
             node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }
+        val bounds = node.boundsCompat()
         val children = ArrayList<NodeSnapshot>(node.childCount)
         if (depth < MAX_SNAPSHOT_DEPTH && budget[0] > 0) {
             for (i in 0 until node.childCount) {
@@ -176,7 +183,19 @@ class PriceMonitorService : AccessibilityService() {
                 }
             }
         }
-        return NodeSnapshot(text, desc, className, resourceName, clickable, children)
+        return NodeSnapshot(text, desc, className, resourceName, clickable, children, bounds)
+    }
+
+    /**
+     * `getBoundsInScreen` 复用同一个 Rect 实例（每节点 new 一个会在 4000 节点快照里
+     * 制造同样多次分配），拿不到或空矩形一律折成 null —— 让几何判据必须显式处理"没有位置"，
+     * 而不是把 (0,0,0,0) 当成"节点在屏幕左上角"。
+     */
+    private fun AccessibilityNodeInfo.boundsCompat(): NodeBounds? {
+        val rect = scratchRect
+        runCatching { getBoundsInScreen(rect) }.onFailure { return null }
+        if (rect.width() <= 0 || rect.height() <= 0) return null
+        return NodeBounds(rect.left, rect.top, rect.right, rect.bottom)
     }
 
     override fun onInterrupt() {

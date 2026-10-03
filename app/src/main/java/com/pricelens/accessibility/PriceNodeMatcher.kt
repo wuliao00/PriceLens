@@ -231,8 +231,14 @@ object PriceNodeMatcher {
     private val PRICE_SYMBOL = Regex("[¥￥]\\s*([\\d,]+(?:\\.\\d+)?)")
     private val BARE_AMOUNT = Regex("^\\s*([\\d,]+(?:\\.\\d+)?)\\s*(元)?\\s*$")
 
-    /** 分期/免息/首付语境不是价格本体（"12期免息"的 12） */
-    private val PRICE_TEXT_EXCLUDE_WORDS = listOf("分期", "免息", "首付", "评价", "晒单")
+    /**
+     * 分期/免息/首付语境不是价格本体（"12期免息"的 12）。
+     *
+     * internal 而非 private（2026-10-04）：`com.pricelens.coupon.slots.CouponVocabulary.excludedNumberWords`
+     * 以前抄了同一批词，两处各写一遍 ⇒ 改一处就让"页面价格判定"与"券槽位判定"分叉。
+     * 现在共享部分**只有这一份**，coupon 侧只声明自己的增量（京豆/销量/库存）。
+     */
+    internal val PRICE_TEXT_EXCLUDE_WORDS = listOf("分期", "免息", "首付", "评价", "晒单")
 
     fun isPriceExcludedText(text: String): Boolean =
         PRICE_TEXT_EXCLUDE_WORDS.any { text.contains(it) }
