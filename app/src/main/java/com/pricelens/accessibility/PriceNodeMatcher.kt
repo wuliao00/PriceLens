@@ -243,52 +243,35 @@ object PriceNodeMatcher {
         JD_URL_SKU.find(text)?.groupValues?.get(1) ?: ID_PARAM.find(text)?.groupValues?.get(1)
 
     // ---------- 页面结构特征（商详门控） ----------
-
-    private val BUY_ACTION_WORDS = listOf(
-        "加入购物车", "立即购买", "领券购买", "马上抢", "现在购买", "单独购买", "立即预约"
-    )
-    /**
-     * 商详底栏专属"立购/预约"动作（列表卡片只有"加入购物车"图标，不含这些词）。
-     *
-     * 「立即预约」是 2026-09-29 真机第二例缺陷的补丁：预约/抢购型商品（茅台飞天需预约）
-     * 底栏只有「立即预约」+「等待抢购」，没有「立即购买」，旧词表把它当非商详 → 浮窗不弹。
-     * **只能收完整的按钮文案**：同一台真机的京东首页信息流里有「**抢先预约**」
-     * （iQOO 16 福袋卡片 content-desc）和「**等待抢购**」（秒杀位），
-     * 收「预约」「抢购」这类短子串会把首页判成商详。守门用例见
-     * `RealDumpGatingTest."home feed reservation wording never reads as a bottom-bar buy action"`。
+    /*
+     * 词表本体搬到了 [PageVocabulary]（2026-10-03 国补页改文案逼出来的改动）：
+     * 这里只留"子串匹配"这一条语义和四个判定函数，词表本身变成**可被远端规则包覆盖的数据**
+     * （`rules/<id>.json` 的 `gate` 块，见 [com.pricelens.rules.RuleJson]）。
+     * 每个函数的 [PageVocabulary.DEFAULT] 默认参保持既有调用点（含全部真机门控用例）
+     * 一行不改也成立——它们测的就是出厂词表。
      */
-    private val BUY_NOW_WORDS = listOf(
-        "立即购买", "领券购买", "马上抢", "现在购买", "单独购买", "立即预约",
-        // 真机 2026-10-03 11:45：京东**国补商品**的完整商详页底栏把「立即购买」换成了
-        // 「领取补贴购买」（同一商品的迷你沉浸页仍是「立即购买」），resource-id 仍是
-        // feature:id/b34 —— 文案变了 ID 没变，词表必须收它，否则这一页判不成商详。
-        // 收的是**完整底栏文案**而不是「补贴购买」这类短子串（同「立即预约」的红线，见下）。
-        "领取补贴购买"
-    )
-    /**
-     * 商详专属分区标记（列表页卡片的"查看详情"按钮不算）。
-     *
-     * 注意：**别把裸「详情」「推荐」收进来** —— 新版京东商详首屏顶部 tab 是
-     * 「商品 / 大家评 / 详情 / 推荐」（2026-09-29 真机实测），裸「详情」会同时命中列表页的
-     * 「查看详情」按钮。首屏没有本词表任何字样，所以门控不能指望这一关，
-     * 兜底走 [BUY_NOW_WORDS]（见 isProductPage）。
-     */
-    private val DETAIL_SECTION_WORDS = listOf("商品详情", "宝贝详情", "图文详情", "商品评价", "宝贝评价")
-    /** 购物车/确认订单页特征 */
-    private val CHECKOUT_WORDS = listOf("去结算", "提交订单", "立即支付", "合计")
 
-    fun isBuyAction(text: String): Boolean = BUY_ACTION_WORDS.any { text.contains(it) }
+    /** 这页有没有"购买动作"（含加入购物车，所以它不足以单独判商详） */
+    fun isBuyAction(text: String, vocabulary: PageVocabulary = PageVocabulary.DEFAULT): Boolean =
+        vocabulary.buyAction.any { text.contains(it) }
 
-    fun isBuyNowAction(text: String): Boolean = BUY_NOW_WORDS.any { text.contains(it) }
+    /** 这页有没有**商详底栏专属**的立购/预约动作（红线：只收完整按钮文案，见 [PageVocabulary]） */
+    fun isBuyNowAction(text: String, vocabulary: PageVocabulary = PageVocabulary.DEFAULT): Boolean =
+        vocabulary.buyNow.any { text.contains(it) }
 
     /** 商详分区标记：商品详情/宝贝详情/图文详情/商品评价（列表卡片的"查看详情"按钮不算） */
-    fun isDetailSection(text: String): Boolean = DETAIL_SECTION_WORDS.any { text.contains(it) }
+    fun isDetailSection(text: String, vocabulary: PageVocabulary = PageVocabulary.DEFAULT): Boolean =
+        vocabulary.detailSection.any { text.contains(it) }
 
-    fun isCheckoutContext(text: String): Boolean = CHECKOUT_WORDS.any { text.contains(it) }
+    /** 购物车/确认订单页特征：任一命中一票否决 */
+    fun isCheckoutContext(text: String, vocabulary: PageVocabulary = PageVocabulary.DEFAULT): Boolean =
+        vocabulary.checkout.any { text.contains(it) }
 
-    private val PDD_SINGLE_BUY = listOf("单独购买")
-    private val PDD_GROUP_BUY = listOf("发起拼单", "立即拼单")
+    /** PDD 商详底栏左侧"单独购买" */
+    fun hasPddSingleBuy(text: String, vocabulary: PageVocabulary = PageVocabulary.DEFAULT): Boolean =
+        vocabulary.pddSingleBuy.any { text.contains(it) }
 
-    fun hasPddSingleBuy(text: String): Boolean = PDD_SINGLE_BUY.any { text.contains(it) }
-    fun hasPddGroupBuy(text: String): Boolean = PDD_GROUP_BUY.any { text.contains(it) }
+    /** PDD 商详底栏右侧"发起拼单/立即拼单"（与 [hasPddSingleBuy] 成对才算商详） */
+    fun hasPddGroupBuy(text: String, vocabulary: PageVocabulary = PageVocabulary.DEFAULT): Boolean =
+        vocabulary.pddGroupBuy.any { text.contains(it) }
 }

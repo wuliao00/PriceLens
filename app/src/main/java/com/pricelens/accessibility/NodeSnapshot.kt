@@ -367,15 +367,22 @@ fun extractItemId(root: NodeSnapshot): String? {
  *  现在兜底只看底栏动作信号：[PriceNodeMatcher.isBuyNowAction] 收的是**商详底栏专属**按钮文案，
  *  真机首页信息流卡片只有"加入购物车"图标（`RealDumpGatingTest` 里 buyNow=false 的实测钉子），
  *  且首页的"抢先预约/等待抢购"字样不在词表内，故首页/搜索页两棵真树仍不过门控。
- * 注：各 App 改版可能挪动按钮文案，词表集中在 [PriceNodeMatcher]，真机回归时按版本校准。
+ * 注：各 App 改版可能挪动按钮文案。词表集中在 [PageVocabulary]（不再散在本函数里），
+ * 并且**可以由远端规则包覆盖**：[com.pricelens.rules.DetectionPipeline] 会把该宿主规则里的
+ * `gate` 作为 [vocabulary] 传进来。这样"京东把「立即购买」改成别的说法"这件事，
+ * 修法是推一条规则，而不是像 2.8.0.1 那样发一次 APK。
  */
-fun isProductPage(root: NodeSnapshot, platform: ShopPlatform): Boolean {
+fun isProductPage(
+    root: NodeSnapshot,
+    platform: ShopPlatform,
+    vocabulary: PageVocabulary = PageVocabulary.DEFAULT
+): Boolean {
     val texts = subtreeTexts(root)
     if (texts.isEmpty()) return false
-    if (texts.any { PriceNodeMatcher.isCheckoutContext(it) }) return false
-    val hasBuyAction = texts.any { PriceNodeMatcher.isBuyAction(it) }
-    val pddPair = texts.any { PriceNodeMatcher.hasPddSingleBuy(it) } &&
-        texts.any { PriceNodeMatcher.hasPddGroupBuy(it) }
+    if (texts.any { PriceNodeMatcher.isCheckoutContext(it, vocabulary) }) return false
+    val hasBuyAction = texts.any { PriceNodeMatcher.isBuyAction(it, vocabulary) }
+    val pddPair = texts.any { PriceNodeMatcher.hasPddSingleBuy(it, vocabulary) } &&
+        texts.any { PriceNodeMatcher.hasPddGroupBuy(it, vocabulary) }
     if (!hasBuyAction && !pddPair) return false
     // 读不出价就不是"有当前价的商品页"，标题也一样：门控要的是"这一页有可展示的单一商品"
     extractPriceHit(root, platform) ?: return false
@@ -383,9 +390,9 @@ fun isProductPage(root: NodeSnapshot, platform: ShopPlatform): Boolean {
     // 商详分区标记是最稳的信号；新版商详首屏没有该字样（真机实测），退而要求
     // "立即购买/领券购买/马上抢/立即预约"这类**商详底栏专属**动作。
     // viaKnownId 在这里只作为加分项参与置信（见 PriceHit），不再当必要条件：真机 id 全是混淆短名。
-    val hasDetailSection = texts.any { PriceNodeMatcher.isDetailSection(it) }
+    val hasDetailSection = texts.any { PriceNodeMatcher.isDetailSection(it, vocabulary) }
     if (hasDetailSection) return true
-    return texts.any { PriceNodeMatcher.isBuyNowAction(it) }
+    return texts.any { PriceNodeMatcher.isBuyNowAction(it, vocabulary) }
 }
 
 /**

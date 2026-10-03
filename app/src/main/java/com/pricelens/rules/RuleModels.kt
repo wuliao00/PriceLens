@@ -1,6 +1,7 @@
 package com.pricelens.rules
 
 import com.pricelens.accessibility.NodeSnapshot
+import com.pricelens.accessibility.PageVocabulary
 
 /**
  * 选择器规则数据模型（GKD 式远程订阅 · 设计文档 §三 的客户端侧落地）。
@@ -89,12 +90,20 @@ data class PageRule(
     }
 }
 
-/** 单平台规则（对应 rules/<id>.json 一个文件） */
+/**
+ * 单平台规则（对应 rules/<id>.json 一个文件）。
+ *
+ * @param vocabulary 本宿主商详门控实际使用的词表 = [PageVocabulary.DEFAULT] 被 JSON `gate` 块
+ *   逐字段覆盖后的**生效值**（没写 gate 就是 DEFAULT）。它是"改文案不用发 APK"的那条通道：
+ *   2026-10-03 京东国补页把底栏改成「领取补贴购买」时，唯一能救它的就是这条通道，而那天是靠
+ *   发 2.8.0.1 修的。校验口径见 [RuleJson] 的 gate 部分。
+ */
 data class PlatformRule(
     val id: String,
     val version: Int,
     val packages: List<String>,
-    val pages: List<PageRule>
+    val pages: List<PageRule>,
+    val vocabulary: PageVocabulary = PageVocabulary.DEFAULT
 ) {
 
     /** `packages` 是包名前缀表（与 `PriceNodeMatcher.isKnownApp` 的 startsWith 口径一致） */

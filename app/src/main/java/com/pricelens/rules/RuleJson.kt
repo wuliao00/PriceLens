@@ -1,5 +1,6 @@
 package com.pricelens.rules
 
+import com.pricelens.accessibility.PageVocabulary
 import com.pricelens.update.UpdateManifest
 import org.json.JSONObject
 
@@ -14,6 +15,8 @@ import org.json.JSONObject
  *  - id、包名前缀、字段名的字符集与长度；包名前缀不允许空串（startsWith("") 会覆盖所有宿主）；
  *  - 正则编译失败、长度超限、捕获组号超过 groupCount；
  *  - confirm 引用了 extract 里不存在的字段，或 allOf/anyOf 都不存在（"任何页面都确认"）；
+ *  - `gate`（门控词表覆盖）里的词带正则元字符、超长、超条数、含控制字符、重复，
+ *    或把所有正向动作信号都关掉（那等于"任何页面都判非商详"= 静默不弹窗）；
  *  - 数量上限（页面/字段/选择器/条目数）—— 防御远端塞超大规则拖垮无障碍主线程。
  *
  * 未知**字段**（不是未知取值）一律忽略：便于清单/规则向前兼容地加注释性字段。
@@ -38,6 +41,45 @@ object RuleJson {
     private val FILE_RE = Regex("^rules/[a-z0-9_-]{1,$MAX_ID_LENGTH}\\.json$")
     private val PACKAGE_RE = Regex("^[a-zA-Z0-9._]{3,100}$")
     private val FIELD_NAME_RE = Regex("^[a-zA-Z][a-zA-Z0-9_]{0,$MAX_FIELD_NAME_LENGTH}$")
+
+    // ---------- gate（商详门控词表覆盖） ----------
+
+    private const val MAX_GATE_WORDS = 32
+    private const val MAX_GATE_WORD_LENGTH = 30
+
+    /** 0x20=空格**放行**：真机底栏文案里确实带空格（竖排「继 续 滑 动」那类），词按子串匹配时需要能写它 */
+    private const val MIN_PRINTABLE_CODE = 0x20
+
+    private const val GATE_BUY_ACTION = "buyAction"
+    private const val GATE_BUY_NOW = "buyNow"
+    private const val GATE_DETAIL_SECTION = "detailSection"
+    private const val GATE_CHECKOUT = "checkout"
+    private const val GATE_PDD_SINGLE_BUY = "pddSingleBuy"
+    private const val GATE_PDD_GROUP_BUY = "pddGroupBuy"
+    private val GATE_KEYS = listOf(
+        GATE_BUY_ACTION,
+        GATE_BUY_NOW,
+        GATE_DETAIL_SECTION,
+        GATE_CHECKOUT,
+        GATE_PDD_SINGLE_BUY,
+        GATE_PDD_GROUP_BUY
+    )
+
+    /** 词按**子串**匹配，正则元字符出现在这儿只会"永远不命中"，所以当场拒绝而不是静默失效 */
+    private val GATE_REGEX_CHARS = Regex("[*+?\\[\\]{}()|^$/\\\\~]")
+
+    /** 低于 [MIN_PRINTABLE_CODE] 的一律拒绝；这张表只为把"制表/换行/空字符"点名写出来 */
+    private val GATE_CONTROL_CHARS = "\t\r\n\u0000"
+
+    /** gate 里某个键对应的出厂词表（[parseGate] 的"至少留一条正向信号"检查用它） */
+    private fun PageVocabulary.fieldWords(key: String): List<String> = when (key) {
+        GATE_BUY_ACTION -> buyAction
+        GATE_BUY_NOW -> buyNow
+        GATE_DETAIL_SECTION -> detailSection
+        GATE_CHECKOUT -> checkout
+        GATE_PDD_SINGLE_BUY -> pddSingleBuy
+        else -> pddGroupBuy
+    }
 
     // ---------- 清单 ----------
 
@@ -134,7 +176,85 @@ object RuleJson {
                     return PlatformRuleResult.Rejected("${RejectReason.BAD_PAGES}:#$i:${parsed.reason}")
             }
         }
-        return PlatformRuleResult.Valid(PlatformRule(id, version, packages, pages))
+        val vocabulary = when (val parsed = parseGate(root)) {
+            is GateParseResult.Ok -> parsed.vocabulary
+            is GateParseResult.Rejected ->
+                return PlatformRuleResult.Rejected("${RejectReason.BAD_GATE}:${parsed.reason}")
+        }
+        return PlatformRuleResult.Valid(PlatformRule(id, version, packages, pages, vocabulary))
+    }
+
+    private sealed interface GateParseResult {
+        data class Ok(val vocabulary: PageVocabulary) : GateParseResult
+        data class Rejected(val reason: String) : GateParseResult
+    }
+
+    /**
+     * `gate` 块 = 商详门控词表的**远端覆盖**（逐字段生效：写了这个字段就整条替换出厂值，
+     * 没写就沿用 [PageVocabulary.DEFAULT]）。它是"电商 App 改按钮文案"这件事的唯一免发版通道。
+     *
+     * 为什么保持 `schemaVersion` 仍是 1：本字段是**可选新增**，而 RuleJson 的既有约定是
+     * "未知字段一律忽略"，所以已出厂的 2.8.0.1 收到带 gate 的规则包会照常解析（只是用不到它）。
+     * 抬版本号反而会让老 App 整包拒绝规则 —— 那是把一个兼容性改进变成一次强制升级。
+     *
+     * 词是**子串**（`text.contains(word)`），不是正则：在这儿写 `^买|购$` 只会永远不命中，
+     * 所以带正则元字符的词一律拒绝（与"任何可疑输入都拒绝，不猜"同一条原则）。
+     * 允许显式空数组 = "这一路信号在本宿主关掉"，方向上只会少弹窗，不会多误弹。
+     */
+    private fun parseGate(root: JSONObject): GateParseResult {
+        val gate = root.optJSONObject("gate") ?: return GateParseResult.Ok(PageVocabulary.DEFAULT)
+        val overridden = LinkedHashMap<String, List<String>>()
+        for (key in GATE_KEYS) {
+            when (val parsed = gateWords(gate, key)) {
+                is WordsResult.Ok -> overridden[key] = parsed.words
+                WordsResult.Absent -> Unit
+                is WordsResult.Rejected -> return GateParseResult.Rejected("$key:${parsed.reason}")
+            }
+        }
+        if (overridden.isEmpty()) return GateParseResult.Ok(PageVocabulary.DEFAULT)
+        val default = PageVocabulary.DEFAULT
+        // 关掉了所有"购买动作"信号的 gate 会让每一页都判成非商详 —— 那是"静默什么都不显示"，
+        // 比坏规则更糟，所以要求至少留一条正向动作信号（否决类 checkout 不算正向信号）。
+        val positives = listOf(GATE_BUY_ACTION, GATE_BUY_NOW, GATE_PDD_SINGLE_BUY, GATE_PDD_GROUP_BUY)
+        if (positives.all { key -> (overridden[key] ?: default.fieldWords(key)).isEmpty() }) {
+            return GateParseResult.Rejected("noPositiveActionSignal")
+        }
+        return GateParseResult.Ok(
+            PageVocabulary(
+                buyAction = overridden[GATE_BUY_ACTION] ?: default.buyAction,
+                buyNow = overridden[GATE_BUY_NOW] ?: default.buyNow,
+                detailSection = overridden[GATE_DETAIL_SECTION] ?: default.detailSection,
+                checkout = overridden[GATE_CHECKOUT] ?: default.checkout,
+                pddSingleBuy = overridden[GATE_PDD_SINGLE_BUY] ?: default.pddSingleBuy,
+                pddGroupBuy = overridden[GATE_PDD_GROUP_BUY] ?: default.pddGroupBuy
+            )
+        )
+    }
+
+    private sealed interface WordsResult {
+        data object Absent : WordsResult
+        data class Ok(val words: List<String>) : WordsResult
+        data class Rejected(val reason: String) : WordsResult
+    }
+
+    /** 一个词表字段：缺失=沿用出厂值；空数组=关掉该信号；元素非法=整条规则拒绝 */
+    private fun gateWords(gate: JSONObject, key: String): WordsResult {
+        val array = gate.optJSONArray(key) ?: return WordsResult.Absent
+        if (array.length() > MAX_GATE_WORDS) return WordsResult.Rejected("count=${array.length()}")
+        val out = ArrayList<String>(array.length())
+        for (i in 0 until array.length()) {
+            val item = array.opt(i)
+            if (item !is String) return WordsResult.Rejected("#$i.notString")
+            val word = item.trim()
+            if (word.length !in 2..MAX_GATE_WORD_LENGTH) return WordsResult.Rejected("#$i.length=${word.length}")
+            if (GATE_REGEX_CHARS.containsMatchIn(word)) return WordsResult.Rejected("#$i.regexMeta")
+            if (word.any { it.code < MIN_PRINTABLE_CODE || GATE_CONTROL_CHARS.contains(it) }) {
+                return WordsResult.Rejected("#$i.nonPrintable")
+            }
+            if (out.contains(word)) return WordsResult.Rejected("#$i.duplicate")
+            out.add(word)
+        }
+        return WordsResult.Ok(out)
     }
 
     private sealed interface PageParseResult {
@@ -279,5 +399,6 @@ object RejectReason {
     const val BAD_SHA256 = "bad_sha256"
     const val BAD_PACKAGES = "bad_packages"
     const val BAD_PAGES = "bad_pages"
+    const val BAD_GATE = "bad_gate"
     const val ID_MISMATCH = "id_mismatch"
 }

@@ -1,6 +1,7 @@
 package com.pricelens.rules
 
 import com.pricelens.accessibility.NodeSnapshot
+import com.pricelens.accessibility.PageVocabulary
 import com.pricelens.accessibility.PriceBasis
 import com.pricelens.accessibility.PriceHit
 import com.pricelens.accessibility.PriceNodeMatcher
@@ -60,7 +61,11 @@ object DetectionPipeline {
         activityName: String? = null
     ): DetectionOutcome {
         ruleDetect(root, platform, packageName, rules, activityName)?.let { return DetectionOutcome.Hit(it) }
-        return heuristic(root, platform, rules)
+        // 启发式路径的词表也跟随该宿主的规则：远端规则里改了 `gate` 就能救"电商 App 改文案"，
+        // 不必再发一次 APK（2026-10-03 国补页那次发了 2.8.0.1）。没有规则、或规则没带 gate
+        // 时退回出厂词表 —— 淘宝/拼多多至今没有规则包，它们一直走的就是出厂词表。
+        val rule = rules.ruleFor(packageName)
+        return heuristic(root, platform, rules, rule?.vocabulary ?: PageVocabulary.DEFAULT, rule != null)
     }
 
     /** 规则路径：确认失败 / 价格解析失败 / 拿不出可信标题都返回 null（= 交给启发式，绝不静默什么都不显示） */
@@ -145,18 +150,30 @@ object DetectionPipeline {
         return PriceHit(value, text, basis, viaKnownId = false)
     }
 
-    /** 老路径逐行保留（改造前的 PriceMonitorService.onAccessibilityEvent 分支顺序） */
-    private fun heuristic(root: NodeSnapshot, platform: ShopPlatform, rules: RuleSet): DetectionOutcome {
-        if (!isProductPage(root, platform)) return DetectionOutcome.NotProductPage
+    /**
+     * 老路径逐行保留（改造前的 PriceMonitorService.onAccessibilityEvent 分支顺序）。
+     *
+     * @param vocabularyFromRule 门控词表是不是来自该宿主的规则 `gate`（只影响日志文案，
+     *  排查"改了规则怎么还不生效"时这条是第一个要看的字段）
+     */
+    private fun heuristic(
+        root: NodeSnapshot,
+        platform: ShopPlatform,
+        rules: RuleSet,
+        vocabulary: PageVocabulary,
+        vocabularyFromRule: Boolean
+    ): DetectionOutcome {
+        if (!isProductPage(root, platform, vocabulary)) return DetectionOutcome.NotProductPage
         val priceHit = extractPriceHit(root, platform) ?: return DetectionOutcome.NoPrice
         val titleHit = extractTitle(root, platform)
+        val gateNote = if (vocabularyFromRule) "，词表=规则 gate" else ""
         return DetectionOutcome.Hit(
             Detection(
                 price = priceHit,
                 title = titleHit?.text,
                 itemId = extractItemId(root),
                 source = DetectionSource.HEURISTIC,
-                matchedBy = if (rules.isEmpty) "启发式回落（无规则）" else "启发式回落（规则未命中）"
+                matchedBy = if (rules.isEmpty) "启发式回落（无规则）" else "启发式回落（规则未命中$gateNote）"
             )
         )
     }

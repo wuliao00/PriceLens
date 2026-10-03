@@ -259,7 +259,24 @@ tools/gen_rules_manifest.py   # 遍历 rules/*.json 重算 sha256、内容变了
 | `pages[].activityRegex` | 可选的 Activity 名过滤；**拿不到 Activity 名时放行**（内容变化事件的 className 是 View 类名） |
 | `pages[].extract{}` | 字段 → 选择器链：`title` / `price` 为约定字段名，可加任意 `buyNow` / `checkout` 等页面信号字段 |
 | `pages[].confirm` | `allOf` / `anyOf`（引用 extract 字段名，至少一个非空）/ `noneOf`（命中即否决，如购物车页的"去结算"） |
+| `gate{}` | 可选：**商详门控词表的远端覆盖**，六个字段 `buyAction` / `buyNow` / `detailSection` / `checkout` / `pddSingleBuy` / `pddGroupBuy`，逐字段生效——写了哪个就整条替换该字段的出厂值，没写的沿用 `PageVocabulary.DEFAULT`；元素按**子串**匹配（不是正则，写正则元字符会被解析期拒绝） |
 | selector | `by` ∈ `text` / `textRegex`（`group` 选捕获组，0=整个匹配）/ `desc` / `descRegex` / `viewId`；匹配前一律过 `cleanTitle` 清洗零宽字符 |
+
+**`gate` 为什么存在（2.8.0.2 起）**：门控"这页是不是商详"除了看 extract/confirm，还要过
+`isProductPage` 那道**词表**关（底栏有没有"立即购买"这类动作）。2026-10-03 真机上京东国补商品
+把底栏换成「领取补贴购买」（resource-id 没变），当时词表写死在 Kotlin 里，唯一的修法是把词收进
+`PriceNodeMatcher` 再发一次 APK —— 那就是 2.8.0.1。词表做成 `gate` 数据之后，同一件事的修法是
+**推一条规则**：`DetectionPipeline` 会把该宿主规则的 `gate` 作为词表传给 `isProductPage`，
+没有规则或规则没带 `gate` 才退出厂词表（淘宝/拼多多至今没有规则包，走的就是出厂词表）。
+
+三条配套纪律：① `gate` 是**可选新增字段**且未知字段一律忽略，所以 `schemaVersion` 保持 `1` ——
+抬版本号会让已出厂的 2.8.0.1 整包拒绝新规则，把兼容性改进变成强制升级；
+② 出厂 `rules/jd.json` 的 `gate` 与 `PageVocabulary.DEFAULT` 必须逐项相等，`GateVocabularyTest`
+里有一条等值钉子盯着这份双真相（两份可以并存，不许悄悄漂移）；
+③ 把所有正向动作信号都关掉的 `gate`（四个正向字段全为空）在解析期被拒 —— 那等于"任何页面都判
+非商详"，是静默不弹窗，比坏规则更糟。判别证据在 `GateVocabularyTest` 的
+`one remote gate word rescues a page the factory wording rejects`：出厂词表判非商详的同一棵树，
+只改 `gate` 就能救回，且命中来源仍是启发式（证明走的确实是词表这条路，不是 extract/confirm）。
 
 **与设计文档（§三）的偏差（以本仓库现实为准）**：现版京东商详页 resource-id 全是混淆短名，
 `viewId` 选择器保留但**预期恒不命中**（真机取证见上文「浮窗为什么常常只能到 TITLE_ONLY」），
