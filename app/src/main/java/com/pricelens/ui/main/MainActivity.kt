@@ -366,11 +366,17 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .padding(inner)
-                // 顺序要紧：wrapContentWidth 必须在 widthIn **之前**。
-                // 真机取证（PLB110 `wm density 280` ⇒ 窗口 717dp 落 MEDIUM）：写成
-                // "widthIn → fillMaxHeight → wrapContentWidth" 时限宽生效了（正文在 600dp 处换行），
-                // 但整列**没有居中**、贴在左边 —— 因为最内层的 wrapContentWidth 居中的是
-                // "列内容在列自身宽度里"，而列在父容器里的位置由它外面的修饰符决定。
+                // 限宽 + 居中：必须 fillMaxWidth 在前、wrapContentWidth 在后，缺 fillMaxWidth 时居中是空转。
+                // 这段判据是**两次真机取证**换来的，别再按"看起来对"改顺序：
+                //  ① `widthIn → fillMaxHeight → wrapContentWidth`（8cc2a44 之前的写法）：限宽生效（正文在 600dp 处
+                //     换行），整列贴左。当时我以为把 wrapContentWidth 提到 widthIn 之前就能居中。
+                //  ② `wrapContentWidth → widthIn`（8cc2a44 的写法）：**同样贴左**。同一台 PLB110、
+                //     `wm density 280` ⇒ 窗口 1256px，量到内容列 `[0,252][1050,2592]`
+                //     —— 左边距 0、右边距 206（1050px 正好是 600dp@280dpi，证明限宽这条一直是对的）。
+                // 原因：`wrapContentWidth(align)` 是把内容**包紧**后再在"自己占到的宽度"里对齐；
+                // 没有谁逼它占满父宽时，它占到的就等于内容宽，对齐量恒为 0 ⇒ 贴左。
+                // `fillMaxWidth()` 先把自己撑到父给的最大宽，后面的 wrap 才有 206px 可以分。
+                .fillMaxWidth()
                 .wrapContentWidth(androidx.compose.ui.Alignment.CenterHorizontally)
                 .then(if (contentMaxDp == null) Modifier else Modifier.widthIn(max = contentMaxDp.dp))
                 .fillMaxHeight()

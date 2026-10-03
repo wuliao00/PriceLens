@@ -300,7 +300,9 @@ extract/confirm。变异自证：把 `detect()` 里那句 `rule?.vocabulary ?: D
 分档下界用 Material 3 官方的 600dp / 840dp，**不是我自己调的数**（这正是"别僵硬化"要的做法：
 引用现成标准而不是照着手里的样本凑阈值）。消费方式保守：COMPACT 返回 `null`（不是"一个大数"，
 因为 `widthIn(max = 很大)` 与"不挂这条 modifier"在 Compose 里不等价），保证 360~500dp 的手机
-与改造前逐像素一致；MEDIUM 限宽 600dp 居中，EXPANDED 限宽 840dp 居中。
+与改造前逐像素一致；MEDIUM 限宽 600dp、EXPANDED 限宽 840dp。
+（**更正**：这里原先写的是"限宽…居中"。真机复测证明**只有"限宽"成立**——列宽确实是 600dp，
+但整列仍贴左。居中属于接线侧的修饰符顺序问题，与分档本身无关，取证与修法见 §9.8。）
 `AdaptiveTest` 里"主流手机宽度全部留在 COMPACT"是这条改动**不许动手机形态**的钉子。
 
 **三、小组件按高度决定行数（`WidgetLayout.kt`）**
