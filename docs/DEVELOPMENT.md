@@ -266,6 +266,16 @@ sh:search:<关键词>            → 识货商品搜索（兜底源）
 ```
 > 非结构化结果统一落 `cache_entries` 表（L2），商品详情落结构化 `products` 表。
 
+### 4. 端侧 AI 兜底：接缝与上机准入策略（v2.9.0 批次，无模型）
+
+`app/src/main/java/com/pricelens/coupon/ai/` 只交付三件能被本机证伪的东西：
+`FallbackExtractor` 接缝（`null` 的含义是"我没参与"，不是"我失败了"）、
+`OnDeviceAiPolicy.eligible(...)` 七标量纯函数（默认关 / 6GB 机型永久降级回规则 / 电量与空闲内存走排队 /
+计费网络只挡下载不挡推理）、以及 `assets/ai/` 下的 prompt 模板与 GBNF 语法（带自洽性单测）。
+**没有权重、没有 `.so`、没有 llama.cpp/MNN 依赖**——本机编不出也验不了机的东西不进仓库。
+判据出处、与"缓存上限 30MB / 凭证绝不出库"人设的取舍、grammar 硬约束 vs CPU prefill 的 trade-off、
+以及留给后续任务的 7 项接线清单，全部在 **[docs/端侧AI兜底.md](端侧AI兜底.md)**。
+
 ---
 
 ## 🧪 测试策略

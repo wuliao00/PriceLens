@@ -1,0 +1,52 @@
+# ai-prompt-version: 1
+# 配套语法: coupon_schema.gbnf （grammar 1.0）—— 输出必须能被该语法逐 token 约束
+# 解码参数: temperature=0 max_new_tokens=256 top_p=1 repeat_penalty=1.0
+#   取 temperature=0 是因为这一层的产物要进比对而不是进对话：同一句文案今天抽出的槽位
+#   必须和昨天一致（跨候选共识的 agreement 才有效），采样带来的抖动会把"模板分歧"
+#   伪装成"模型有把握"。max_new_tokens=256 的上界来自语法本身：一张券的 JSON 约 90~120
+#   token，两条券 + 价格槽约 200 token，再长就说明模型在输出语法之外的东西，应当截断而不是续写。
+# 占位符: 全文只允许出现一次占位标记（见 AiPromptAsset.placeholderCount 的用例）
+# 改本文件 = 升版本号并同步 grammar：槽位字面量名两边必须逐字一致，改名等于换 grammar 版本
+# 加载: 以 # 起始的行由 AiPromptAsset.strip 前的 isDirective 规则剔除，不进 prompt
+
+【第 1 段 · 槽位定义】
+你在抽取电商优惠文案里的券槽位。只输出 JSON，不解释、不复述原文、不补全没有出现的数字。
+缺失就写 null；宁可整段返回 null，也不要给出文案里没有的金额。
+
+金额角色（五种，互斥；同一句里判不出角色就让该槽位为 null，绝不默认成 discount）：
+  discount  券面额：本单可减掉的数额。词面信号「减 / 立减 / 券面 / 无门槛 / 可减」。
+            例：「满199减50」→ discount=50
+  threshold 用券门槛：使用这张券需要先达到的金额。词面信号「满 / 满X可用 / 门槛 / 满额」。
+            例：「满199减50」→ threshold=199
+  final     到手价：叠加优惠后实际需要支付的金额。词面信号「到手 / 券后 / 领后 / 实付」。
+  list      标价：原价、划线价、日常价。词面信号「原价 / 划线 / 日常价 / 标价」。
+  drop      降幅：相对某个基准减少了多少。词面信号「降 / 跌 / 便宜了 / 比原价」。
+「本单可减1500」这类只有一个数字的句子：只有出现「券 / 领」才判 discount，
+只出现「降 / 便宜」才判 drop；两者都没有就写 null，不要猜。
+
+状态词表（state 只能取下列字符串之一）：
+  CLAIMABLE     「领取 / 立即领 / 去领取」
+  CLAIMED       「已领 / 已领取 / 去使用」
+  EXPIRED       「已过期 / 过期 / 失效 / 已结束」
+  SOLD_OUT      「已抢完 / 已领完 / 抢光 / 无库存」
+  MEMBER_ONLY   「会员专享 / PLUS / 88VIP / Plus 会员」
+  REGION_LIMITED「限…地区 / 部分地区 / 仅…可用」
+  UNKNOWN       文案里没有任何状态信号（默认值；不许把"看起来应该能领"当成 CLAIMABLE）
+
+作用范围（scope 只能取下列字符串之一）：
+  ITEM 单品 / SHOP 店铺 / CATEGORY 品类 / PLATFORM 平台 / MEMBER 会员 / UNKNOWN
+多张券要输出成 coupons 数组里的多个元素，绝不把「店铺券 + 品类券 + 平台券」揉成一张。
+日期一律输出 yyyy-MM-dd；文案里只有"明天过期"这类相对说法就写 null，不做日期换算。
+
+【第 2 段 · 示例】
+示例 1
+输入：京东 自营 小米14 12+256G，领券立减300，满2999可用，PLUS会员再减50，明天过期
+输出：{"platform":"jd","coupons":[{"discount":300,"threshold":2999,"scope":"PLATFORM","state":"CLAIMABLE","expiry":null,"url":null},{"discount":50,"threshold":null,"scope":"MEMBER","state":"MEMBER_ONLY","expiry":null,"url":null}],"price":{"final":null,"list":null,"drop":null},"confidence":0.8}
+
+示例 2
+输入：淘宝 88VIP 优惠券已领取，满200减20，到手￥179.9，原价￥199
+输出：{"platform":"taobao","coupons":[{"discount":20,"threshold":200,"scope":"MEMBER","state":"CLAIMED","expiry":null,"url":null}],"price":{"final":179.9,"list":199,"drop":null},"confidence":0.85}
+
+【第 3 段 · 待抽取文案】
+输入：{text}
+输出：

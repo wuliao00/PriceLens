@@ -1,0 +1,66 @@
+# coupon_schema.gbnf
+# grammar-version: 1
+# 配套 prompt: coupon_prompt_v1.txt（ai-prompt-version 1）—— 两份文件的名字与槽位字面量必须同步改
+# 用途: 端侧模型的**约束解码**语法（llama.cpp 的 GBNF 形式），本版只是资产，运行时未接线
+# 自检: app/src/test/java/com/pricelens/coupon/ai/AiAssetContractTest.kt 逐行扫描，
+#       确认每条产生式右侧引用的符号都在左侧定义过、无重复定义、且都能从 root 到达
+# 写法约束: 字面量一律双引号，字符类一律方括号，不用正则终端——
+#       这样语法不依赖运行时的 regex 支持（老版 llama.cpp 的 grammar-parser 没有正则终端），
+#       也让本文件的自检能只用一个字符串扫描器完成。改语法时请保持这两条约束。
+# 字段次序即解码次序，与 prompt 的两条 few-shot 输出逐字对齐（先 platform 后 coupons）
+# 说明: 所有槽位都不可省略、不可为 null 之外的类型；数值一律十进制，不放开指数写法
+
+root ::= "{" ws obj ws "}"
+obj ::= platform-field comma coupons-field comma price-field comma confidence-field
+
+platform-field ::= "\"platform\"" colon platform-value
+platform-value ::= "\"jd\"" | "\"taobao\"" | "\"pdd\"" | "\"unknown\""
+
+coupons-field ::= "\"coupons\"" colon coupons-array
+coupons-array ::= "[" ws ("]" | coupon-list ws "]")
+coupon-list ::= coupon (comma coupon)*
+
+coupon ::= "{" ws coupon-obj ws "}"
+coupon-obj ::= discount-field comma threshold-field comma scope-field comma state-field comma expiry-field comma url-field
+
+discount-field ::= "\"discount\"" colon number-or-null
+threshold-field ::= "\"threshold\"" colon number-or-null
+scope-field ::= "\"scope\"" colon scope-value
+state-field ::= "\"state\"" colon state-value
+expiry-field ::= "\"expiry\"" colon expiry-value
+url-field ::= "\"url\"" colon url-value
+
+scope-value ::= "\"ITEM\"" | "\"SHOP\"" | "\"CATEGORY\"" | "\"PLATFORM\"" | "\"MEMBER\"" | "\"UNKNOWN\""
+state-value ::= "\"CLAIMABLE\"" | "\"CLAIMED\"" | "\"EXPIRED\"" | "\"SOLD_OUT\"" | "\"MEMBER_ONLY\"" | "\"REGION_LIMITED\"" | "\"UNKNOWN\""
+
+expiry-value ::= "null" | date
+date ::= "\"" d4 "-" d2 "-" d2 "\""
+d4 ::= digit digit digit digit
+d2 ::= digit digit
+
+url-value ::= "null" | string
+
+price-field ::= "\"price\"" colon price-object
+price-object ::= "{" ws price-slots ws "}"
+price-slots ::= final-field comma list-field comma drop-field
+final-field ::= "\"final\"" colon number-or-null
+list-field ::= "\"list\"" colon number-or-null
+drop-field ::= "\"drop\"" colon number-or-null
+
+confidence-field ::= "\"confidence\"" colon number
+
+number-or-null ::= "null" | number
+number ::= negative? integer fraction?
+negative ::= "-"
+integer ::= digit+
+fraction ::= "." digit+
+digit ::= [0-9]
+
+string ::= "\"" string-char* "\""
+string-char ::= [^\"\\] | "\\" esc-char
+esc-char ::= ["\\/bfnrt] | "u" hex hex hex hex
+hex ::= [0-9a-fA-F]
+
+colon ::= ws ":"
+comma ::= ws "," ws
+ws ::= [ \t\r\n]*
