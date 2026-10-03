@@ -196,7 +196,7 @@ class BallGeometryTest {
         assertFalse(canExpand(OverlayMode.Panel))
     }
 
-    // ---------- ballDropPosition（松手一次性落窗；拖动期间只画 translation） ----------
+    // ---------- ballDropPosition（松手那一下吸附；拖动途中走下面的 ballDragPosition） ----------
 
     @Test
     fun `drag past the middle snaps to the right edge`() {
@@ -236,6 +236,61 @@ class BallGeometryTest {
             screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 0
         )
         assertEquals(140, y)
+    }
+
+    // ---------- ballDragPosition（拖动每一帧：只夹取，绝不吸附） ----------
+
+    /**
+     * 判别例：同一组入参下，拖动中**不许**吸附、松手才吸附。
+     *
+     * 取 x=800 是因为它已经出了 [snapEdge] 的中线死区（死区是球心距中线 ±ballSize/2 = ±112；
+     * 球心 800+112=912 距中线 628 有 284，判 Right）。若拖动途中就吸附，用户会看到球在手指
+     * 还在走的时候突然跳去贴边 —— 这条把两种行为分开钉住：
+     * ballDragPosition 给 800（跟着手指），ballDropPosition 给贴边的 1032。
+     */
+    @Test
+    fun `live drag follows the finger without snapping`() {
+        val (x, y) = ballDragPosition(
+            originX = 100, originY = 100, dx = 700f, dy = 300f, ballSize = 224,
+            screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 0
+        )
+        assertEquals(800, x)
+        assertEquals(400, y)
+        val (dropX, dropY) = ballDropPosition(
+            x = 800, y = 400, dx = 0f, dy = 0f, ballSize = 224,
+            screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 0
+        )
+        assertEquals("同一个位置松手才应该吸到右边缘", 1256 - 224, dropX)
+        assertEquals("纵向不参与吸附", 400, dropY)
+    }
+
+    @Test
+    fun `live drag is clamped at the edges but stays put horizontally`() {
+        val (x, y) = ballDragPosition(
+            originX = 900, originY = 400, dx = 900f, dy = 0f, ballSize = 224,
+            screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 0
+        )
+        assertEquals("拖出右边界只夹住，不等松手就贴边", 1256 - 224, x)
+        val top = ballDragPosition(
+            originX = 300, originY = 400, dx = 0f, dy = -5000f, ballSize = 224,
+            screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 0
+        )
+        assertEquals("状态栏那一条不能拖进去", 140, top.second)
+    }
+
+    /** 起点锚定：同一帧位移配不同起点就该差同样的距离（逐帧累加会漂移的那种写法过不了这条） */
+    @Test
+    fun `live drag position depends only on origin plus delta`() {
+        val a = ballDragPosition(
+            originX = 100, originY = 500, dx = 250f, dy = 0f, ballSize = 224,
+            screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 0
+        )
+        val b = ballDragPosition(
+            originX = 120, originY = 500, dx = 250f, dy = 0f, ballSize = 224,
+            screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 0
+        )
+        assertEquals(350, a.first)
+        assertEquals(370, b.first)
     }
 
     // ---------- 收窗时机与建窗形态（真机"球闪烁 + 变回胶囊条"那一条） ----------

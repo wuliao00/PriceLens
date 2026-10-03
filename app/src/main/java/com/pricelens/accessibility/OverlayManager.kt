@@ -107,6 +107,16 @@ object OverlayManager {
     /** 球形态下延迟收窗的待办（门控一闪即断时不该立刻拆窗；下一次命中会取消它） */
     private var pendingHideJob: Job? = null
 
+    /**
+     * 这一次拖动的起点（球窗口的左上角，ACTION_DOWN 那一刻由 [beginBallDrag] 钉住）。
+     *
+     * 每一帧的窗口位置都从"起点 + 屏幕坐标累计位移"反算，而不是"当前位置 + 本帧增量"：
+     * 后者会把逐帧取整与窗口移动带来的反馈累加成滞后（"不跟手"的数学成因）。
+     * 松手吸附走窗口当前位置，所以这两个值不需要在 [endBallDrag] 之后复位。
+     */
+    private var dragOriginX = 0
+    private var dragOriginY = 0
+
     /** 当前展示内容（无障碍折叠胶囊/展开面板的唯一数据入口） */
     var content by mutableStateOf<PriceEvents.Detected?>(null)
         private set
@@ -508,22 +518,59 @@ object OverlayManager {
         applyLayout(wm, view, p)
     }
 
-    /** 球拖动中：按窗口左上角（TOP|START）移动并夹进可用区；不吸附（吸附只在松手那一下） */
     /**
-     * 松手：把拖动期间累计的位移一次性落到窗口上（吸附最近边 + 夹进可用区 + 落盘）。
-     *
-     * **拖动过程中不搬窗口**：Compose 给指针的坐标是窗口内坐标，窗口一动，手指的局部坐标
-     * 就跟着被减掉一截，"每帧 updateViewLayout"会让球既不跟手又抖（真机：用户报
-     * "滑动后小圆球闪烁，不跟手"）。拖动期间的位移由 PriceOverlay 用
-     * `graphicsLayer.translationX/Y` 画（纯绘制通道、零 IPC），这里只搬这一次。
+     * 球：按下那一刻钉住拖动起点（窗口左上角）。之后每一帧都用"起点 + 屏幕坐标累计位移"
+     * 反算窗口位置，所以这里必须在 ACTION_DOWN 时被调一次 —— 漏掉的话起点是上一次拖动的值，
+     * 球会整段跳偏。
      */
-    fun endBallDrag(dx: Float, dy: Float) {
+    fun beginBallDrag() {
+        if (mode != OverlayMode.Ball) return
+        val p = params ?: return
+        ensureBounds(appContext ?: return)
+        dragOriginX = p.x
+        dragOriginY = p.y
+    }
+
+    /**
+     * 球：拖动中的**每一帧**搬窗口（[dx]/[dy] 是相对按下那一刻的屏幕坐标累计位移）。
+     *
+     * 为什么不像以前那样"拖动期间只画 graphicsLayer.translationX/Y、松手才搬一次窗口"：
+     * 球形态下窗口本身就只有球径大小（[collapseToBall] 那条"窗口跟着收成球径，否则面板的
+     * 透明区会吃掉商品页触摸"的约束），而 translation 是画在**窗口表面**上的 —— 内容一旦
+     * 被画到窗口边界之外就被裁掉，球最多只能离开窗口半个身位，手指继续走它就"停在那儿"。
+     * 用户 2026-10-03 复测报的"球还是不跟手"就是这个，不是坐标反馈问题。
+     * `FLAG_LAYOUT_NO_LIMITS` 也不会放大表面，只有把窗口搬起来才对。
+     *
+     * 每帧一次 `updateViewLayout` 是这类悬浮球的通行做法（gkd / EasyFloat / FloatWindow 都是），
+     * 不需要额外节流；位置没变的那一帧直接跳过，省一次 binder 调用。
+     */
+    fun dragBallBy(dx: Float, dy: Float) {
+        if (mode != OverlayMode.Ball) return
+        val p = params ?: return
+        val wm = windowManager ?: return
+        val view = overlayView ?: return
+        val (x, y) = ballDragPosition(
+            dragOriginX, dragOriginY, dx, dy, ballSidePx, displayWidth, displayHeight, insetTop, insetBottom
+        )
+        if (x == p.x && y == p.y) return
+        p.x = x
+        p.y = y
+        applyLayout(wm, view, p)
+    }
+
+    /**
+     * 松手：从**窗口当前位置**吸附最近边 + 夹进可用区 + 落盘。
+     *
+     * 不再接收累计位移 —— 拖动期间窗口已经跟着手指走完了，位置就在 params 里；
+     * 再累加一次就是双倍位移（这正是"每帧搬窗口"与"松手补一次"两套算法混用时会出现的错）。
+     */
+    fun endBallDrag() {
         if (mode != OverlayMode.Ball) return
         val p = params ?: return
         val wm = windowManager ?: return
         val view = overlayView ?: return
         val (x, y) = ballDropPosition(
-            p.x, p.y, dx, dy, ballSidePx, displayWidth, displayHeight, insetTop, insetBottom
+            p.x, p.y, 0f, 0f, ballSidePx, displayWidth, displayHeight, insetTop, insetBottom
         )
         p.x = x
         p.y = y
@@ -699,7 +746,9 @@ object OverlayManager {
                         identityLowest = identityLowest,
                         mode = mode,
                         onDrag = { dx, dy -> moveBy(dx, dy) },
-                        onBallDragEnd = { dx, dy -> endBallDrag(dx, dy) },
+                        onBallDragStart = { beginBallDrag() },
+                        onBallDrag = { dx, dy -> dragBallBy(dx, dy) },
+                        onBallDragEnd = { endBallDrag() },
                         onCollapseWindow = { collapseToBall() },
                         onExpandWindow = { expandToPanel() },
                         onToggleExpanded = { expanded ->

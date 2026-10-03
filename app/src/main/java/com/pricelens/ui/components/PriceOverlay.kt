@@ -1,5 +1,6 @@
 package com.pricelens.ui.components
 
+import android.view.MotionEvent
 import android.view.ViewConfiguration
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
@@ -12,8 +13,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -46,18 +45,17 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.AwaitPointerEventScope
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -86,6 +84,7 @@ import com.pricelens.util.PriceFormatter
 import com.pricelens.util.TimeAgo
 import java.time.LocalDate
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import kotlinx.coroutines.launch
 
 /** 球面透明度：只有"画"这一层半透明，`LayoutParams.alpha` 仍保持 1.0（见 OverlayManager 文件头第 4 条）。
@@ -129,7 +128,9 @@ fun PriceOverlay(
     identityLowest: Double?,
     mode: OverlayMode,
     onDrag: (Float, Float) -> Unit,
-    onBallDragEnd: (Float, Float) -> Unit,
+    onBallDragStart: () -> Unit,
+    onBallDrag: (Float, Float) -> Unit,
+    onBallDragEnd: () -> Unit,
     onCollapseWindow: () -> Unit,
     onExpandWindow: () -> Unit,
     onToggleExpanded: (Boolean) -> Unit,
@@ -234,6 +235,8 @@ fun PriceOverlay(
             OverlayMode.Ball -> BallForm(
                 label = ballLabel(detected.price, ballReferenceLowest(detected, bundle, identity, identityLowest)),
                 touchSlopPx = touchSlopPx,
+                onDragStart = onBallDragStart,
+                onDrag = onBallDrag,
                 onDragEnd = onBallDragEnd,
                 onTap = { switchForm(OverlayMode.Panel, onExpandWindow) }
             )
@@ -537,46 +540,80 @@ private fun PanelForm(
 /**
  * 小圆球：直径 [BALL_DIAMETER_DP] dp，只显 [ballLabel] 那两行（现价 + 可选差值标记）。
  *
- * 手势只有一个 `pointerInput`：按下后累计位移，**超过** touch slop 才动窗口（[onDrag]），
- * 松手吸附（[onSettled]）；没超过就当点按展开回面板（[onTap]）。
- * 拆成"拖动一个 pointerInput + 点击一个 pointerInput"是两个节点各自判定同一根手指，
+ * 手势只有**一个** DOWN→MOVE→UP 状态机（[pointerInteropFilter] 里那一个 when）：
+ * 按下累计屏幕位移，**超过** touch slop 才认定是拖动并开始搬窗口（[onDragStart] + [onDrag]），
+ * 松手吸附（[onDragEnd]）；没超过就当点按展开回面板（[onTap]）。
+ * 拆成"拖动一个手势 + 点击一个手势"是两个节点各自判定同一根手指，
  * 真机上就是"一动就误判成点击"（面板那两条的历史问题，这里不再犯）。
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun BallForm(label: String, touchSlopPx: Int, onDragEnd: (Float, Float) -> Unit, onTap: () -> Unit) {
+private fun BallForm(
+    label: String,
+    touchSlopPx: Int,
+    onDragStart: () -> Unit,
+    onDrag: (Float, Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onTap: () -> Unit
+) {
     val noPrice = stringResource(R.string.ovl_ball_no_price)
     val lines = label.split('\n')
     val priceLine = lines.firstOrNull().orEmpty().ifEmpty { noPrice }
     val ballCd = stringResource(R.string.ovl_ball_cd_expand, label.replace('\n', ' ').ifEmpty { noPrice })
-    // 拖动期间的位移**只画在绘制通道上**：窗口一搬，指针给我们的就是"窗口内"坐标，
-    // 手指位移会被窗口位移抵消掉一截 —— 那正是"球不跟手 + 抖/闪"的成因。
-    // 松手时把这一步累计位移交给 OverlayManager 一次落窗（见 endBallDrag）。
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
+    // 一次拖动的临时状态。用普通类而不是 mutableStateOf：这些值每帧都变，
+    // 但没有任何组合期代码读它们 —— 做成 State 只会白白重组整棵浮窗树。
+    val drag = remember { BallDragState() }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .semantics { contentDescription = ballCd }
-            .graphicsLayer {
-                translationX = offsetX
-                translationY = offsetY
-            }
-            .pointerInput(touchSlopPx) {
-                awaitEachGesture {
-                    awaitBallGesture(
-                        slopPx = touchSlopPx,
-                        onDragged = { dx, dy ->
-                            offsetX += dx
-                            offsetY += dy
-                        },
-                        onDragFinished = {
-                            onDragEnd(offsetX, offsetY)
-                            offsetX = 0f
-                            offsetY = 0f
-                        },
-                        onTap = onTap
-                    )
+            // 这里**不画** translationX/Y：球形态下窗口就只有球径大小（为了让球不吃商品页的
+            // 触摸），位移画到窗口边界外会被窗口表面裁掉 —— 球最多离开窗口半个身位，手指继续
+            // 走它就"停在那儿"。这才是用户"球还是不跟手"的真因；上一版归因成"窗口内坐标被
+            // 窗口位移抵消"是判错了方向。现在每帧把窗口搬过去（[onDrag] → dragBallBy）。
+            //
+            // 为什么用 pointerInteropFilter 而不是 pointerInput：只有 MotionEvent 在
+            // ACTION_DOWN 上就给得到**屏幕绝对坐标** rawX/rawY。PointerInputChange 没有
+            // rawPosition（1.7.6 的 jar 里 javap 可查，rawPosition 挂在 PointerEvent 那一侧），
+            // 而 Compose 的 awaitFirstDown 已经把按下那一帧消费掉了，事后拿不到它的屏幕坐标
+            // —— 用"第一帧 move"当锚点会把 down→move 那几像素从窗口位移里漏掉，
+            // 球就会固定落后手指一截。
+            // 它挂在球这个节点上、走 Compose 自己的命中测试，与当年"根 ComposeView 上
+            // setOnTouchListener 和 AndroidComposeView 抢 ACTION_DOWN"不是一回事。
+            .pointerInteropFilter { event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        drag.downX = event.rawX
+                        drag.downY = event.rawY
+                        drag.dragged = false
+                        true
+                    }
+
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = event.rawX - drag.downX
+                        val dy = event.rawY - drag.downY
+                        if (!drag.dragged && isDrag(sqrt(dx * dx + dy * dy), touchSlopPx)) {
+                            drag.dragged = true
+                            onDragStart()
+                        }
+                        // 越过阈值这一帧就把**同一份**总位移交出去：起步不掉帧，
+                        // 也不会把 slop 那几像素从窗口位移里漏掉
+                        if (drag.dragged) onDrag(dx, dy)
+                        true
+                    }
+
+                    MotionEvent.ACTION_UP -> {
+                        if (drag.dragged) onDragEnd() else onTap()
+                        true
+                    }
+
+                    MotionEvent.ACTION_CANCEL -> {
+                        if (drag.dragged) onDragEnd()
+                        true
+                    }
+
+                    else -> false
                 }
             },
         contentAlignment = Alignment.Center
@@ -614,36 +651,16 @@ private fun BallForm(label: String, touchSlopPx: Int, onDragEnd: (Float, Float) 
     }
 }
 
-/** 球上的按下→移动→抬起一次判定：位移长度与 [isDrag] 的阈值来自 ViewConfiguration（调用方给的 px） */
-private suspend fun AwaitPointerEventScope.awaitBallGesture(
-    slopPx: Int,
-    onDragged: (Float, Float) -> Unit,
-    onDragFinished: () -> Unit,
-    onTap: () -> Unit
-) {
-    val down = awaitFirstDown(requireUnconsumed = false)
-    var previous = down.position
-    var travelled = 0f
+/**
+ * 一次球拖动的状态：按下那一刻的**屏幕**坐标 + 是否已越过 touch slop。
+ *
+ * 刻意不是 Compose State：这三个值只在 touch 回调里读写，没有任何组合期代码读它们。
+ * 每帧一次 updateViewLayout 已经够贵了，别再为它重组浮窗树。
+ */
+private class BallDragState {
+    var downX = 0f
+    var downY = 0f
     var dragged = false
-    while (true) {
-        val event = awaitPointerEvent(PointerEventPass.Main)
-        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-        if (change.pressed) {
-            val delta = change.position - previous
-            previous = change.position
-            // 没到 slop 之前窗口一动不动：手指按下时的几像素抖动不该被看成"拖了一下"。
-            // 阈值判定把**本次位移算进去**，否则越过阈值那一帧会被丢掉（手感上像"起步慢半拍"）
-            if (isDrag(travelled + delta.getDistance(), slopPx)) {
-                dragged = true
-                onDragged(delta.x, delta.y)
-            }
-            travelled += delta.getDistance()
-            change.consume()
-        } else {
-            if (dragged) onDragFinished() else onTap()
-            break
-        }
-    }
 }
 
 @Composable

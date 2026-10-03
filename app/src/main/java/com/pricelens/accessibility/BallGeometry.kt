@@ -150,6 +150,37 @@ fun ballDropPosition(
 }
 
 /**
+ * 拖动**过程中**每一帧的窗口左上角：按下那一刻的窗口位置 + 屏幕坐标系的累计位移，
+ * **只夹取、不吸附**（吸附只发生在松手那一下，见 [ballDropPosition]）。
+ *
+ * 为什么是"起点 + 累计位移"而不是"当前位置 + 本帧增量"：后者会把每一帧的四舍五入
+ * 和窗口移动带来的坐标反馈累加进去，拖几帧就开始滞后（"不跟手"的数学成因）。
+ * 锚在 DOWN 那一刻的浮点起点上，误差不会累积。
+ *
+ * @param dx/dy 来自 `MotionEvent.rawX/rawY`（或 `PointerInputChange.rawPosition`）的
+ *   **屏幕坐标系**位移。窗口内坐标在这里不可用：窗口正在被搬，局部位移会被自己的移动抵消。
+ */
+fun ballDragPosition(
+    originX: Int,
+    originY: Int,
+    dx: Float,
+    dy: Float,
+    ballSize: Int,
+    screenWidth: Int,
+    screenHeight: Int,
+    topInset: Int,
+    bottomInset: Int
+): Pair<Int, Int> = clampPosition(
+    (originX + dx).roundToInt(),
+    (originY + dy).roundToInt(),
+    ballSize,
+    screenWidth,
+    screenHeight,
+    topInset,
+    bottomInset
+)
+
+/**
  * 收起成球后，页面门控短暂失败（商详页把主价滚出屏幕、图片轮播切换）要不要**立刻**收窗。
  *
  * 真机症状（用户 2026-10-03 报）："滑动后小圆球闪烁，不跟手，又显示继续滑动查看图文详细"——
