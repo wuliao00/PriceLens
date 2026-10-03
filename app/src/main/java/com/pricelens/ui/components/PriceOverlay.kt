@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -336,7 +337,14 @@ private fun PanelForm(
                 )
             ) {
                 Text(
+                    // weight(fill=false)：宽度不够时**先缩价格文本**，而不是把右边的两个动作挤出去。
+                    // 真机取证（2026-10-03 23:46 PLB110，1256px 宽）：折叠胶囊实测只剩
+                    // 「页面价 ¥11,579」+「收」，「收起」的「起」和右边那枚 × 都被裁到胶囊外——
+                    // 而资源里 `ovl_ball_collapse` 明明是「收起」两个字。我上一轮只 grep 了字符串
+                    // 就判"审计项不成立"，漏了"渲染后确实只剩一个『收』字"这件事（见 §9.5 的更正）。
+                    // 动作按钮被文案挤没，是"改文案就坏"最典型的形态：宁可让价格省略号。
                     text = "$basisLabel ${PriceFormatter.format(detected.price)}",
+                    modifier = Modifier.weight(1f, fill = false),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
