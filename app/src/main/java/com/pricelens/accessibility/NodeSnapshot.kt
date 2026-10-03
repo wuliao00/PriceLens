@@ -215,10 +215,7 @@ fun extractTitle(root: NodeSnapshot, platform: ShopPlatform): TitleHit? {
         for (raw in listOfNotNull(n.text, n.contentDescription)) {
             val text = PriceNodeMatcher.cleanTitle(raw) ?: continue
             if (!PriceNodeMatcher.isPlausibleTitle(text, strict = true)) continue
-            var score = text.length.coerceAtMost(60)
-            // 典型商品标题长度带加权；促销长句/参数行通常超出该带
-            if (text.length in 12..45) score += 15
-            if (PriceNodeMatcher.looksLikeSpecLine(text)) score -= 25
+            var score = PriceNodeMatcher.titleScore(text)
             if (n.clickable) score -= 4
             if (score > bestScore) {
                 bestScore = score

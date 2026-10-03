@@ -116,7 +116,7 @@ object PriceNodeMatcher {
     private val TITLE_BLACKLIST_WORDS = listOf(
         "补贴", "免息", "退货", "参数", "评价", "推荐", "加入购物车",
         "领券", "红包", "运费险", "售后", "发票", "包邮", "秒杀", "抢购",
-        "评论", "晒单", "问答", "关注", "客服", "进店", "物流", "发货", "更多"
+        "评论", "晒单", "问答", "关注", "客服", "进店", "物流", "发货", "更多", "好店"
     )
 
     private val CURRENCY_PATTERN = Regex("[¥￥]")
@@ -148,17 +148,35 @@ object PriceNodeMatcher {
      *  - strict=true（三级启发式）：>8 字（旧阈值保留）、≤80、无冒号规格行特征、非纯数字/日期。
      *  - **两级都拒绝导航/工具位**（"购物车20"、"首页"、"消息3"）：一/二级只看 ID 语义，
      *    而淘宝把这些节点的 contentDescription 也做成了语义化 id，长度门槛 6 字挡不住（真机脏数据见 AccessibilityLabel）。
+     *  - **两级都拒绝竖排逐字文案与读屏说明句**（真机取证见 AccessibilityLabel 第二批注释）。
      */
     fun isPlausibleTitle(text: String, strict: Boolean): Boolean {
         val minLen = if (strict) 9 else 6
         if (text.length < minLen || text.length > if (strict) 80 else 120) return false
         if (AccessibilityLabel.looksLikeNavLabel(text)) return false
+        if (AccessibilityLabel.isVerticalSpacedText(text)) return false
+        if (AccessibilityLabel.looksLikeTalkbackText(text)) return false
         if (CURRENCY_PATTERN.containsMatchIn(text)) return false
         if (text.contains('\n')) return false
         if (DATEISH.matches(text)) return false
         if (TITLE_BLACKLIST_WORDS.any { text.contains(it) }) return false
         if (strict && looksLikeSpecLine(text)) return false
         return true
+    }
+
+    /**
+     * 标题候选打分 —— [extractTitle] 的三级启发式与 [com.pricelens.rules.DetectionPipeline]
+     * 比较"规则标题 vs 启发式标题"用的是**同一把尺**（两处各写一套分数迟早会漂移）。
+     *
+     * 长度本身是正分（商品名通常比界面文案长），但只到 60 封顶；
+     * 12~45 是典型商品名长度带，额外加权；规格参数行重罚。
+     * 调用方各自的附加项（如"节点可点击减 4 分"）留在调用处，不进这个公共尺。
+     */
+    fun titleScore(text: String): Int {
+        var score = text.length.coerceAtMost(60)
+        if (text.length in 12..45) score += 15
+        if (looksLikeSpecLine(text)) score -= 25
+        return score
     }
 
     /** 规格参数行特征："屏幕尺寸：6.7英寸"、"存储容量：256GB" */

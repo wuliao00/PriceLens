@@ -1,0 +1,150 @@
+package com.pricelens.accessibility
+
+import com.pricelens.rules.DetectionPipeline
+import com.pricelens.rules.DetectionPipeline.DetectionOutcome
+import com.pricelens.rules.RuleSet
+import com.pricelens.rules.loadedBuiltinJdRule
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * 真机原树标题回归（2026-10-03，OPPO PLB110 / Android 15，京东 App 已登录）。
+ *
+ * 触发这条重写的是一次真机走查：用户在浮窗里看到「继续滑动查看图文详细」，而
+ * logcat 给出了完整链路（E:/dev/pl-evidence-29/208_logcat.txt）——
+ *
+ *   A11Y 命中来源=规则命中 规则 jd@v1/product_detail [title=textRegex:^[^¥￥]{10,80}$ …]
+ *       price=¥92.9(basis=NET) title=继 续 滑 动 查 看 图 文 详 情
+ *   搜索开始: [继 续 滑 动 查 看 图 文 详 情]
+ *
+ * 两个结论，都是这一批断言要钉住的：
+ *  1. **v2.8.0 的规则路径绕过了标题合理性闸**。28cc529 把"导航项不是商品标题"只加在
+ *     启发式路径（[extractTitle]）上，而规则先命中就直接 emit，所以用户报的第三个症状
+ *     当时并没有被治好（我一度以为治好了，见 §9.1 的更正）。
+ *  2. 垃圾标题不只是"看着不对"：它会**以它当关键词发起全网搜索**（当当/识货/什么值得买
+ *     各拉一次 90KB HTML），并把这条垃圾写进搜索历史。
+ *
+ * 夹具是真机 `uiautomator dump` 原样文件（只做过一次手机号/账号扫描，未改结构）：
+ *  - `jd_detail_plb110_20261003.xml`：泸州老窖商详，**加载完成后**。用于钉住"改标题闸门
+ *    不能把好的那一帧也弄没"：这一帧规则标题本来就是对的（真机 logcat 与本地跑分一致），
+ *    价格 ¥92.9 也是对的。
+ *    （写这条用例前我猜"京东新版把款式芯片排在商品名上方，所以芯片会被当标题"——
+ *    **跑完真机树证明这个猜法是错的**：BFS 顺序里标题节点先于芯片，规则抓到的是正确标题。
+ *    留在这里是因为它记录了一次"看起来合理的假设被量具推翻"，别照抄直觉改判定顺序。）
+ *  - `tb_detail_plb110_20261003.xml`：淘宝商详的视频态，整棵树 75 个节点里只有 12 条
+ *    文本/描述，全是导航外壳（「购物车，按钮」「更多28 按钮」「图片，按钮。双击可进入详情页。」）。
+ *    这一页读不出价也读不出标题 ⇒ 必须**不弹窗**，而不是把导航词当商品名弹出来。
+ */
+class RealDumpTitleTest {
+
+    private val jdDetail = loadRealDump(JD_DUMP)
+    private val tbDetail = loadRealDump(TB_DUMP)
+    private val jdRule = RuleSet(listOf(loadedBuiltinJdRule()))
+
+    @Test
+    fun `fixtures are the real device trees and are not budget-truncated`() {
+        assertEquals(317, jdDetail.rawNodeCount)
+        assertEquals(75, tbDetail.rawNodeCount)
+        assertFalse(jdDetail.truncated)
+        assertFalse(tbDetail.truncated)
+        assertEquals(jdDetail.rawNodeCount, jdDetail.snapshotNodeCount)
+        assertEquals(tbDetail.rawNodeCount, tbDetail.snapshotNodeCount)
+    }
+
+    /**
+     * 真机京东商详**加载完成后**：浮窗标题必须是商品名、价格必须是 ¥92.9。
+     *
+     * 这条在加闸门**之前就是绿的**（真机 logcat 同步证实），它的作用是"闸门不许把好的一帧也弄没"：
+     * 规则标题不可信时会改走启发式取标题，启发式若在这棵树上读不出商品名，标题就空了、整条规则作废
+     * → 浮窗不弹。那样用户看到的就不是"标题错"而是"淘宝/京东全都不弹"，是更严重的退步。
+     */
+    @Test
+    fun `pipeline on real jd detail emits the product name and the real price`() {
+        val outcome = DetectionPipeline.detect(
+            jdDetail.root, ShopPlatform.JD, JD_PACKAGE, jdRule, JD_DETAIL_ACTIVITY
+        )
+        assertTrue("真机商详必须命中（不命中=浮窗不弹，同样是用户报的缺陷）：$outcome",
+            outcome is DetectionOutcome.Hit)
+        val detection = (outcome as DetectionOutcome.Hit).detection
+        println("[title] 规则路径标题=${detection.title} 来源=${detection.source.label}")
+        assertTrue(
+            "浮窗标题必须是商品名，实测拿到的是『${detection.title}』",
+            detection.title!!.contains("泸州老窖")
+        )
+        assertEquals(92.9, detection.price.value, 0.001)
+    }
+
+    /**
+     * 用户报的第一现场：京东商详**加载中**那一帧，图上只有竖排提示「继 续 滑 动 查 看 图 文 详 情」
+     * （京东把竖排文案渲染成逐字 + 空格，所以它是 21 个字符、不含 ¥，正好被兜底选择器吃掉）。
+     *
+     * 期望的行为是**这一帧不弹窗**（等页面渲染完，下一条用例的真标题出现再弹），
+     * 而不是弹一个把界面提示当商品名、还顺手拿它去全网搜一次的浮窗。
+     */
+    @Test
+    fun `jd loading-frame scroll hint is never emitted as a product title`() {
+        val loadingFrame = container(
+            kids = arrayOf(
+                leaf(text = "继 续 滑 动 查 看 图 文 详 情"),
+                leaf(text = "¥92.9"),
+                leaf(text = "到手价"),
+                leaf(text = "加入购物车"),
+                leaf(text = "立即购买")
+            )
+        )
+        val outcome = DetectionPipeline.detect(
+            loadingFrame, ShopPlatform.JD, JD_PACKAGE, jdRule, JD_DETAIL_ACTIVITY
+        )
+        assertFalse("加载中那一帧绝不能 emit（emit 出去的就是用户看到的『继续滑动查看图文详情』）：$outcome",
+            outcome is DetectionOutcome.Hit)
+    }
+
+    /**
+     * 真机淘宝视频态：整棵树没有价、没有商品名，只有导航外壳。
+     * 这类页面必须判"非商详"收窗 —— 它同时也是「购物车20，按钮」那条脏身份的形态。
+     */
+    @Test
+    fun `text-less taobao detail dump yields no hit instead of nav chrome garbage`() {
+        val outcome = DetectionPipeline.detect(
+            tbDetail.root, ShopPlatform.TAOBAO, TB_PACKAGE, RuleSet.EMPTY, TB_DETAIL_ACTIVITY
+        )
+        assertFalse("淘宝视频态没有任何商品文本，绝不能命中：$outcome",
+            outcome is DetectionOutcome.Hit)
+        val texts = dumpTexts(tbDetail.root)
+        assertTrue("夹具应保留读屏说明句（没了说明夹具被换过，本用例失去意义）",
+            texts.any { it.contains("按钮") })
+    }
+
+    /**
+     * 回落链单独钉一条：把规则清空（[RuleSet.EMPTY]，等价于"规则没命中"）后，
+     * 启发式路径必须**自己**就能在这棵真机树上读出商品名并命中。
+     *
+     * 为什么单独立一条：闸门生效后，"规则标题不可信"时会改用启发式的标题。
+     * 如果启发式在这棵树上读不出标题，标题为空 → 整条规则作废 → 浮窗不弹，
+     * 症状就从"标题错"升级成"商详页压根不弹"。这条绿着，才说明那条回落有底。
+     */
+    @Test
+    fun `heuristic fallback alone still reads the product name out of the same real dump`() {
+        val outcome = DetectionPipeline.detect(
+            jdDetail.root, ShopPlatform.JD, JD_PACKAGE, RuleSet.EMPTY, JD_DETAIL_ACTIVITY
+        )
+        assertTrue("启发式回落必须能命中真机商详：$outcome", outcome is DetectionOutcome.Hit)
+        val detection = (outcome as DetectionOutcome.Hit).detection
+        assertTrue(
+            "启发式标题应含商品名，实测『${detection.title}』",
+            detection.title!!.contains("泸州老窖")
+        )
+        assertEquals(DetectionPipeline.DetectionSource.HEURISTIC, detection.source)
+    }
+
+    private companion object {
+        const val JD_DUMP = "jd_detail_plb110_20261003.xml"
+        const val TB_DUMP = "tb_detail_plb110_20261003.xml"
+        const val JD_PACKAGE = "com.jingdong.app.mall"
+        const val TB_PACKAGE = "com.taobao.taobao"
+        const val JD_DETAIL_ACTIVITY = "com.jd.lib.productdetail.ProductDetailActivity"
+        const val TB_DETAIL_ACTIVITY = "com.taobao.android.detail2.core.framework.NewDetailActivity"
+    }
+}

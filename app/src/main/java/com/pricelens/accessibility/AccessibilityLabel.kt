@@ -65,4 +65,48 @@ object AccessibilityLabel {
      * 标题取法用它做二次拒绝：真商品名不会以"，按钮"结尾。
      */
     fun hadRoleSuffix(raw: String): Boolean = raw.trim() != stripRoles(raw)
+
+    /**
+     * 竖排文案被逐字拼接的形态（≥5 个单字、每字之间一个空格）。
+     *
+     * 真机取证（2026-10-03 PLB110 / 京东商详加载中那一帧）：`继 续 滑 动 查 看 图 文 详 情`。
+     * 京东把"继续滑动查看图文详情"画成竖排，无障碍树里读出来就是逐字加空格 ——
+     * 它 21 个字符、不含货币符号、没有任何黑名单词，所以**长度带和黑名单都挡不住**，
+     * 而规则路径的兜底选择器 `^[^¥￥]{10,80}$` 会原样收下它。
+     *
+     * 判别依据是"每个词都只有一个字"：真实商品名的空格是分隔音节/规格段的
+     * （「泸州老窖 窖龄30年 浓香型白酒」），不会出现整串单字。
+     */
+    private val VERTICAL_SPACED = Regex("^(?:\\S\\s){4,}\\S$")
+
+    fun isVerticalSpacedText(text: String): Boolean = VERTICAL_SPACED.matches(text.trim())
+
+    /**
+     * 角色词**独立成词**挂在尾部（分隔符可以是逗号，也可以只是空格）。
+     * [ROLE_SUFFIX] 只认「，按钮」这类带逗号的后缀，而真机同时存在「更多28 按钮」这种写法。
+     */
+    private val ROLE_TOKEN_TAIL = Regex(
+        "[，,\\s](按钮|图片|图标|图像|已选中|未选中|可点击|已禁用|可双击|链接|标签页|标题)$"
+    )
+
+    /**
+     * 句末标点。商品名是**短语**不是**句子**：出现「。」/「；」/省略号，说明抓到的是一段
+     * 说明文字或价格免责声明（真机取证：「…以订单结算页的价格为准。若商家单独对价格进行
+     * 说明的，以商家的表述为准」）。
+     *
+     * 故意不收「！」和「？」—— 电商商品名里带问号的营销写法真实存在，收了会误杀。
+     */
+    private val SENTENCE_PUNCT = Regex("[。；…]")
+
+    /**
+     * 这串是"给读屏念的说明句"或"一段正文"，不是商品名。
+     *
+     * 真机取证（淘宝商详视频态整棵树的文本就这几条）：
+     * `视频，按钮。双击可暂停或播放视频。`、`图片，按钮。双击可进入详情页。`、`更多28 按钮`。
+     * 这些串角色词后面还有话，[stripRoles] 的"只吃尾部"吃不动，必须整串拒绝。
+     */
+    fun looksLikeTalkbackText(text: String): Boolean {
+        val s = text.trim()
+        return ROLE_TOKEN_TAIL.containsMatchIn(s) || SENTENCE_PUNCT.containsMatchIn(s)
+    }
 }

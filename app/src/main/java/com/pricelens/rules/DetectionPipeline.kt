@@ -59,23 +59,56 @@ object DetectionPipeline {
         rules: RuleSet,
         activityName: String? = null
     ): DetectionOutcome {
-        ruleDetect(root, packageName, rules, activityName)?.let { return DetectionOutcome.Hit(it) }
+        ruleDetect(root, platform, packageName, rules, activityName)?.let { return DetectionOutcome.Hit(it) }
         return heuristic(root, platform, rules)
     }
 
-    /** 规则路径：确认失败 / 价格解析失败都返回 null（= 交给启发式，绝不静默什么都不显示） */
-    private fun ruleDetect(root: NodeSnapshot, packageName: String, rules: RuleSet, activityName: String?): Detection? {
+    /** 规则路径：确认失败 / 价格解析失败 / 拿不出可信标题都返回 null（= 交给启发式，绝不静默什么都不显示） */
+    private fun ruleDetect(
+        root: NodeSnapshot,
+        platform: ShopPlatform,
+        packageName: String,
+        rules: RuleSet,
+        activityName: String?
+    ): Detection? {
         val rule = rules.ruleFor(packageName) ?: return null
         val result = RuleExtractor.extract(root, rule, activityName) ?: return null
         val priceHit = resolveRulePrice(root, result) ?: return null
         val page = result.page.name ?: "-"
         return Detection(
             price = priceHit,
-            title = result.title,
+            title = pickTitle(root, platform, result) ?: return null,
             itemId = extractItemId(root),
             source = DetectionSource.RULE,
             matchedBy = "规则 ${result.ruleId}@v${result.ruleVersion}/$page [${result.describeFields()}]"
         )
+    }
+
+    /**
+     * 规则抽出的标题只是**候选**，必须过与启发式同一道合理性闸。
+     *
+     * 为什么必须补这一刀（2026-10-03 PLB110 真机 logcat 取证，用户报的第三个症状）：
+     * 出厂规则 `jd@v1/product_detail` 的标题兜底选择器是 `textRegex: ^[^¥￥]{10,80}$`
+     * —— 一条"任何 10~80 字符且不含货币符号的文本"的网。京东商详**加载中那一帧**，
+     * 图上只有竖排提示「继 续 滑 动 查 看 图 文 详 情」（21 字符、无 ¥），于是：
+     *   `A11Y 命中来源=规则命中 … title=继 续 滑 动 查 看 图 文 详 情` → 浮窗把它当商品名显示
+     *   → 紧接着 `搜索开始: [继 续 滑 动 查 看 图 文 详 情]` 拿它去全网搜了一遍
+     *     （当当/识货/什么值得买各拉一次 90KB HTML），还落进搜索历史。
+     * 28cc529 当时只把闸加在启发式路径（[extractTitle]）上，规则先命中就直接 emit，
+     * 所以那次修复对这个症状**没有生效**（真机复验才发现，见 §9.1 的更正）。
+     *
+     * 取舍：规则标题不可信时**保留规则的价格**（价格选择器是按 ID/正则精确写的，比启发式
+     * 的"第一个带 ¥ 的文本"更准），只把标题换成启发式的打分结果；两边都拿不出可信标题时
+     * 整条规则判为未命中 —— 与启发式路径同一条口径："读不出可信标题就不算这一页有可展示的
+     * 单商品"，宁可晚一帧再弹，也不弹一个错标题。
+     *
+     * 真机已验证：加载完成后的京东树规则标题本来就是对的（[RealDumpTitleTest] 第二条用例），
+     * 所以这里只在"规则抓到外壳文案"时才多跑一次 [extractTitle]，正常路径不付额外开销。
+     */
+    private fun pickTitle(root: NodeSnapshot, platform: ShopPlatform, result: RuleExtractResult): String? {
+        val fromRule = result.title?.takeIf { PriceNodeMatcher.isPlausibleTitle(it, strict = false) }
+        if (fromRule != null) return fromRule
+        return extractTitle(root, platform)?.text?.takeIf { PriceNodeMatcher.isPlausibleTitle(it, strict = false) }
     }
 
     /**

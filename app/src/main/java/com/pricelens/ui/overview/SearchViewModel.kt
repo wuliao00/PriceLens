@@ -3,6 +3,7 @@ package com.pricelens.ui.overview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pricelens.accessibility.PriceEvents
+import com.pricelens.accessibility.PriceNodeMatcher
 import com.pricelens.accessibility.ShopPlatform
 import com.pricelens.data.remote.ApiClient
 import com.pricelens.data.remote.BiliApi
@@ -379,17 +380,23 @@ class SearchViewModel @Inject constructor(
                     detected.packageName.startsWith("com.xunmeng") -> "本机拼多多 App 登录账号"
                     else -> "本机电商 App 登录账号"
                 }
+                // 标题不可信时**绝不用它做任何事**（真机 2026-10-03 取证：规则把京东加载中那一帧的
+                // 竖排提示「继 续 滑 动 查 看 图 文 详 情」当商品名 → 这里拿它发起全网搜索，
+                // 当当/识货/什么值得买各拉一次 ~90KB HTML，还把它写进了搜索历史）。
+                // 检测侧已有一道闸（DetectionPipeline.pickTitle），这条是消费侧的第二道：
+                // 规则文件可以从远端热更，一条新规则不该能把垃圾关键词打进网络和搜索历史。
+                val title = detected.title?.takeIf { PriceNodeMatcher.isPlausibleTitle(it, strict = false) }
                 // 网络搜索还没出结果时，先用账号实时价占位展示（@Singleton 候选已有则不覆盖，
                 // 展示层由 [product] 门控 + [staleNotice] 提示防"A 价标 B"）
-                resolver.fillFromDetection(detected.price, detected.title)
+                resolver.fillFromDetection(detected.price, title)
 
                 // A2 P0-3：关键词清洗取代 take(30) 盲截断（截半型号会搜到旧款价）；
                 // 拿到确定性京东 SKU 时直接按 SKU 精查，不再用标题碰运气。
-                val cleaned = SearchQueryCleaner.clean(detected.title)
+                val cleaned = SearchQueryCleaner.clean(title)
                 val query = if (detected.platform == ShopPlatform.JD && detected.itemId != null) {
                     detected.itemId
                 } else {
-                    cleaned ?: detected.title?.take(30)
+                    cleaned ?: title?.take(30)
                 }
                 if (query != null && (query != lastSearchedTitle || now - lastSearchedTitleAt >= 3_000)) {
                     lastSearchedTitle = query

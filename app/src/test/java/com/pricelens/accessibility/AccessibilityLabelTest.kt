@@ -11,6 +11,11 @@ import org.junit.Test
  * 红证据不是这里给的，是真机给的：2026-10-03 上午用户在淘宝里逛了一圈，
  * `.dev` 库里落下两条脏身份（标题 `购物车，按钮` / `购物车20，按钮`，各自绑了一个价格）
  * 与两条脏搜索历史——那是 2.8.0 就有的行为。本文件把当时实际出现的字符串逐条钉住。
+ *
+ * **本文件同时是"我一度以为治好了"的更正记录**：28cc529 只把闸加在启发式路径上，
+ * 而 v2.8.0 起规则路径先命中就直接 emit（见 [RealDumpTitleTest] 的 logcat 取证），
+ * 所以用户报的「继续滑动查看图文详细」当天又复现了一次。下面第二批用例治的是
+ * "什么样的字符串不是商品名"，规则路径那道闸在 DetectionPipeline 里另有一条用例钉住。
  */
 class AccessibilityLabelTest {
 
@@ -67,6 +72,57 @@ class AccessibilityLabelTest {
     @Test
     fun `真商品标题照常通过`() {
         val real = PriceNodeMatcher.cleanTitle("小米 REDMI Book 14 2026 Core Ultra5 32GB+1TB 星光银") ?: ""
+        assertTrue(PriceNodeMatcher.isPlausibleTitle(real, strict = false))
+        assertTrue(PriceNodeMatcher.isPlausibleTitle(real, strict = true))
+    }
+
+    // ---------- 2026-10-03 真机补采的第二批脏文案 ----------
+    //
+    // 上一批只覆盖了"导航项 + 角色后缀"。同日在 PLB110 上还抓到三类形态完全不同的读屏/渲染外壳，
+    // 它们都不带「，按钮」，所以 stripRoles 与 looksLikeNavLabel 两道都拦不住：
+    //  - 京东把竖排文案渲染成**逐字加空格**（「继 续 滑 动 查 看 图 文 详 情」），21 字符、不含 ¥，
+    //    正好落进规则兜底选择器 `^[^¥￥]{10,80}$` 的字符带里；
+    //  - 淘宝/京东的读屏说明句是**整句**（「视频，按钮。双击可暂停或播放视频。」），角色词后面还有话，
+    //    所以"只吃尾部"剥不动它；
+    //  - 角色词也可以只用**空格**分隔（「更多28 按钮」），不带逗号。
+
+    @Test
+    fun `竖排逐字文案判为渲染外壳`() {
+        assertTrue(AccessibilityLabel.isVerticalSpacedText("继 续 滑 动 查 看 图 文 详 情"))
+        // 判别例：真实标题里也有空格，但词是多字的
+        assertFalse(AccessibilityLabel.isVerticalSpacedText("泸州老窖 窖龄30年 浓香型白酒 52度 250ml单瓶装"))
+        assertFalse(AccessibilityLabel.isVerticalSpacedText("52度 250mL 6瓶 窖龄"))
+        assertFalse(AccessibilityLabel.isVerticalSpacedText("第 2 张图"))
+    }
+
+    @Test
+    fun `读屏说明句判为界面文字`() {
+        assertTrue(AccessibilityLabel.looksLikeTalkbackText("视频，按钮。双击可暂停或播放视频。"))
+        assertTrue(AccessibilityLabel.looksLikeTalkbackText("图片，按钮。双击可进入详情页。"))
+        assertTrue(AccessibilityLabel.looksLikeTalkbackText("更多28 按钮"))
+        // 判别例：以"按钮"结尾的真实商品名不许误杀（角色词必须是独立成词的）
+        assertFalse(AccessibilityLabel.looksLikeTalkbackText("工业防水按钮"))
+        assertFalse(AccessibilityLabel.looksLikeTalkbackText("泸州老窖 窖龄30年 浓香型白酒 52度 250ml单瓶装"))
+    }
+
+    @Test
+    fun `第二批脏文案过不了一二级门槛`() {
+        for (dirty in listOf(
+            "继 续 滑 动 查 看 图 文 详 情",
+            "视频，按钮。双击可暂停或播放视频。",
+            "图片，按钮。双击可进入详情页。",
+            "更多28 按钮",
+            "生变化，最终以订单结算页的价格为准。若商家单独对价格进行说明的，以商家的表述为准",
+            "天猫五星好店"
+        )) {
+            assertFalse("脏文案被判成商品标题：『$dirty』", PriceNodeMatcher.isPlausibleTitle(dirty, strict = false))
+            assertFalse("脏文案（strict）被判成商品标题：『$dirty』", PriceNodeMatcher.isPlausibleTitle(dirty, strict = true))
+        }
+    }
+
+    @Test
+    fun `以按钮结尾的真实商品名照常通过`() {
+        val real = "工业防水按钮 微动开关 LW-12mm 两脚自锁"
         assertTrue(PriceNodeMatcher.isPlausibleTitle(real, strict = false))
         assertTrue(PriceNodeMatcher.isPlausibleTitle(real, strict = true))
     }
