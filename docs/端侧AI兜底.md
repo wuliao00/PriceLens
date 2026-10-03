@@ -126,9 +126,10 @@ golden set 还没到量能量化它的量。等能量化"1B vs 3B 的槽位准�
 
 ### 3.3 每条判据的 positive control
 
-`each criterion maps to its documented decision` 是一张 18 行的表：前 11 行是"该拒的被拒/该排的被排"，
-后 7 行是"只改这一条就能放行"（8GB 机型、预算 601MB、电量 21%、空闲 2049MB、计费网络但模型已就位、
-非计费网络可下模型……）。`nominal…runs` 那条同时是用户开关的放行正例。
+`each criterion maps to its documented decision` 是一张 17 行的表：前 11 行是"该拒的被拒/该排的被排"（含三条
+判据顺序的交叉用例：开关关时不看电量、机型不达标时预算说了不算、预算不够时电量再高也不下），
+后 6 行是"只改这一条就能放行"（8GB 机型、预算 601MB、电量 21%、空闲 2049MB、计费网络但模型已就位、
+非计费网络可下模型）。`nominal…runs` 那条同时是用户开关的放行正例。
 四条阈值边界（6144 / 20 / 600 / 2048）各有一条**恰好等于阈值应放行**的独立用例，
 表格里刻意不出现这些取值——这样变异探针的归因是单点的（见 §5）。
 
@@ -174,17 +175,41 @@ price{final,list,drop} / confidence`，42 条产生式。
 **自检能力的边界要说明白**：它证明的是"符号图自洽"，不是"这份语法能解码出正确答案"。
 后者要等能编译、能验机的那一版用真模型跑 golden set。
 
-## 5. 测试纪律与红绿证据
+## 5. 测试纪律与红绿证据（含没做到的那部分）
 
-- 三个测试类共 40 条用例：`ConsensusFallbackExtractorTest`（14）、`OnDeviceAiPolicyTest`（11）、
-  `AiAssetContractTest`（15）。全部是 JVM 单测，无 Robolectric、无新依赖。
-- 变异自证：把 `batterySupported` / `deviceRamSupported`（以及 `freeRamSupported`、`budgetFitsModel`）
-  里的 `>=` 改成 `>`，预期**恰好对应那条"等于阈值应放行"的用例**变红；还原后自己再跑一次
-  不带 `--tests` 过滤的全量门禁。实际执行与 GRADLE_EXIT 记录在
-  `E:/dev/pl-builds/coupon-ai.status.log`（台账），本文不抄写运行时数字。
-- 变异探针先在**本机用 Python 镜像逐条仿真**过（同一份判据、同一张用例表、四种 `>= → >` 变异各自
-  只打到一条），这样一次构建预算就能覆盖"红→绿"而不是用来发现拼写错误。
-- `grep -rn "MUTATION" app/src` 必须为空：本仓库不留任何被注释掉的变异代码。
+**本轮实际跑过什么**（构建只能走 `bash E:/dev/pl-build.sh E:/dev/pl-coupon-ai <任务>`，全机锁串行，预算 3 次，已用满）：
+
+| 次 | 任务 | GRADLE_EXIT | 结果 |
+| --- | --- | --- | --- |
+| 1 | `ktlintCheck :app:testDebugUnitTest --rerun` | 1 | `ktlintMainSourceSetCheck` 抓到两处 enum 尾逗号（`FallbackDraft.kt:39`、`FallbackExtractor.kt:12`）；构建提前失败，测试源集检查与单测未跑 |
+| 2 | 同上（含两处 `>= → >` 变异） | 1 | ktlint 未再报错，死在 `compileDebugUnitTestKotlin`：`ConsensusFallbackExtractorTest.kt:56` 的 `withAmount!!.discount` 被工具侧 PostToolUse hook 吃掉一个 `!!` ⇒ `Double?` 传不进 `assertEquals(double,double,double)`。变异红因此没机会露出 |
+| 3 | 同上（变异已还原为 `>=`，不带 `--tests` 过滤） | **0** | BUILD SUCCESSFUL in 9m33s；`ktlintTestSourceSetCheck` 执行并通过；`:app:testDebugUnitTest` **770 条用例 / 0 failed / 0 error / 0 skipped**（93 个测试类，含本任务新增 3 类 40 条：`ConsensusFallbackExtractorTest` 14、`OnDeviceAiPolicyTest` 11、`AiAssetContractTest` 15） |
+
+`grep -rn "MUTATION" app/src` 在最终态执行过，**无匹配**（退出码 1）：仓库里不留任何被注释掉的变异代码。
+
+### 5.1 变异自证：Gradle 侧这一版**没有**跑成，下面是它的替身与补法
+
+三次预算被两处真实的构建期错误吃掉（ktlint 尾逗号、`!!` 被 hook 改写），而"变异红"与"还原后的全量绿"
+无法在同一次构建里同时拿到。所以下面的归因证据来自**逐条镜像仿真**，不是 Gradle 运行结果：
+把 `OnDeviceAiPolicy` 的四条判据（`deviceRamSupported` / `batterySupported` / `freeRamMb` / `budgetFitsModel`）
+的 `>=` 各改成 `>`，用与单测完全相同的判据实现和同一张 30 行用例表跑一遍，结果是每个变异**恰好打红一条**、
+其余全绿：
+
+```
+mutation battery -> red: ['battery exactly at the threshold is eligible']
+mutation device  -> red: ['device exactly at the six gigabyte floor is eligible']
+mutation free    -> red: ['free ram exactly at the floor is eligible']
+mutation budget  -> red: ['ai budget exactly at the model soft cap is eligible for the download']
+```
+
+这份单点归因之所以成立，是因为用例表里刻意**不出现任何等于阈值的取值**（用 19/21、4096/8192、599/601），
+每条阈值只有一条"恰好等于阈值应放行"的独立用例。补跑一次 Gradle 侧的变异红，成本是 1 次构建 + 2 行改动：
+把 `batterySupported` 与 `deviceRamSupported` 的 `>=` 改成 `>`，跑
+`bash E:/dev/pl-build.sh E:/dev/pl-coupon-ai :app:testDebugUnitTest --rerun`，
+预期且应当**只有**上面列出的那 2 条用例红，还原后再跑一次全量。
+
+同一套镜像还校验了 `consensus(...)` 的 12 组候选（含并列取小、去重来源、min 支持度、冲突标记文本）
+与 §4.2 的语法自洽/字段次序断言——本文件的 §4 与 §2 表格里的每条判据都在这张镜像表里有对应行。
 
 ## 6. grammar 硬约束 vs CPU prefill 性能（trade-off）
 

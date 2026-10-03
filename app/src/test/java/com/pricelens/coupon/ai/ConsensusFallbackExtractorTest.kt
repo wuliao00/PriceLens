@@ -50,10 +50,11 @@ class ConsensusFallbackExtractorTest {
 
     @Test
     fun `candidates carrying no amounts collapse to null instead of an empty draft`() {
-        // 正例对照：下面那条填了面额的就不是 null
+        // 三条 null 语义都要有，且下面填了面额的那条是它们的正例对照
+        assertNull(extractor().extract(clauses))
         assertNull(extractor(cand(), cand(source = page)).extract(clauses))
-        val withAmount = extractor(cand(discount = 50.0)).extract(clauses)
-        assertEquals(50.0, withAmount!!.discount, 0.0)
+        val withAmount = requireNotNull(extractor(cand(discount = 50.0)).extract(clauses))
+        assertEquals(50.0, requireNotNull(withAmount.discount), 0.0)
     }
 
     @Test
