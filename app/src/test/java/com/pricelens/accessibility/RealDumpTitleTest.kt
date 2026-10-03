@@ -210,11 +210,39 @@ class RealDumpTitleTest {
         assertEquals(11499.0, detection.price.value, 0.001)
     }
 
+    /**
+     * 真机第五棵（2026-10-03 21:45 PLB110，国补商品**叠着「领取国家补贴」半屏弹层**那一帧）。
+     *
+     * 这一帧是用户报"把界面提示当商品名"的**第四个形态**，成因和前三次都不一样，
+     * 而且这次是 adb 走查当场抓到的（logcat 为证）：
+     * `A11Y 命中来源=规则命中 规则 jd@v3/product_detail [title=textRegex:^[^¥￥]{10,80}$ …]
+     *  title=当前地区可领，本单可减1500元` → 紧接着拿这句促销语去全网搜了一遍。
+     *
+     * 真因不在词表、不在打分，而在**规则标题兜底网的长度上限**：
+     * 这一页真正的商品名是 145 字（`雷神（ThundeRobot）猎刃S 电竞游戏本笔记本电脑…`），
+     * 被 `{10,80}` 直接排除在网外 ⇒ 网里剩下的第一个"像句子的文本"就是那句 17 字促销语。
+     * 六棵真机树的商品名实测长度 32 / 61 / 145 / 170（含零宽前缀），80 这个数**低于真实分布**，
+     * 是照最早那棵样本凑的。所以这条用例钉的是"上限必须容得下真商品名"，
+     * 而不是"再给促销语加一个词"。
+     */
+    @Test
+    fun `real jd detail with the subsidy popup open keeps the 145-char product name`() {
+        val popup = loadRealDump(GUOBU_POPUP_DUMP)
+        val outcome = DetectionPipeline.detect(popup.root, ShopPlatform.JD, JD_PACKAGE, jdRule, JD_DETAIL_ACTIVITY)
+        assertTrue("国补弹层那一帧也必须命中（价格 ¥13199 就在同一棵树上）：$outcome", outcome is DetectionOutcome.Hit)
+        val detection = (outcome as DetectionOutcome.Hit).detection
+        println("[guobu-popup] 来源=${detection.source.label} 标题长度=${detection.title?.length} 标题=${detection.title}")
+        val title = detection.title ?: "（无标题）"
+        assertFalse("不许把补贴弹层的促销行当商品名：『$title』", title.contains("可领") || title.contains("可减"))
+        assertTrue("必须是那串 145 字的商品名：『$title』", title.contains("猎刃S"))
+    }
+
     private companion object {
         const val JD_DUMP = "jd_detail_plb110_20261003.xml"
         const val JD_MIANFEI_DUMP = "jd_detail_mianfei_plb110_20261003.xml"
         const val JD_GUOBU_DUMP = "jd_detail_guobu_plb110_20261003.xml"
         const val TB_DUMP = "tb_detail_plb110_20261003.xml"
+        const val GUOBU_POPUP_DUMP = "jd_detail_guobu_popup_plb110_20261003.xml"
         const val JD_PACKAGE = "com.jingdong.app.mall"
         const val TB_PACKAGE = "com.taobao.taobao"
         const val JD_DETAIL_ACTIVITY = "com.jd.lib.productdetail.ProductDetailActivity"

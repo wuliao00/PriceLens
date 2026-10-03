@@ -10,14 +10,30 @@ import com.pricelens.accessibility.bfs
  *
  * 契约：
  *  - 页面按声明顺序尝试，[PageRule.matchesActivity] 不通过就整体跳过；
- *  - 每个字段的多个选择器是 fallback 链，按顺序尝试，**在树序（BFS，父先于子、左先于右）里
- *    第一个命中的节点胜出**；
+ *  - 每个字段的多个选择器是 fallback 链，按顺序尝试；链内命中谁，分两种口径：
+ *    · **title 取全树 [PriceNodeMatcher.titleScore] 最高的那个**（[TITLE_FIELD] 写了为什么）；
+ *    · 其余字段取树序（BFS，父先于子、左先于右）里第一个命中的 —— price/buyNow/checkout 的语义
+ *      就是「页面上先出现的那个」，改成最高分反而会把划线价与到手价混掉；
  *  - 文本一律先过 [PriceNodeMatcher.cleanTitle]（删零宽字符）再匹配与输出 —— 真机京东用
  *    U+200B 填充文案，不清洗会"规则明明写了还是不命中"（见 InvisibleTextSanitizingTest）；
  *  - 全部字段抽完后校验 [ConfirmRule]；确认失败返回 null（= 规则未命中，由管线回落到启发式）；
  *  - 永不抛异常：正则运行时异常、空树、null 文本全部按"未命中"处理。
  */
 object RuleExtractor {
+
+    /**
+     * 只有这个字段走「全树最高分」。
+     *
+     * 真机取证（2026-10-03 21:45 PLB110，国补商品叠「领取国家补贴」半屏弹层那一帧）：
+     * 真商品名挂在 **depth=23**，而促销行 `当前地区可领，本单可减1500元` 在 **depth=8**，
+     * BFS 先撞到浅的那条 ⇒ 浮窗显示促销语，并且**拿它去全网搜了一遍**
+     * （当当/什么值得买/识货各一次，logcat 为证）。同一条兜底网 `^[^¥￥]{10,N}$` 里两条都合法，
+     * 所以这不是词表问题、也不是长度上限问题（80→200 实测救不回来），是「第一个命中」这个口径
+     * 本身的问题：树序是渲染层结构的巧合，不是「哪个更像商品名」的判断。
+     * 分数用 [PriceNodeMatcher.titleScore] —— 与启发式路径、与
+     * [com.pricelens.rules.DetectionPipeline.pickTitle] 的比对，三处共用同一把尺。
+     */
+    private const val TITLE_FIELD = "title"
 
     fun extract(root: NodeSnapshot, rule: PlatformRule, activityName: String? = null): RuleExtractResult? {
         for (page in rule.pages) {
@@ -40,6 +56,7 @@ object RuleExtractor {
                 runCatching { Regex(selector.value) }.getOrNull() ?: return null
             else -> null
         }
+        var best: RuleFieldHit? = null
         for (node in bfs(root)) {
             val hit = when (selector.by) {
                 SelectorBy.VIEW_ID -> matchViewId(node, selector)
@@ -49,9 +66,15 @@ object RuleExtractor {
                 SelectorBy.DESC_REGEX -> regexGroup(regex, clean(node.contentDescription), selector)
             } ?: continue
             val nodeText = clean(node.text) ?: clean(node.contentDescription) ?: continue
-            return RuleFieldHit(field, hit, nodeText, selector, node)
+            val candidate = RuleFieldHit(field, hit, nodeText, selector, node)
+            if (field != TITLE_FIELD) return candidate
+            // 严格大于：同分时保留树序更靠前的那条（平手不改变既有行为）
+            val previous = best
+            if (previous == null || PriceNodeMatcher.titleScore(hit) > PriceNodeMatcher.titleScore(previous.value)) {
+                best = candidate
+            }
         }
-        return null
+        return best
     }
 
     /** viewId：全限定名精确匹配；或只写 `:id/` 后的名字段（与主价白名单的"名后缀"策略同源） */

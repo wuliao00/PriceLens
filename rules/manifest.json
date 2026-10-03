@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "manifestVersion": 2026100302,
-  "generatedAt": "2026-10-03T10:56:08Z",
+  "manifestVersion": 2026100303,
+  "generatedAt": "2026-10-03T14:01:48Z",
   "repository": "https://gitee.com/wuliao11541/PriceLens",
   "rules": [
     {
       "id": "jd",
       "file": "rules/jd.json",
-      "version": 3,
-      "sha256": "d2f3c51561ed87a2239ab47f792b63cf6e721f35bea6f589595728fdcfb9f5b6"
+      "version": 4,
+      "sha256": "1b0bb8eddfd7893d70c285c2861af95eeb7f935a34b4e6fbc5d3d9e5d7fee49d"
     }
   ]
 }

@@ -51,11 +51,12 @@ class BuiltinRuleTest {
     fun `builtin rule parses and declares jd package prefix`() {
         val rule = loadedBuiltinJdRule()
         assertEquals("jd", rule.id)
-        // 3 = 2026-10-03 加 `gate`（商详门控词表的远端可改副本，见 GateVocabularyTest）时由
-        // tools/gen_rules_manifest.py 自动递增的（2 = 把国补底栏文案「领取补贴购买」收进
-        // buyNow 正则）。改内容不改版本号 = 这条会红，
+        // 4 = 2026-10-03 晚把标题兜底网从 {10,80} 抬到 {10,200}（真机商品名实测 32/61/145/170 字，
+        //     80 低于真实分布 ⇒ 网里只剩促销行，见 RealDumpTitleTest 第五棵）；
+        // 3 = 加 `gate`（词表远端可改副本，见 GateVocabularyTest）；2 = 收「领取补贴购买」。
+        // 都由 tools/gen_rules_manifest.py 自动递增。改内容不改版本号 = 这条会红，
         // 逼着一起重算 sha256，见下面两条一致性闸门）
-        assertEquals(3, rule.version)
+        assertEquals(4, rule.version)
         assertEquals(listOf("com.jingdong"), rule.packages)
         assertTrue(rule.covers("com.jingdong.app.mall"))
         assertEquals(1, rule.pages.size)

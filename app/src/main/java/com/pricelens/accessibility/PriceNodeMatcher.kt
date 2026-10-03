@@ -120,6 +120,22 @@ object PriceNodeMatcher {
     )
 
     private val CURRENCY_PATTERN = Regex("[¥￥]")
+
+    /**
+     * 商品名长度上限（**清洗后**的字符数）。
+     *
+     * 这里曾经是 `if (strict) 80 else 120` 两个各自拍的数，2026-10-03 晚被真机连抽两次脸：
+     *  1. 规则兜底网 `{10,80}` 把 145 字的真商品名排除在网外，网里只剩促销行
+     *     `当前地区可领，本单可减1500元` ⇒ 浮窗显示促销语并拿它全网搜了一遍
+     *     （`jd_detail_guobu_popup_plb110_20261003.xml`，logcat 为证）；把网抬到 200 之后
+     *     规则**确实**取到了真名，却被本函数这道闸又判死——同一个数在两个地方各写一遍；
+     *  2. 六棵真机树的商品名实测长度 32 / 61 / 145 / 170（170 那棵含零宽填充，清洗后约 155）。
+     *
+     * 所以：一个数、两路共用、值取"实测最长 170 再留一档"。上限存在的意义是挡住
+     * "整段说明文字/拼接正文"，不是挡商品名——真商品名比想象的长得多。
+     * 改这个数之前先去看 `app/src/test/resources/fixtures` 目录里最长的那条商品名。
+     */
+    const val TITLE_MAX_LEN = 220
     private val PURE_NUMBER = Regex("\\d{1,9}(?:\\.\\d{1,2})?")
     private val DATEISH = Regex("^[\\d\\s.,%\\-/:年月日]+$")
 
@@ -165,7 +181,7 @@ object PriceNodeMatcher {
      */
     fun isPlausibleTitle(text: String, strict: Boolean): Boolean {
         val minLen = if (strict) 9 else 6
-        if (text.length < minLen || text.length > if (strict) 80 else 120) return false
+        if (text.length < minLen || text.length > TITLE_MAX_LEN) return false
         if (AccessibilityLabel.looksLikeNavLabel(text)) return false
         if (AccessibilityLabel.isVerticalSpacedText(text)) return false
         if (AccessibilityLabel.looksLikeTalkbackText(text)) return false
@@ -188,7 +204,8 @@ object PriceNodeMatcher {
      * strict=true 拒它，一/二级（ID 背书）与规则路径不拒，所以这道要单独有名字给它们用。
      */
     fun isDisplayableTitle(text: String): Boolean =
-        isPlausibleTitle(text, strict = false) && !looksLikeSpecLine(text)
+        isPlausibleTitle(text, strict = false) && !looksLikeSpecLine(text) &&
+        !AccessibilityLabel.isCountEnumeration(text)
 
     /**
      * 标题候选打分 —— [extractTitle] 的三级启发式与 [com.pricelens.rules.DetectionPipeline]

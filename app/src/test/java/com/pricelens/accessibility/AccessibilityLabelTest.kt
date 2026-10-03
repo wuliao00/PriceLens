@@ -143,4 +143,22 @@ class AccessibilityLabelTest {
         assertFalse(PriceNodeMatcher.isPlausibleTitle("12期免息", strict = false))
         assertFalse(PriceNodeMatcher.isPlausibleTitle("24期免息 晒单返红包", strict = false))
     }
+
+    /**
+     * 计数枚举形状（真机 2026-10-03 21:45 迷你沉浸详情页）：`1个视频，4张图片` 被启发式当商品名
+     * 返回，随后拿它去全网搜了一遍。判据是形状（数字+短非数字段，逗号串起来，≥2 段），不是词表。
+     *
+     * 三条 positive control 是这条判据的**下限**：真实商品名里有数字、有逗号、有单位，
+     * 只断言"角标被拒"而不管住这些，就等于把误杀换成了漏检。
+     */
+    @Test
+    fun `media counters are rejected while numeric product names survive`() {
+        assertTrue(AccessibilityLabel.isCountEnumeration("1个视频，4张图片"))
+        assertTrue(AccessibilityLabel.isCountEnumeration("3条评价，12张图片"))
+        assertFalse("带空格与单位的规格写法不是计数枚举", AccessibilityLabel.isCountEnumeration("500ml 2瓶 酱香型白酒"))
+        assertFalse("含逗号的真实商品名不许被误杀", AccessibilityLabel.isCountEnumeration("泸州老窖 窖龄30年，52度 500mL 6瓶"))
+        assertFalse("单段计数不是枚举", AccessibilityLabel.isCountEnumeration("240Hz高刷"))
+        assertFalse(PriceNodeMatcher.isDisplayableTitle("1个视频，4张图片"))
+        assertTrue(PriceNodeMatcher.isDisplayableTitle("泸州老窖 窖龄30年，52度 500mL 6瓶 礼盒装"))
+    }
 }

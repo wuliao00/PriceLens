@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "jd",
-  "version": 3,
+  "version": 4,
   "description": "京东 App 商详页选择器（现货 / 预约 / 国补三种底栏文案都覆盖）。gate 是商详门控词表的远端可改副本，必须与出厂 PageVocabulary.DEFAULT 逐项相等（BuiltinRuleTest 比对钉死），改词表 = 推规则，不用发 APK。规则说明见 docs/API.md「选择器规则远程订阅」。",
   "packages": [
     "com.jingdong"
@@ -23,7 +23,7 @@
           },
           {
             "by": "textRegex",
-            "value": "^[^¥￥]{10,80}$"
+            "value": "^[^¥￥]{10,200}$"
           }
         ],
         "price": [
