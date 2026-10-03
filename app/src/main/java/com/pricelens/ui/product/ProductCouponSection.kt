@@ -3,6 +3,8 @@ package com.pricelens.ui.product
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,8 +39,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
+import com.pricelens.coupon.CouponExtractor
+import com.pricelens.coupon.CouponMisreadFiles
+import com.pricelens.coupon.CouponMisreadJsonl
+import com.pricelens.coupon.CouponMisreadStore
+import com.pricelens.coupon.MisreadLedger
 import com.pricelens.data.remote.GwdangApi
 import com.pricelens.ui.common.AsyncValue
 import com.pricelens.ui.common.valueOrDefault
@@ -50,8 +60,12 @@ import com.pricelens.ui.theme.LocalSemanticColors
 import com.pricelens.ui.theme.MotionDurations
 import com.pricelens.ui.theme.PriceLensEasing
 import com.pricelens.ui.theme.PriceType
+import com.pricelens.ui.theme.fg
 import com.pricelens.util.PriceFormatter
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * §十一 详情页「找券」段。
@@ -61,6 +75,14 @@ import kotlinx.coroutines.launch
  *  - 券源只展示爆料里显式写出的券，不做价差反推；
  *  - 有券但都没到门槛 → 如实说"暂无可算的到手价"，不显示误导性的 ¥0；
  *  - 到手价 countUp 走 graphicsLayer alpha（§2.1 铁律），500ms 属 §2.3 的历史例外时长。
+ *
+ * 任务书 B2 之后这里并排放**两组券**（B2 口径：不许悄悄替换/吞掉 Gwdang 那条路）：
+ *  - 远端组：`GwdangApi.Coupon`，什么值得买券频道给的列表，渲染一行都不改；
+ *  - 本机组：[CouponExtractor] 从当前搜索文案（用户贴进来的分享文本正是剪贴板入口的本命）
+ *    逐句读出的 [com.pricelens.coupon.model.CouponSlot]，带三档置信、逐槽"未识别"与证据句；
+ *    每张券一个"这条不对"按钮，点了只进内存清单，导出走 files 下的本地通道
+ *    （[CouponMisreadJsonl] 与 `tools/golden/coupons.jsonl` 逐字段兼容，人工放进评测集才参与回归）。
+ * 节点树入口（浮窗侧的 page_node）不在本刀接线，展示层按 Extraction 类型写一份即可复用。
  */
 @Composable
 fun ProductCouponSection(searchViewModel: SearchViewModel) {
@@ -68,6 +90,12 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
     val couponsAsync by searchViewModel.coupons.collectAsStateWithLifecycle()
     val netPrice by searchViewModel.netPrice.collectAsStateWithLifecycle()
     val coupons = couponsAsync.valueOrDefault(emptyList())
+    val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
+    // 本机识别只走门面（统一流水线不许绕）；每轮关键词算一次，重排不重算
+    val localExtraction = remember(keyword) { CouponExtractor.fromClipboard(keyword.trim()) }
+    val localRows = localCouponRows(localExtraction)
+    val ledger = remember { MisreadLedger() }
+    var markedCount by remember { mutableStateOf(0) }
 
     when {
         couponsAsync is AsyncValue.Loading<*> || (loading && coupons.isEmpty()) -> {
@@ -75,24 +103,23 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
             return
         }
         couponsAsync is AsyncValue.Error<*> -> {
-            // 失败：友好提示；有旧数据仍展示
+            // 失败：友好提示；有旧数据仍展示（本机组不依赖远端，有它自己在就不空手退出）
             Column(Modifier.fillMaxSize().padding(Dims.SpacingXL)) {
                 EmptyState(
                     icon = Icons.Filled.Warning,
                     title = stringResource(R.string.error_load_failed),
                     desc = stringResource(R.string.error_retry_hint)
                 )
-                if (coupons.isEmpty()) return
+                if (coupons.isEmpty() && localRows.isEmpty()) return
                 Spacer(Modifier.height(Dims.SpacingL))
             }
         }
-        coupons.isEmpty() -> {
+        coupons.isEmpty() && localRows.isEmpty() -> {
             // 搜索后也可能"确实没有券"（券源只展示显式券文案，不做价差反推）
-            val searched = searchViewModel.keyword.collectAsStateWithLifecycle().value.isNotBlank()
             EmptyState(
                 icon = Icons.Filled.ConfirmationNumber,
                 title = stringResource(
-                    if (searched) R.string.coupon_empty_title else R.string.empty_search_first
+                    if (keyword.isNotBlank()) R.string.coupon_empty_title else R.string.empty_search_first
                 ),
                 desc = stringResource(R.string.coupon_empty_hint),
                 modifier = Modifier.padding(Dims.SpacingXL)
@@ -104,6 +131,29 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // SAF 兜底（崩溃日志同款写法）：把逐行 JSONL 写到用户当场选定的位置，程序不挑地方
+    val safMisreadExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            val marks = ledger.snapshot()
+            val jsonl = CouponMisreadJsonl.export(marks)
+            scope.launch {
+                val outcome = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openOutputStream(uri)
+                            ?.use { it.write(jsonl.toByteArray(Charsets.UTF_8)) }
+                            ?: error("openOutputStream 返回 null")
+                    }
+                }
+                val msg = if (outcome.isSuccess) {
+                    context.getString(R.string.coupon_local_export_saved, marks.size, uri.lastPathSegment ?: uri.toString())
+                } else {
+                    context.getString(R.string.coupon_local_export_failed)
+                }
+                snackbar.showSnackbar(msg)
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -136,6 +186,51 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
                     scope.launch { snackbar.showSnackbar(context.getString(R.string.coupon_copied)) }
                 }
                 Spacer(Modifier.height(Dims.SpacingM))
+            }
+            // 本机识别组（B2 交付一/二）：小标题明说来源，逐卡三档+逐槽+证据句+纠错按钮
+            if (localRows.isNotEmpty()) {
+                item(key = "local_header") {
+                    LocalGroupHeader()
+                }
+                itemsIndexed(localRows, key = { _, row -> "local:${row.index}_${row.sourceText.hashCode()}" }) { _, row ->
+                    LocalCouponCard(
+                        row = row,
+                        marked = ledger.isMarked(localExtraction, row.index),
+                        onMark = {
+                            if (ledger.mark(localExtraction, row.index, System.currentTimeMillis())) {
+                                markedCount = ledger.markedCount()
+                            }
+                        }
+                    )
+                    Spacer(Modifier.height(Dims.SpacingM))
+                }
+                if (markedCount > 0) {
+                    item(key = "local_export") {
+                        MisreadExportRow(
+                            markedCount = markedCount,
+                            onWriteLocal = {
+                                val marks = ledger.snapshot()
+                                val jsonl = CouponMisreadJsonl.export(marks)
+                                scope.launch {
+                                    val outcome = withContext(Dispatchers.IO) {
+                                        runCatching {
+                                            CouponMisreadStore(File(context.filesDir, CouponMisreadFiles.DIR_NAME))
+                                                .write(jsonl, System.currentTimeMillis())
+                                        }
+                                    }
+                                    val result = outcome.getOrNull()
+                                    val msg = if (result != null) {
+                                        context.getString(R.string.coupon_local_export_saved, marks.size, result.name)
+                                    } else {
+                                        context.getString(R.string.coupon_local_export_failed)
+                                    }
+                                    snackbar.showSnackbar(msg)
+                                }
+                            },
+                            onExportSaf = { safMisreadExport.launch(CouponMisreadFiles.fileName(System.currentTimeMillis())) }
+                        )
+                    }
+                }
             }
         }
         SnackbarHost(snackbar)
@@ -200,5 +295,90 @@ private fun CouponCard(coupon: GwdangApi.Coupon, onCopy: () -> Unit) {
                 Text(stringResource(R.string.coupon_copy))
             }
         }
+    }
+}
+
+/** 本机识别组的小标题：明说这组是"从当前文案里识别的"，与上面远端券列表是两回事 */
+@Composable
+private fun LocalGroupHeader() {
+    Column {
+        Spacer(Modifier.height(Dims.SpacingL))
+        Text(stringResource(R.string.coupon_local_header), style = MaterialTheme.typography.titleSmall)
+        Text(
+            stringResource(R.string.coupon_local_subheader),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(Dims.SpacingM))
+    }
+}
+
+/** 单个槽位的显示文本：未识别就是一句"未识别"，args 为空即没携带任何别的槽位的数 */
+@Composable
+private fun slotValueText(cell: SlotCell): String = when {
+    cell.unknown -> stringResource(R.string.coupon_local_unrecognized)
+    cell.args.isEmpty() -> stringResource(cell.valueRes)
+    else -> stringResource(cell.valueRes, *cell.args.toTypedArray())
+}
+
+/**
+ * 本机识别的一张券：档位（措辞+色调）、固定七格逐槽、证据句、"这条不对"。
+ * 读屏拿到的是一条拼好的句子（档位 + 逐槽读数 + 证据句），不是散落的标签串。
+ */
+@Composable
+private fun LocalCouponCard(row: LocalCouponRow, marked: Boolean, onMark: () -> Unit) {
+    val tierText = stringResource(tierLabelRes(row.tier))
+    // 读屏句子逐格拼：这里不用 joinToString(transform)——那个内联 lambda 不继承 Composable 上下文
+    val cellParts = mutableListOf<String>()
+    for (cell in row.cells) {
+        cellParts.add(stringResource(R.string.coupon_local_cd_slot, stringResource(cell.labelRes), slotValueText(cell)))
+    }
+    val readout = cellParts.joinToString("，")
+    val description = stringResource(R.string.coupon_local_cd_row, tierText, readout, row.sourceText)
+    PriceCard(modifier = Modifier.fillMaxWidth().semantics { contentDescription = description }) {
+        Column {
+            Text(tierText, style = MaterialTheme.typography.labelLarge, color = tierTone(row.tier).fg())
+            row.cells.forEach { cell ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(cell.labelRes),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(Modifier.width(Dims.SpacingS))
+                    Text(slotValueText(cell), style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                }
+            }
+            Text(
+                stringResource(R.string.coupon_local_source_line, row.sourceText),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3
+            )
+            TextButton(onClick = onMark, enabled = !marked, shape = MaterialTheme.shapes.small) {
+                Text(stringResource(if (marked) R.string.coupon_local_marked else R.string.coupon_local_mark_wrong))
+            }
+        }
+    }
+}
+
+/** 导出行：只导被标记的那几条；两条通道（本机文件 / SAF 另存）都不联网 */
+@Composable
+private fun MisreadExportRow(markedCount: Int, onWriteLocal: () -> Unit, onExportSaf: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = Dims.SpacingS)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onWriteLocal, shape = MaterialTheme.shapes.small) {
+                Text(stringResource(R.string.coupon_local_export, markedCount))
+            }
+            Spacer(Modifier.width(Dims.SpacingS))
+            TextButton(onClick = onExportSaf, shape = MaterialTheme.shapes.small) {
+                Text(stringResource(R.string.coupon_local_export_saf))
+            }
+        }
+        Text(
+            stringResource(R.string.coupon_local_export_note),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
