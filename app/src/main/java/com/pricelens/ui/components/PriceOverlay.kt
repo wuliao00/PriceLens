@@ -46,6 +46,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -128,8 +129,7 @@ fun PriceOverlay(
     identityLowest: Double?,
     mode: OverlayMode,
     onDrag: (Float, Float) -> Unit,
-    onBallDrag: (Float, Float) -> Unit,
-    onBallSettled: () -> Unit,
+    onBallDragEnd: (Float, Float) -> Unit,
     onCollapseWindow: () -> Unit,
     onExpandWindow: () -> Unit,
     onToggleExpanded: (Boolean) -> Unit,
@@ -171,8 +171,10 @@ fun PriceOverlay(
     val switchForm: (OverlayMode, () -> Unit) -> Unit = { target, commit ->
         switchScope.launch {
             form.animateTo(0f, tween(MotionDurations.Standard, easing = PriceLensEasing))
-            commit()
+            // 先换内容、再换窗口尺寸。反过来会留一帧"面板内容装在球大的窗口里"，
+            // 面板首行文字被裁成一条露在球旁边（真机看到的就是这条残留文案）
             shown = target
+            commit()
             form.animateTo(1f, tween(MotionDurations.Standard, easing = PriceLensEasing))
         }
     }
@@ -232,8 +234,7 @@ fun PriceOverlay(
             OverlayMode.Ball -> BallForm(
                 label = ballLabel(detected.price, ballReferenceLowest(detected, bundle, identity, identityLowest)),
                 touchSlopPx = touchSlopPx,
-                onDrag = onBallDrag,
-                onSettled = onBallSettled,
+                onDragEnd = onBallDragEnd,
                 onTap = { switchForm(OverlayMode.Panel, onExpandWindow) }
             )
         }
@@ -542,19 +543,40 @@ private fun PanelForm(
  * 真机上就是"一动就误判成点击"（面板那两条的历史问题，这里不再犯）。
  */
 @Composable
-private fun BallForm(label: String, touchSlopPx: Int, onDrag: (Float, Float) -> Unit, onSettled: () -> Unit, onTap: () -> Unit) {
+private fun BallForm(label: String, touchSlopPx: Int, onDragEnd: (Float, Float) -> Unit, onTap: () -> Unit) {
     val noPrice = stringResource(R.string.ovl_ball_no_price)
     val lines = label.split('\n')
     val priceLine = lines.firstOrNull().orEmpty().ifEmpty { noPrice }
     val ballCd = stringResource(R.string.ovl_ball_cd_expand, label.replace('\n', ' ').ifEmpty { noPrice })
+    // 拖动期间的位移**只画在绘制通道上**：窗口一搬，指针给我们的就是"窗口内"坐标，
+    // 手指位移会被窗口位移抵消掉一截 —— 那正是"球不跟手 + 抖/闪"的成因。
+    // 松手时把这一步累计位移交给 OverlayManager 一次落窗（见 endBallDrag）。
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .semantics { contentDescription = ballCd }
+            .graphicsLayer {
+                translationX = offsetX
+                translationY = offsetY
+            }
             .pointerInput(touchSlopPx) {
                 awaitEachGesture {
-                    awaitBallGesture(touchSlopPx, onDrag, onSettled, onTap)
+                    awaitBallGesture(
+                        slopPx = touchSlopPx,
+                        onDragged = { dx, dy ->
+                            offsetX += dx
+                            offsetY += dy
+                        },
+                        onDragFinished = {
+                            onDragEnd(offsetX, offsetY)
+                            offsetX = 0f
+                            offsetY = 0f
+                        },
+                        onTap = onTap
+                    )
                 }
             },
         contentAlignment = Alignment.Center
@@ -595,25 +617,30 @@ private fun BallForm(label: String, touchSlopPx: Int, onDrag: (Float, Float) -> 
 /** 球上的按下→移动→抬起一次判定：位移长度与 [isDrag] 的阈值来自 ViewConfiguration（调用方给的 px） */
 private suspend fun AwaitPointerEventScope.awaitBallGesture(
     slopPx: Int,
-    onDrag: (Float, Float) -> Unit,
-    onSettled: () -> Unit,
+    onDragged: (Float, Float) -> Unit,
+    onDragFinished: () -> Unit,
     onTap: () -> Unit
 ) {
     val down = awaitFirstDown(requireUnconsumed = false)
     var previous = down.position
     var travelled = 0f
+    var dragged = false
     while (true) {
         val event = awaitPointerEvent(PointerEventPass.Main)
         val change = event.changes.firstOrNull { it.id == down.id } ?: break
         if (change.pressed) {
             val delta = change.position - previous
             previous = change.position
-            // 没到 slop 之前窗口一动不动：手指按下时的几像素抖动不该被看成"拖了一下"
-            if (isDrag(travelled, slopPx)) onDrag(delta.x, delta.y)
+            // 没到 slop 之前窗口一动不动：手指按下时的几像素抖动不该被看成"拖了一下"。
+            // 阈值判定把**本次位移算进去**，否则越过阈值那一帧会被丢掉（手感上像"起步慢半拍"）
+            if (isDrag(travelled + delta.getDistance(), slopPx)) {
+                dragged = true
+                onDragged(delta.x, delta.y)
+            }
             travelled += delta.getDistance()
             change.consume()
         } else {
-            if (isDrag(travelled, slopPx)) onSettled() else onTap()
+            if (dragged) onDragFinished() else onTap()
             break
         }
     }

@@ -119,5 +119,49 @@ fun nextOverlayMode(current: OverlayMode, event: OverlayEvent): OverlayMode = wh
 /** 当前形态能否发起「收起」（球的收起 = 自己，无效动作） */
 fun canCollapse(mode: OverlayMode): Boolean = mode is OverlayMode.Panel
 
+/**
+ * 松手落点：窗口当前左上角 + 手指累计位移（px）→ 先吸附最近边，再夹进可用区。
+ *
+ * 为什么拖动过程中不调这个、只在松手调一次：拖动时每次 `updateViewLayout` 都会把窗口搬走，
+ * 而 Compose 给指针的坐标是**窗口内**坐标——窗口一动，手指的局部坐标几乎不变，
+ * 于是"窗口跟着手走"会自己把自己拖死（真机症状：不跟手 + 抖动/闪烁）。
+ * 所以拖动期间只用 `graphicsLayer.translationX/Y` 画位移（纯绘制通道，零 IPC），
+ * 松手这一下才真正搬窗口。
+ */
+fun ballDropPosition(
+    x: Int,
+    y: Int,
+    dx: Float,
+    dy: Float,
+    ballSize: Int,
+    screenWidth: Int,
+    screenHeight: Int,
+    topInset: Int,
+    bottomInset: Int
+): Pair<Int, Int> {
+    val movedX = (x + dx).roundToInt()
+    val movedY = (y + dy).roundToInt()
+    val snapped = when (snapEdge(movedX, ballSize, screenWidth)) {
+        Side.Left -> 0
+        Side.Right -> (screenWidth - ballSize).coerceAtLeast(0)
+        Side.Keep -> movedX
+    }
+    return clampPosition(snapped, movedY, ballSize, screenWidth, screenHeight, topInset, bottomInset)
+}
+
+/**
+ * 收起成球后，页面门控短暂失败（商详页把主价滚出屏幕、图片轮播切换）要不要**立刻**收窗。
+ *
+ * 真机症状（用户 2026-10-03 报）："滑动后小圆球闪烁，不跟手，又显示继续滑动查看图文详细"——
+ * 面板形态下这条门控是对的（离开商详就该收窗），但球是用户**主动收起**的常驻读价器，
+ * 京东页面滚动时门控会一闪一闪地失败，于是窗口被反复 remove/add，
+ * 而每次新建窗口都从面板起步 → 球"变回"胶囊条。所以球形态下延迟收窗，
+ * 期间任何一次重新命中都取消这次拆除。
+ */
+fun shouldDeferTeardown(mode: OverlayMode): Boolean = mode is OverlayMode.Ball
+
+/** 新建窗口时该用哪种形态：跟随用户上一次的主动选择，而不是硬回面板 */
+fun initialForm(userCollapsed: Boolean): OverlayMode = if (userCollapsed) OverlayMode.Ball else OverlayMode.Panel
+
 /** 当前形态能否发起「展开」 */
 fun canExpand(mode: OverlayMode): Boolean = mode is OverlayMode.Ball

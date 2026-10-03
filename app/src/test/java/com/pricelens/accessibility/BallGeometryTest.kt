@@ -195,4 +195,60 @@ class BallGeometryTest {
         assertTrue(canExpand(OverlayMode.Ball))
         assertFalse(canExpand(OverlayMode.Panel))
     }
+
+    // ---------- ballDropPosition（松手一次性落窗；拖动期间只画 translation） ----------
+
+    @Test
+    fun `drag past the middle snaps to the right edge`() {
+        val (x, y) = ballDropPosition(
+            x = 500, y = 400, dx = 600f, dy = 100f, ballSize = 224,
+            screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 0
+        )
+        assertEquals(1256 - 224, x)
+        assertEquals(500, y)
+    }
+
+    @Test
+    fun `small drag keeps the position instead of snapping`() {
+        val (x, y) = ballDropPosition(
+            x = 500, y = 400, dx = 20f, dy = 0f, ballSize = 224,
+            screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 0
+        )
+        assertEquals(520, x)
+        assertEquals(400, y)
+    }
+
+    /** 判别例：拖出下边界必须被 inset 夹住（球压导航栏是真机上最难看的错） */
+    @Test
+    fun `drag beyond the bottom is clamped above the nav bar`() {
+        val (x, y) = ballDropPosition(
+            x = 0, y = 2000, dx = 0f, dy = 5000f, ballSize = 224,
+            screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 120
+        )
+        assertEquals(0, x)
+        assertEquals(2760 - 120 - 224, y)
+    }
+
+    @Test
+    fun `drag above the top inset is clamped below the status bar`() {
+        val (_, y) = ballDropPosition(
+            x = 300, y = 400, dx = 0f, dy = -5000f, ballSize = 224,
+            screenWidth = 1256, screenHeight = 2760, topInset = 140, bottomInset = 0
+        )
+        assertEquals(140, y)
+    }
+
+    // ---------- 收窗时机与建窗形态（真机"球闪烁 + 变回胶囊条"那一条） ----------
+
+    @Test
+    fun `ball defers teardown while panel tears down at once`() {
+        assertTrue(shouldDeferTeardown(OverlayMode.Ball))
+        assertFalse(shouldDeferTeardown(OverlayMode.Panel))
+    }
+
+    @Test
+    fun `new window follows the user's last explicit form`() {
+        assertEquals(OverlayMode.Ball, initialForm(userCollapsed = true))
+        assertEquals(OverlayMode.Panel, initialForm(userCollapsed = false))
+    }
 }

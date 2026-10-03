@@ -42,6 +42,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -68,6 +69,9 @@ object OverlayManager {
     /** 面板窗口的宽度上限（dp）= PriceOverlay 的 `widthIn(max = 280.dp)` + 左右各 12dp 外圈 */
     private const val PANEL_MAX_WIDTH_DP = 304f
 
+    /** 球形态下"离开商详"的宽限期：门控一闪即断不立刻拆窗（见 [onLeftProductPage]） */
+    private const val TEARDOWN_GRACE_MS = 1500L
+
     private var windowManager: WindowManager? = null
     private var overlayView: ComposeView? = null
     private var host: OverlayHost? = null
@@ -93,6 +97,15 @@ object OverlayManager {
     /** 当前浮窗形态。**面板与球共用同一枚窗口**，切换只换尺寸与内容，绝不 addView 第二枚 */
     var mode by mutableStateOf<OverlayMode>(OverlayMode.Panel)
         private set
+
+    /**
+     * 用户是否主动把浮窗收成了球。与 [mode] 分开存：mode 描述"当前窗口是什么"，
+     * 这一个描述"用户想要什么"，它要跨 hide()/show() 活下来（否则滚动一次球就变回胶囊条）。
+     */
+    private var userCollapsed = false
+
+    /** 球形态下延迟收窗的待办（门控一闪即断时不该立刻拆窗；下一次命中会取消它） */
+    private var pendingHideJob: Job? = null
 
     /** 当前展示内容（无障碍折叠胶囊/展开面板的唯一数据入口） */
     var content by mutableStateOf<PriceEvents.Detected?>(null)
@@ -142,6 +155,9 @@ object OverlayManager {
         collectJob = scope.launch(Dispatchers.Main) {
             PriceEvents.detections.collect { detected ->
                 if (!canDrawOverlays(context)) return@collect
+                // 重新命中 = 还在商详页：把"延迟收窗"撤掉（球形态下滚动会一闪一闪地读不到价）
+                pendingHideJob?.cancel()
+                pendingHideJob = null
                 content = detected
                 bundle = null
                 // M4：确认态在「换商品」这一刻归零（不是在展开时），下一次 trackIdentity 重算回填
@@ -289,6 +305,23 @@ object OverlayManager {
     fun onLeftProductPage() {
         enrichJob?.cancel()
         identityJob?.cancel()
+        if (shouldDeferTeardown(mode)) {
+            // 球形态下不立刻拆窗：京东商详页往下一滚主价就出屏，门控会一闪一闪地判"离开商详"，
+            // 每次都 remove/add 一遍 ⇒ 用户看到的"小圆球闪烁 + 又变回胶囊条"。
+            // 给 1.5s 宽限：期间任何一次重新命中都取消拆除，球继续显示上一次读到的价。
+            if (pendingHideJob?.isActive == true) return
+            pendingHideJob = serviceScope?.launch(Dispatchers.Main) {
+                delay(TEARDOWN_GRACE_MS)
+                pendingHideJob = null
+                confirmedIdentity = null
+                identityDays = 0
+                identityLowest = null
+                content = null
+                bundle = null
+                hide()
+            }
+            return
+        }
         confirmedIdentity = null
         identityDays = 0
         identityLowest = null
@@ -300,6 +333,10 @@ object OverlayManager {
     fun stop() {
         collectJob?.cancel()
         collectJob = null
+        pendingHideJob?.cancel()
+        pendingHideJob = null
+        // 服务真的被拆了才忘掉用户的形态选择（窗口都不在了，下一次是全新一次浮窗）
+        userCollapsed = false
         enrichJob?.cancel()
         identityJob?.cancel()
         identityJob = null
@@ -373,8 +410,9 @@ object OverlayManager {
         host = null
         windowManager = null
         params = null
-        // 形态必须复位：窗口都不在了，留着 Ball 会让下一次 show() 用球尺寸去 addView 一枚面板
-        mode = OverlayMode.Panel
+        // 形态**不在这里复位**：用户主动收起的球是一次选择，不该因为页面滚动让门控闪断一次
+        // 就被抹掉（真机症状：球一闪变回胶囊条）。复位只发生在 stop()（服务真的拆了）
+        // 或用户自己展开回面板。下一次 show() 按 [userCollapsed] 决定用哪种尺寸建窗。
     }
 
     /** Composable 展开时回调：无确定性 ID 的延迟预取（TITLE_ONLY 只允许出券行，且标仅供参考） */
@@ -432,6 +470,7 @@ object OverlayManager {
         val ctx = appContext ?: return
         ensureBounds(ctx)
         mode = next
+        userCollapsed = true
         val stored = readBallPosition()
         val rawX = stored?.first ?: (displayWidth - p.x - ballSidePx)
         val rawY = stored?.second ?: p.y
@@ -456,6 +495,7 @@ object OverlayManager {
         val ctx = appContext ?: return
         ensureBounds(ctx)
         mode = next
+        userCollapsed = false
         // 球的右边缘 = 面板的右边缘。面板最宽 PANEL_MAX_WIDTH_DP，x 再大就会把它整个推到
         // 屏幕左外侧；这条上限比"最远拖到中线"更严时听上限的。
         val density = ctx.resources.displayMetrics.density
@@ -469,27 +509,22 @@ object OverlayManager {
     }
 
     /** 球拖动中：按窗口左上角（TOP|START）移动并夹进可用区；不吸附（吸附只在松手那一下） */
-    fun moveBallBy(dx: Float, dy: Float) {
+    /**
+     * 松手：把拖动期间累计的位移一次性落到窗口上（吸附最近边 + 夹进可用区 + 落盘）。
+     *
+     * **拖动过程中不搬窗口**：Compose 给指针的坐标是窗口内坐标，窗口一动，手指的局部坐标
+     * 就跟着被减掉一截，"每帧 updateViewLayout"会让球既不跟手又抖（真机：用户报
+     * "滑动后小圆球闪烁，不跟手"）。拖动期间的位移由 PriceOverlay 用
+     * `graphicsLayer.translationX/Y` 画（纯绘制通道、零 IPC），这里只搬这一次。
+     */
+    fun endBallDrag(dx: Float, dy: Float) {
         if (mode != OverlayMode.Ball) return
         val p = params ?: return
         val wm = windowManager ?: return
         val view = overlayView ?: return
-        val rawX = (p.x + dx).roundToInt()
-        val rawY = (p.y + dy).roundToInt()
-        val (x, y) = clampPosition(rawX, rawY, ballSidePx, displayWidth, displayHeight, insetTop, insetBottom)
-        p.x = x
-        p.y = y
-        applyLayout(wm, view, p)
-    }
-
-    /** 松手：吸附到最近的左/右边缘（悬浮球惯例）并落盘，下一次收起还回这里 */
-    fun settleBallDrag() {
-        if (mode != OverlayMode.Ball) return
-        val p = params ?: return
-        val wm = windowManager ?: return
-        val view = overlayView ?: return
-        val (x, y) = clampPosition(snappedBallX(p.x), p.y, ballSidePx, displayWidth, displayHeight, insetTop, insetBottom)
-        if (x == p.x && y == p.y) return
+        val (x, y) = ballDropPosition(
+            p.x, p.y, dx, dy, ballSidePx, displayWidth, displayHeight, insetTop, insetBottom
+        )
         p.x = x
         p.y = y
         applyLayout(wm, view, p)
@@ -615,20 +650,35 @@ object OverlayManager {
 
         val overlayHost = OverlayHost()
         host = overlayHost
-        // 每次新建窗口都从面板起步：形态属于"这一次浮窗"，不跨商品、不跨收窗存活
-        mode = OverlayMode.Panel
+        // 新建窗口跟随用户上一次的主动选择：球形态下门控一闪、窗口重建，
+        // 不该把球"变回"胶囊条（真机报的"又显示继续滑动查看图文详细"就是这个）
+        mode = initialForm(userCollapsed)
 
+        val ball = mode == OverlayMode.Ball
         val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (ball) ballSidePx else WindowManager.LayoutParams.WRAP_CONTENT,
+            if (ball) ballSidePx else WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                 or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.END
-            x = 32
-            y = 200
+            if (ball) {
+                // 球用 TOP|START（x = 离左边多远），左右吸附才不用猜面板宽度；
+                // 位置优先取持久化的那一份，没有就落在右侧默认位
+                gravity = Gravity.TOP or Gravity.START
+                val stored = readBallPosition()
+                val (x, y) = clampPosition(
+                    stored?.first ?: (displayWidth - ballSidePx), stored?.second ?: 200,
+                    ballSidePx, displayWidth, displayHeight, insetTop, insetBottom
+                )
+                this.x = x
+                this.y = y
+            } else {
+                gravity = Gravity.TOP or Gravity.END
+                x = 32
+                y = 200
+            }
         }
         params = lp
 
@@ -649,8 +699,7 @@ object OverlayManager {
                         identityLowest = identityLowest,
                         mode = mode,
                         onDrag = { dx, dy -> moveBy(dx, dy) },
-                        onBallDrag = { dx, dy -> moveBallBy(dx, dy) },
-                        onBallSettled = { settleBallDrag() },
+                        onBallDragEnd = { dx, dy -> endBallDrag(dx, dy) },
                         onCollapseWindow = { collapseToBall() },
                         onExpandWindow = { expandToPanel() },
                         onToggleExpanded = { expanded ->
