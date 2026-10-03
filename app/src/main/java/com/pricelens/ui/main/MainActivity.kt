@@ -366,9 +366,14 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .padding(inner)
+                // 顺序要紧：wrapContentWidth 必须在 widthIn **之前**。
+                // 真机取证（PLB110 `wm density 280` ⇒ 窗口 717dp 落 MEDIUM）：写成
+                // "widthIn → fillMaxHeight → wrapContentWidth" 时限宽生效了（正文在 600dp 处换行），
+                // 但整列**没有居中**、贴在左边 —— 因为最内层的 wrapContentWidth 居中的是
+                // "列内容在列自身宽度里"，而列在父容器里的位置由它外面的修饰符决定。
+                .wrapContentWidth(androidx.compose.ui.Alignment.CenterHorizontally)
                 .then(if (contentMaxDp == null) Modifier else Modifier.widthIn(max = contentMaxDp.dp))
                 .fillMaxHeight()
-                .wrapContentWidth(androidx.compose.ui.Alignment.CenterHorizontally)
         ) {
             // 剪贴板横条：只在概览页、只在认出商品链接时出现；「忽略」= 同一段内容不再提示
             val detected = clipboardLink
