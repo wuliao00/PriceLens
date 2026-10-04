@@ -116,4 +116,30 @@ class CouponTemplatesTest {
         // 正例对照：同一份 JSON 改回合法就必须通过（否则"拒绝"其实是"永远拒绝"）
         assertNotNull(CouponTemplates.from(json(1, item("a", numberPattern, discountRoles))))
     }
+
+    /**
+     * `subsidy-tail`：数字在前的替身说法（`17元外卖餐补`）。
+     * 命中的是**数字组**，替身词组（餐补/补贴…）不是数字 ⇒ 按 roles 对齐规则被跳过。
+     */
+    @Test
+    fun `数字在前的补贴形状命中为面额`() {
+        val hits = CouponTemplates.builtin().match("17元外卖餐补")
+        val tail = hits.first { it.templateId == "subsidy-tail" }
+        assertEquals(listOf(AmountRole.DISCOUNT), tail.amounts.map { it.role })
+        assertEquals(17.0, tail.amounts[0].value, 0.0)
+        assertEquals("命中的必须是那个数字而不是替身词", 0, tail.amounts[0].start)
+        // 反例（PLB110 的真样本）：`活动售价5998元，参与官方限时补贴…` —— 5998 是售价。
+        // 逗号在间隙里是被排除的字符，所以这条**不许**命中；把 {0,4} 改成 .{0,4} 就会在这里红。
+        assertTrue(CouponTemplates.builtin().match("活动售价5998元，参与官方限时补贴").none { it.templateId == "subsidy-tail" })
+        // 反例：间隙超过 4 个字（跨进别人的半句）不认
+        assertTrue(CouponTemplates.builtin().match("17元无门槛限时外卖大额餐补").none { it.templateId == "subsidy-tail" })
+        // 反例（2026-10-05 那条真误抽）：规整层把全角逗号换成**半角**，
+        // "排除全角标点"的负向类会在半角逗号上放行 ⇒ `3499元,参与补贴` 把售价认领成面额。
+        // 间隙类必须是正向汉字类，这条直接在半角形态上重跑一次。
+        assertTrue(CouponTemplates.builtin().match("活动售价3499元,参与补贴15%起减500元").none { it.templateId == "subsidy-tail" })
+        // 反例：空格也不是合法间隙（`…500元 晒单返红包` 的空格来自节点拼接）
+        assertTrue(CouponTemplates.builtin().match("至高减500元 晒单返红包").none { it.templateId == "subsidy-tail" })
+        // 正例对照：紧贴的写法也认（「20元补贴」没有品类词）
+        assertEquals(20.0, CouponTemplates.builtin().match("20元补贴").first { it.templateId == "subsidy-tail" }.amounts[0].value, 0.0)
+    }
 }

@@ -64,6 +64,12 @@ data class WordRule(val token: String, val pattern: Regex) {
  *   两者的区别是真的：0.0 = 文案明说了"没有门槛"，null = 文案没提门槛。
  *   评测集里 `【点击领取】¥70无门槛立减券` 标的就是 `threshold: 0.0`，
  *   而流水线第一版对这类句子的产出是 null ⇒ 券级命中直接判失败（一次口径差异吃掉一条 TP）。
+ * @param emptyCouponWords 「有券但没金额」的判据词：整句**一个数字都没有**、又出现这些词时，
+ *   产一张 discount/threshold 全 null 的券（句级置信落到 `CONTEXT_ONLY_CONFIDENCE=0.5` ⇒
+ *   展示层是"待核验"档，逐槽显示"未识别"）。真样本两条：底栏按钮「领券」(评测集 jd-instock-02)、
+ *   首页角标「试用专享券」(jd-home-01) —— 评测集标的就是全 null 券。
+ *   这里**刻意不复用** [couponHints] 那批宽词：同一份真样本里「满赠」(jd-pl-04) 无数字、
+ *   「下单返9折券」(jd-guobu-08) 有数字，用宽词会把赠品/折扣活动也产成一张券，而误抽比漏抽贵。
  */
 data class CouponVocabulary(
     val amountRoles: Map<AmountRole, List<WordRule>>,
@@ -75,7 +81,8 @@ data class CouponVocabulary(
     val platformPrefixes: List<Pair<String, String>>,
     val communityTipWords: List<String>,
     val communityAskWords: List<String>,
-    val zeroThresholdWords: List<String>
+    val zeroThresholdWords: List<String>,
+    val emptyCouponWords: List<String>
 ) {
 
     companion object {
@@ -114,7 +121,16 @@ data class CouponVocabulary(
                     // 判"离数字最近的词"时两者**结束下标相同**，规则取长词 ⇒ `无门槛50元券` 的 50 判成
                     // DISCOUNT（这是对的：无门槛券的 50 就是面额）；若只登记 `门槛`，50 会被判成门槛，
                     // 展示成"满50可用"—— 一张不存在的券。钉子见 AmountRoleTest。
-                    WordRule.literal("无门槛")
+                    WordRule.literal("无门槛"),
+                    // 「补贴」：真样本 `…plus立减34.99元，国家补贴500元优惠活动…`（评测集 cm-youhui-06）——
+                    // 「国家补贴500元」说的是确定减额，但它不带 减/省，左侧词表少它就是漏抽。
+                    // 同族的「国家补贴15%」不会因此变成 ¥15 的券：紧跟百分号的数字在**两处**都被挡
+                    // （管线 consume 的 followedByPercent、复核层的同名守卫），真样本里三处 `补贴15%` 全靠它。
+                    // 反面的替身说法「红包」「返现」「餐补」在 2026-10-04 的全量真样本里**没有一次**
+                    // 直接领数字：`…至高减500元 晒单返红包`、`今日有天猫app专属红包，满5.01减5` ——
+                    // 红包后面是句号或逗号。所以这一版不收这三个，收了就是照一条编词表。
+                    // 「17元外卖餐补」那种**数字在前**的形状走模板，见 CouponTemplates 的 subsidy-tail。
+                    WordRule.literal("补贴")
                 ),
                 AmountRole.THRESHOLD to listOf(
                     WordRule.literal("满"),
@@ -222,7 +238,11 @@ data class CouponVocabulary(
             resourceHints = listOf("coupon", "promotion", "youhui", "voucher"),
             // 共享的五个词只有一份：取自 accessibility 那份（PriceNodeMatcher 第 235 行，已转 internal），
             // 这里只写本包按真机补齐的**增量**。
-            excludedNumberWords = PriceNodeMatcher.PRICE_TEXT_EXCLUDE_WORDS + listOf("京豆", "销量", "库存"),
+            // 「淘金币」与「京豆」同族（平台虚拟货币抵扣，不是券）：真样本
+            // `使用淘金币再省0.12元起，根据账号情况可能抵更多`（评测集 cm-youhui-05）——
+            // 「省0.12」的左侧词是「省」，不拦就会多出一张 ¥0.12 的券（评测里它是唯一的误抽之一）。
+            // 拦得住是因为这句自己成clause（社区按「。」分句），同帖的 `领取满11减4元优惠券` 不受牵连。
+            excludedNumberWords = PriceNodeMatcher.PRICE_TEXT_EXCLUDE_WORDS + listOf("京豆", "销量", "库存", "淘金币"),
             platformPrefixes = listOf(
                 "com.jingdong" to "jd",
                 "com.taobao" to "taobao",
@@ -234,7 +254,9 @@ data class CouponVocabulary(
             communityTipWords = listOf("到手", "券后", "领", "满减", "立减", "无门槛", "叠", "凑单", "红包", "补贴", "实付", "售价", "活动价"),
             // 原 PostAdapter.ASK_WORDS：没有爆料形态时按问句处理（`？` 规整后是 `?`，两条都留是历史形态）
             communityAskWords = listOf("怎么", "如何", "能不能", "可以吗", "求推荐", "有没有", "求助", "请问", "？", "?"),
-            zeroThresholdWords = listOf("无门槛")
+            zeroThresholdWords = listOf("无门槛"),
+            // 「券/领」两个词，不是 couponHints 那批宽词 —— 依据与反例都在上面的 @param 注释里
+            emptyCouponWords = listOf("券", "领")
         )
     }
 }

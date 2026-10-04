@@ -170,6 +170,23 @@ private fun builtinTemplates(): List<CouponTemplate> = listOf(
     CouponTemplate("drop-amount", Regex("(降|跌|便宜|比原价)\\s*(?:了)?\\s*[¥￥]?\\s*([\\d.]+)"), listOf(AmountRole.DROP), 0.8),
     CouponTemplate("currency-quan", Regex("[¥￥]\\s*([\\d.]+)\\s*(?:元)?(?:无门槛)?(?:立减)?券"), listOf(AmountRole.DISCOUNT), 0.9),
     CouponTemplate("lijian-amount", Regex("立减\\s*[¥￥]?\\s*([\\d.]+)"), listOf(AmountRole.DISCOUNT), 0.9),
+    // 「数字在前、替身说法在后」：`17元外卖餐补`（评测集 jd-home-02，真机京东首页角标原文）。
+    // 这类形状是 AmountRole.of 的结构性盲区 —— 那把尺子只看数字**之前**的词，而这里角色词在数字之后。
+    // 间隙上限 4 的依据：真样本最远是「外卖」两字，留一倍余量给「外卖无门槛」这类写法；
+    // 再长就多半是别人的半句了（`…5998元参与官方限时补贴…` 那种"价格词后接补贴"另有管，见 consume 的价格角色优先）。
+    // 间隙为什么必须是**正向汉字类**，而不是"排除标点"：规整层会把全角逗号换成半角
+    // （`活动售价3499元,参与补贴15%起减500元…` 经 PostAdapter.normalize 就是这个形状），
+    // 负向类里只列全角标点时，半角逗号就成了合法间隙 ⇒ 3499（售价）被认领成券面额。
+    // 这条误抽是 2026-10-05 由全量评测抓到的（同时 list 槽变成 null），钉子见 CouponPipelineTest 的生产路径用例。
+    // 空格也不许进间隙：这里的空格多半是节点/子句拼接留下的，不是短语内部的连接。
+    // 同族的 `至高减500元 晒单返红包`（评测集 jd-instock-01）也落在间隙内，但它整句带「晒单」，
+    // 由 `CouponHints.numbersUsable` 先拦掉（钉子见 CouponPipelineTest 的"晒单句一张券都不许产"）。
+    CouponTemplate(
+        "subsidy-tail",
+        Regex("([\\d.]+)\\s*元[\\u4e00-\\u9fa5]{0,4}?(餐补|补贴|红包|返现)"),
+        listOf(AmountRole.DISCOUNT),
+        0.8
+    ),
     CouponTemplate("no-threshold", Regex("无门槛"), emptyList(), 0.75),
     CouponTemplate("state-sold-out", Regex("已抢完|已领完|抢光|已加光"), emptyList(), 0.9, CouponState.SOLD_OUT),
     CouponTemplate("state-expired", Regex("已过期|过期|失效"), emptyList(), 0.9, CouponState.EXPIRED),

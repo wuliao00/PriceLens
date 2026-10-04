@@ -109,7 +109,11 @@ class CouponPipelineTest {
         assertEquals(299.0, thresholdOnly.threshold!!, 0.0)
         // 正例对照：低置信（兜底 0.5）的券留在结果里，丢弃是"无核验直出"的另一种形状
         assertEquals(CouponTemplates.CONTEXT_ONLY_CONFIDENCE, consume("满299可用").confidence, 0.0001)
-        assertTrue(consume("领券").slots.isEmpty())
+        // 「领券」到这里**不再是空**（2026-10-04 改）：它以前被当成本条断言的例子，
+        // 可评测集把「领券」(jd-instock-02) 与「试用专享券」(jd-home-01) 标的是"有券、金额没写"的
+        // 全 null 券 —— 两条一直是漏检。判据搬到 emptyCouponWords（整句无数字 + 券名词），
+        // 正反例都在下面的专项用例里钉着。
+        assertEquals(1, consume("领券").slots.size)
     }
 
     @Test
@@ -206,5 +210,79 @@ class CouponPipelineTest {
         assertEquals(100.0, consume("新客抵现100元", vocabulary = extended).slots.single().discount!!, 0.0)
         // 反例：换词表不影响别的角色（`到手` 由模板声明，依然进价格槽、不进券槽）
         assertTrue(consume("到手100元", vocabulary = extended).slots.isEmpty())
+    }
+
+    /**
+     * 「数字在前、替身说法在后」（`17元外卖餐补`）。这类形状是 `AmountRole.of` 的**结构性盲区**：
+     * 那把尺子只看数字之前的词，所以它归模板管，而不是往左侧词表里塞「餐补」。
+     */
+    @Test
+    fun `数字在前的替身说法由模板认领成面额`() {
+        // 正例：真机京东首页角标原文（评测集 jd-home-02，之前一直是漏检）
+        val meal = oneSlot("17元外卖餐补")
+        assertEquals(17.0, meal.discount!!, 0.0)
+        assertNull(meal.threshold)
+        // 左侧「补贴」直接领数字：`国家补贴500元` 说的是确定减额（评测集 cm-youhui-06 漏的那张）
+        assertEquals(500.0, oneSlot("国家补贴500元优惠活动").discount!!, 0.0)
+        // 反例（PLB110 抓到的那条，逼出"确定性复核"的同一句）：5998 是**售价**，
+        // 逗号切断间隙 ⇒ 模板不许跨标点认领；499 才是面额，两个价格数字留在价格槽
+        val post = consume("天猫精选此款目前活动售价5998元，参与官方限时补贴减499元，实付低至4999元")
+        assertEquals("期望一张券，实际=${post.slots}", 1, post.slots.size)
+        assertEquals(499.0, post.slots[0].discount!!, 0.0)
+        assertNull(post.slots[0].threshold)
+        assertEquals(5998.0, post.price.listPrice!!, 0.0)
+        // `实付低至4999元` 的 4999 判不出角色：尺子允许的连接字是 `[\s¥￥了至到价]`，里面**没有「低」**，
+        // 所以它既不进券也不进价格槽。这是既有口径、不是这批改出来的，已单立待办（补 FINAL 侧的
+        // 「低至」要单独跑一次全量 eval，别和这批混在一起）。
+        assertNull(post.price.finalPrice)
+        // 反例：`至高减500元 晒单返红包` 的 500 落在模板间隙里，但整句带「晒单」⇒ 一个数字都不采信
+        val claim = consume("国家补贴 至高减500元 晒单返红包")
+        assertTrue("晒单句一张券都不许产，实际=${claim.slots}", claim.slots.isEmpty())
+    }
+
+    /** 虚拟货币抵扣（淘金币/京豆）与券不是一回事：整句数字不采信，但不许牵连同帖别的句子 */
+    @Test
+    fun `虚拟货币抵扣那句里的数字一律不采信`() {
+        val outcome = consume("使用淘金币再省0.12元起，根据账号情况可能抵更多")
+        assertTrue("淘金币抵扣不是券，实际=${outcome.slots}", outcome.slots.isEmpty())
+        // 正例对照：分句是边界，同帖另一句的券照常抽（评测集 cm-youhui-05 的 4|11）
+        val kept = oneSlot("领取满11减4元优惠券")
+        assertEquals(4.0, kept.discount!!, 0.0)
+        assertEquals(11.0, kept.threshold!!, 0.0)
+    }
+
+    /**
+     * 「有券名、整句没数字」产一张全 null 的券（评测集两条标了"全 null 券"的条目）。
+     * 两个反例是这条判据的边界：宽词会把赠品/折扣活动也说成券，而误抽比漏抽贵。
+     */
+    @Test
+    fun `有券名但整句没数字产一张空券`() {
+        val bare = oneSlot("领券")
+        assertNull(bare.discount)
+        assertNull(bare.threshold)
+        // 置信只能落在 CONTEXT_ONLY：没有金额就没有可核验的东西，展示层据此显示"待核验"
+        assertEquals(CouponTemplates.CONTEXT_ONLY_CONFIDENCE, consume("领券").confidence, 0.0001)
+        assertEquals(1, consume("试用专享券").slots.size)
+        // 反例一：有数字但没角色词（9折）⇒ 不产券，否则折扣活动变成一张金额不明的券
+        assertTrue(consume("下单返9折券").slots.isEmpty())
+        // 反例二：无数字但不是券名（满赠）⇒ 不产券。这就是不复用 couponHints 宽词的理由
+        assertTrue(consume("满赠").slots.isEmpty())
+    }
+
+    /**
+     * **走生产路径**的误抽钉子（2026-10-05）。
+     * 为什么必须走 `fromPost` 而不是直接喂 consume：规整层会把全角逗号换成半角
+     * （`活动售价3499元,参与补贴…`），而 consume 层的用例看不到这件事 ——
+     * 当时 subsidy-tail 模板把「,参与补贴」当成合法间隙，于是 3499（**售价**）变成了一张 ¥3499 的券，
+     * 同时 list 槽静默变空。两条都是"看起来正常"的错，只有全量评测+生产路径才抓得到。
+     */
+    @Test
+    fun `售价数字走生产路径也不许变成券面额`() {
+        val post = "京东此款目前活动售价3499元，参与补贴15%起减500元，PLUS专享立减17.49元优惠活动，下单1件，实付低至2981.51元。"
+        val extraction = CouponExtractor.fromPost(post, 0L)
+        val values = extraction.coupons.map { it.discount }
+        assertTrue("3499 是售价，不许进券槽，实际=$values", values.none { it == 3499.0 })
+        assertEquals("售价槽不许静默变空", 3499.0, extraction.price.listPrice!!, 0.0)
+        assertTrue("17.49 是真券，必须还在，实际=$values", values.contains(17.49))
     }
 }

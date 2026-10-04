@@ -135,7 +135,14 @@ internal object CouponPipeline {
                 // 它会带着正确的 scope/state 一起出现，看起来像真券。
                 if (followedByPercent(clause.text, found.range.last + 1)) continue
                 val value = found.value.replace(",", "").toDoubleOrNull() ?: continue
-                when (val role = declared[start]?.role ?: AmountRole.of(clause.text, start, vocabulary)) {
+                // 角色的优先级不是风格问题：**价格词是比模板形状更强的信号**。
+                // 尺子在数字左侧认出 售价/原价/划线/到手/券后/领后/降/跌 这类词时，那个数字就是价格，
+                // 模板（含 subsidy-tail 这种按形状认领的）不许把它改成券面额 ——
+                // 2026-10-05 全量评测抓到 `活动售价3499元,参与补贴…` 里的 3499 变成了券（同时 list 槽空掉），
+                // 而这条正是 PLB110 上"模型把 5998 写成门槛"的同一个坑，只不过这次是我自己踩的。
+                val judged = AmountRole.of(clause.text, start, vocabulary)
+                val role = if (judged != null && judged.isPriceRole()) judged else declared[start]?.role ?: judged
+                when (role) {
                     AmountRole.DISCOUNT, AmountRole.THRESHOLD -> discounts.add(AmountValue(value, start, found.range.last + 1, role))
                     AmountRole.FINAL, AmountRole.LIST, AmountRole.DROP -> prices.add(AmountValue(value, start, found.range.last + 1, role))
                     null -> Unit
@@ -192,6 +199,20 @@ internal object CouponPipeline {
                 out.add(slotOf(null, thresholdValue(it.value, clause.text, vocabulary), clause, segment, state, scope, expiry, code, url))
             }
         }
+        // 「有券但没金额」：整句**一个数字都没有**、又出现券名证据词 ⇒ 产一张全 null 的券。
+        // 三个条件缺一不可，每一条都被真样本钉着：
+        //  · 要产：底栏按钮「领券」(jd-instock-02)、首页角标「试用专享券」(jd-home-01)，
+        //    页面确有可领券、只是文案没写面额 —— 评测集标的就是"全 null 的券"，不产就是漏检；
+        //  · 「无数字」这条挡住：`下单返9折券`(jd-guobu-08)——有数字却没角色词，
+        //    产出来的"9折券"是一张金额不明的券，而折扣活动不是券；
+        //  · 用 emptyCouponWords（只有 券/领）而不是 couponHints（含 满/到手/折/省）挡住：
+        //    「满赠」(jd-pl-04) 无数字但也不是券。**没有金额就没有可核验的东西**，
+        //    所以这张券的置信只能是 CONTEXT_ONLY（0.5），展示层落在"待核验"档、逐槽显示"未识别"。
+        if (out.isEmpty() && values.isEmpty() && !NUMBER.containsMatchIn(clause.text) &&
+            vocabulary.emptyCouponWords.any { clause.text.contains(it) }
+        ) {
+            out.add(slotOf(null, null, clause, clause.text.trim(), state, clauseScope, expiry, code, url))
+        }
         return out
     }
 
@@ -218,6 +239,13 @@ internal object CouponPipeline {
         while (i < text.length && text[i] == ' ') i++
         return i < text.length && (text[i] == '%' || text[i] == '％')
     }
+
+    /**
+     * 这个角色是不是**价格**（到手/标价/降幅）。
+     * 它是"模板不许把这个数字改成券"的判据 —— 价格词写在数字左边就是硬证据，
+     * 而模板只看见形状（见 consume 里那段 2026-10-05 的说明）。
+     */
+    private fun AmountRole.isPriceRole(): Boolean = this == AmountRole.FINAL || this == AmountRole.LIST || this == AmountRole.DROP
 
     /** 这张券**自己那一段**原文（上一张券结束处 → 本张券最后一个数字） */
     private fun segmentOf(clause: Clause, from: Int, to: Int): String {

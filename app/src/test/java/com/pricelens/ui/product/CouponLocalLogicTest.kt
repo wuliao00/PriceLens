@@ -116,6 +116,24 @@ class CouponLocalLogicTest {
         assertEquals("满50减50券，已领完", rows.single().sourceText)
     }
 
+    /**
+     * 「有券但没金额」这张**全 null 券**在展示层的形状（2026-10-05 抽取层新增的这种槽位：
+     * 整句没数字却有券名，例如首页角标「试用专享券」）。
+     * 要求是"看得见、但不装懂"：两格金额都标未识别、证据句还在、档位由调用方给的置信决定。
+     */
+    @Test
+    fun `全空券显示成读不出而不是空白行`() {
+        val rows = localCouponRows(extractionOf(slot(discount = null, threshold = null, sourceText = "试用专享券"), confidence = 0.4))
+        assertEquals("一行都不能少：这张券的存在本身是信息", 1, rows.size)
+        val cells = rows.single().cells
+        assertEquals(7, cells.size)
+        assertTrue("面额没读出来就必须标未识别", cells[0].unknown)
+        assertTrue("门槛没读出来就必须标未识别", cells[1].unknown)
+        assertEquals(R.string.coupon_local_unrecognized, cells[0].valueRes)
+        assertEquals(listOf<String>(), cells[0].args + cells[1].args)
+        assertEquals("证据句要让用户能看到是从哪句读出来的", "试用专享券", rows.single().sourceText)
+    }
+
     @Test
     fun `门槛零是文案显式写了无门槛与未识别是两件事`() {
         val rows = localCouponRows(extractionOf(slot(discount = 70.0, threshold = 0.0)))

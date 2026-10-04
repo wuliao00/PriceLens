@@ -72,4 +72,23 @@ class AmountRoleTest {
         assertEquals(AmountRole.THRESHOLD, AmountRole.of(clause, 8))
         assertEquals(AmountRole.DISCOUNT, AmountRole.of(clause, 12))
     }
+
+    /**
+     * 「国家补贴500元」：替身说法落在数字**左侧**，所以归这把尺子管
+     * （评测集 cm-youhui-06 里那张 500 一直是漏检，就缺这个词）。
+     * 右侧的替身说法（`17元外卖餐补`）**不在这里判** —— 尺子只往前看是它的本职，
+     * 那一类由模板 `subsidy-tail` 认领，见上面"只往数字前面看"与 CouponTemplatesTest。
+     */
+    @Test
+    fun `补贴在左侧时领走紧跟的数字`() {
+        val clause = "plus立减34.99元，国家补贴500元优惠活动"
+        assertEquals(AmountRole.DISCOUNT, AmountRole.of(clause, clause.indexOf("500")))
+        // 同句的 34.99 归「减」：两个数字各看自己左边的最近词，互不抢
+        assertEquals(AmountRole.DISCOUNT, AmountRole.of(clause, clause.indexOf("34.99")))
+        // 反例：隔一个逗号就不许领（ROLE_NUMBER_GLUE 的本职，加词表不能把它松动掉）
+        assertNull(AmountRole.of("国家补贴，500元", 5))
+        // 反例：`补贴15%` 的 15 在这把尺子上确实会判成 DISCOUNT —— 拦住它的是**百分号守卫**
+        // （管线与复核层各一道），这里写明分工，免得下次误以为词表能挡费率
+        assertEquals(AmountRole.DISCOUNT, AmountRole.of("国家补贴15%", 4))
+    }
 }
