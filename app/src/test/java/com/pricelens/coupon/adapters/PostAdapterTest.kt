@@ -77,12 +77,14 @@ class PostAdapterTest {
 
     @Test
     fun `帖型词表在词表对象里而不是适配器里`() {
-        // 出厂值判不出来的一条新说法（社区把"爆料"改叫"好价分享"）
-        val post = "百亿补贴 好价分享 19元"
+        // 出厂值判不出来的一条新说法（社区把"捡漏"用作爆料口吻）。
+        // 注：这条原来用的是「百亿补贴」，2026-10-04 把「补贴/实付/售价/活动价」补进出厂词表之后
+        // 它变成 TIP 了 —— 换词不是修测试，是因为**被测前提变了**：那句现在真能判出来。
+        val post = "捡漏啦 19元"
         assertEquals(PostKind.CHATTER, PostAdapter.classifyKind(post))
         // 正例对照：换一份词表就能接住，不改一行判定代码、也不发版（增量登记，出厂值仍然有效）
         val extended = CouponVocabulary.DEFAULT.copy(
-            communityTipWords = CouponVocabulary.DEFAULT.communityTipWords + "好价分享"
+            communityTipWords = CouponVocabulary.DEFAULT.communityTipWords + "捡漏"
         )
         assertEquals(PostKind.TIP, PostAdapter.classifyKind(post, extended))
         assertEquals(1, PostAdapter.normalize(post, epoch20261001, extended).size)

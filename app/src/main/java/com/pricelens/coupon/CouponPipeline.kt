@@ -101,6 +101,10 @@ internal object CouponPipeline {
         if (CouponHints.numbersUsable(clause.text, vocabulary)) {
             for (found in NUMBER.findAll(clause.text)) {
                 val start = found.range.first
+                // 百分号后面跟的是**费率**不是金额：`参与立减15%` 的 15 不是 15 元。
+                // 评测集里这一条被抽成过一张 ¥15 的券（误抽），而误抽比漏抽更贵 ——
+                // 它会带着正确的 scope/state 一起出现，看起来像真券。
+                if (followedByPercent(clause.text, found.range.last + 1)) continue
                 val value = found.value.replace(",", "").toDoubleOrNull() ?: continue
                 when (val role = declared[start]?.role ?: AmountRole.of(clause.text, start, vocabulary)) {
                     AmountRole.DISCOUNT, AmountRole.THRESHOLD -> discounts.add(AmountValue(value, start, found.range.last + 1, role))
@@ -137,7 +141,8 @@ internal object CouponPipeline {
                 pending?.let {
                     val segment = segmentOf(clause, consumedEnd, it.end)
                     val scope = scopeOf(segment, clauseScope, vocabulary)
-                    out.add(slotOf(null, it.value, clause, segment, state, scope, expiry, code, url))
+                    val threshold = thresholdValue(it.value, clause.text, vocabulary)
+                    out.add(slotOf(null, threshold, clause, segment, state, scope, expiry, code, url))
                 }
                 pending = value
                 continue
@@ -145,7 +150,8 @@ internal object CouponPipeline {
             val stop = maxOf(value.end, pending?.end ?: value.end)
             val segment = segmentOf(clause, consumedEnd, stop)
             val scope = scopeOf(segment, clauseScope, vocabulary)
-            out.add(slotOf(value.value, pending?.value, clause, segment, state, scope, expiry, code, url))
+            val threshold = thresholdValue(pending?.value, clause.text, vocabulary)
+            out.add(slotOf(value.value, threshold, clause, segment, state, scope, expiry, code, url))
             consumedEnd = stop
             pending = null
         }
@@ -154,10 +160,34 @@ internal object CouponPipeline {
             if (evidence) {
                 val segment = segmentOf(clause, consumedEnd, it.end)
                 val scope = scopeOf(segment, clauseScope, vocabulary)
-                out.add(slotOf(null, it.value, clause, segment, state, scope, expiry, code, url))
+                out.add(slotOf(null, thresholdValue(it.value, clause.text, vocabulary), clause, segment, state, scope, expiry, code, url))
             }
         }
         return out
+    }
+
+    /**
+     * 门槛：显式写了「无门槛」的句子，门槛是 **0.0** 而不是 null。
+     *
+     * 两者不是一回事，评测集也是这么标的：`0.0` = 文案明说了"没有门槛"，
+     * `null` = 文案没提门槛。展示层要靠它把"没读出门槛"与"不用凑单"分开说
+     * —— 前者是我们的缺口，后者是用户可以直接下单。
+     *
+     * 判据用**整句**而不是"这张券那一段"：因为「无门槛」的常见位置在金额**后面**
+     * （`【点击领取】¥70无门槛立减券`、`50元无门槛券`），而段只覆盖到本张券的最后一个数字，
+     * 拿段判会永远看不见它 —— 第一版就是这么写的，测试里那条断言直接 NPE。
+     */
+    private fun thresholdValue(explicit: Double?, clauseText: String, vocabulary: CouponVocabulary): Double? =
+        explicit ?: if (vocabulary.zeroThresholdWords.any { clauseText.contains(it) }) 0.0 else null
+
+    /**
+     * 数字后面紧跟百分号（允许隔一个空格）⇒ 是费率不是金额。
+     * `立减15%` 的 15、`补贴15%起减500` 里的 15 都属于这一类。
+     */
+    private fun followedByPercent(text: String, from: Int): Boolean {
+        var i = from
+        while (i < text.length && text[i] == ' ') i++
+        return i < text.length && (text[i] == '%' || text[i] == '％')
     }
 
     /** 这张券**自己那一段**原文（上一张券结束处 → 本张券最后一个数字） */

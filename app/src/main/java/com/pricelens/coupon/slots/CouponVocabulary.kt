@@ -60,6 +60,10 @@ data class WordRule(val token: String, val pattern: Regex) {
  *   以前它硬编码在 `PostAdapter` 里（private），于是"社区把『爆料』改成『好价分享』"
  *   这件事仍然要**发一次 APK** —— 而本包的核心承诺就是把改判据从发版降级为推规则。
  * @param communityAskWords 社区帖"这是求助"的问句词（命中且没有爆料形态 ⇒ 判 ASK，不进抽取）。
+ * @param zeroThresholdWords 「无门槛」这类**显式零门槛**的说法：命中时 threshold 写 **0.0**，不是 null。
+ *   两者的区别是真的：0.0 = 文案明说了"没有门槛"，null = 文案没提门槛。
+ *   评测集里 `【点击领取】¥70无门槛立减券` 标的就是 `threshold: 0.0`，
+ *   而流水线第一版对这类句子的产出是 null ⇒ 券级命中直接判失败（一次口径差异吃掉一条 TP）。
  */
 data class CouponVocabulary(
     val amountRoles: Map<AmountRole, List<WordRule>>,
@@ -70,7 +74,8 @@ data class CouponVocabulary(
     val excludedNumberWords: List<String>,
     val platformPrefixes: List<Pair<String, String>>,
     val communityTipWords: List<String>,
-    val communityAskWords: List<String>
+    val communityAskWords: List<String>,
+    val zeroThresholdWords: List<String>
 ) {
 
     companion object {
@@ -101,6 +106,10 @@ data class CouponVocabulary(
                     WordRule.literal("减"),
                     WordRule.literal("立减"),
                     WordRule.literal("券面"),
+                    // 「省」：真机国补页的券行写的是「PLUS会员等，本单含支付省¥134.99」——
+                    // 这是"能省多少"的正字法，不是降幅（降/跌/便宜 才是 DROP）。
+                    // 评测集里三条 `支付省¥X` 全靠它才抽得出来。
+                    WordRule.literal("省"),
                     // 「无门槛」在 DISCOUNT 与 THRESHOLD 两边都登记（THRESHOLD 侧是 `门槛` 这个词）。
                     // 判"离数字最近的词"时两者**结束下标相同**，规则取长词 ⇒ `无门槛50元券` 的 50 判成
                     // DISCOUNT（这是对的：无门槛券的 50 就是面额）；若只登记 `门槛`，50 会被判成门槛，
@@ -218,9 +227,10 @@ data class CouponVocabulary(
                 "com.yangkeduo" to "pdd"
             ),
             // 原 PostAdapter.TIP_WORDS：命中且句里有数字 ⇒ 爆料帖，才进抽取
-            communityTipWords = listOf("到手", "券后", "领", "满减", "立减", "无门槛", "叠", "凑单", "红包"),
+            communityTipWords = listOf("到手", "券后", "领", "满减", "立减", "无门槛", "叠", "凑单", "红包", "补贴", "实付", "售价", "活动价"),
             // 原 PostAdapter.ASK_WORDS：没有爆料形态时按问句处理（`？` 规整后是 `?`，两条都留是历史形态）
-            communityAskWords = listOf("怎么", "如何", "能不能", "可以吗", "求推荐", "有没有", "求助", "请问", "？", "?")
+            communityAskWords = listOf("怎么", "如何", "能不能", "可以吗", "求推荐", "有没有", "求助", "请问", "？", "?"),
+            zeroThresholdWords = listOf("无门槛")
         )
     }
 }

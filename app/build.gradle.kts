@@ -71,6 +71,41 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    // 端侧 LLM 引擎（llama.cpp + 最小 JNI）：**默认不编**，只在显式给出 llama.cpp 源码目录时打开。
+    //
+    // 为什么默认关（这是刻意的，不是偷懒）：
+    //  ① 现有 CI 的 runner 没装 NDK，一旦无条件 externalNativeBuild，release 链会直接红；
+    //  ② llama.cpp 源码 35MB，不进本仓库（用 -Ppricelens.llamaDir=<外部检出目录> 指过去），
+    //     要进仓库就得走 submodule + CI 装 NDK + Gitee 侧镜像，那是**发布链的改动**，该单独立项；
+    //  ③ 关掉时零影响：不产生 .so、不需要 NDK、APK 与今天逐字节同类。
+    // 打开时只编 arm64-v8a：中长尾机型里 32 位早就不是目标，多编一份只是白占体积。
+    val llamaDir = (project.findProperty("pricelens.llamaDir") as String?)?.takeIf { it.isNotBlank() }
+    if (llamaDir != null) {
+        ndkVersion = "26.1.10909125"
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
+        }
+        defaultConfig {
+            externalNativeBuild {
+                cmake {
+                    arguments += "-DPRICELENS_LLAMA_DIR=$llamaDir"
+                    // 第三方的 C/C++ 一律按 Release 编：AGP 给 debug 变体默认塞的是 CMAKE_BUILD_TYPE=Debug
+                    // （-O0），那会让 ggml 的 SIMD 内核既大又多。两个实际后果都很难受：
+                    //  ① .so 从十几 MB 涨到 60MB+，装机与冷启动都变慢；
+                    //  ② **真机上量到的 tok/s 是 -O0 的数**，拿它下"这台机器跑不跑得动"的结论会严重低估。
+                    // 放在 arguments 末尾会覆盖 AGP 自己传的那个（CMake 同名变量后者生效）。
+                    arguments += "-DCMAKE_BUILD_TYPE=Release"
+                }
+            }
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
+        }
+    }
+
     lint {
         // release 不需要 lint 检查（避免 build 时缺失 lint 报告文件导致失败）
         checkReleaseBuilds = false

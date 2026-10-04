@@ -163,6 +163,28 @@ class CouponPipelineTest {
     }
 
     @Test
+    fun `百分号后面的是费率不是金额而显式无门槛是零门槛`() {
+        // 真机：`参与立减15%` 被抽成过一张 ¥15 的券 —— 误抽比漏抽贵，
+        // 因为它带着正确的 scope/state 一起出现，看起来完全像真券。
+        assertTrue("立减15% 不该产出券，实际=${consume("参与立减15%优惠活动").slots}", consume("参与立减15%优惠活动").slots.isEmpty())
+        // 正例对照：同一个数字不带百分号就是面额（证明不是"把这条通道关死了"）
+        assertEquals(15.0, oneSlot("立减15元").discount!!, 0.0)
+
+        // 「无门槛」是**显式零门槛**：threshold 写 0.0，与"没提门槛"的 null 不是一回事
+        val noThreshold = oneSlot("【点击领取】¥70无门槛立减券")
+        assertEquals(70.0, noThreshold.discount!!, 0.0)
+        assertEquals(0.0, noThreshold.threshold!!, 0.0)
+        // 反例：没写「无门槛」的句子门槛仍是 null（不许被上面那条规则顺手改掉）
+        assertNull(oneSlot("领50元券").threshold)
+        assertEquals(199.0, oneSlot("满199减50").threshold!!, 0.0)
+
+        // 「省」在真机国补页是面额的正字法（`PLUS会员等，本单含支付省¥134.99`），不是降幅
+        assertEquals(134.99, oneSlot("PLUS会员等，本单含支付省¥134.99").discount!!, 0.0001)
+        // 反例：隔着一段话的「省」不许再认领数字（glue 规则仍在）
+        assertTrue(consume("国家补贴至高省15%，热度643.0万").slots.isEmpty())
+    }
+
+    @Test
     fun `状态与范围都按词表判并且祖先能补位`() {
         val claimed = oneSlot("已领完的店铺券满199减20")
         assertEquals(CouponState.SOLD_OUT, claimed.state)

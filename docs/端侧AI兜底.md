@@ -251,3 +251,50 @@ mutation budget  -> red: ['ai budget exactly at the model soft cap is eligible f
 - `app/src/main/java/com/pricelens/coupon/ai/AiPromptAsset.kt`（资产读取契约）
 - `app/src/main/assets/ai/coupon_prompt_v1.txt`、`app/src/main/assets/ai/coupon_schema.gbnf`
 - `app/src/test/java/com/pricelens/coupon/ai/`（三个测试类）
+
+## 运行时已落地（2026-10-04）：llama.cpp 编进 APK 了，但**默认关**
+
+上面第 6 条"运行时与权重"今晚落了一半，边界写在明面上：
+
+**做了什么**
+- `app/src/main/cpp/llm_jni.cpp`：最小 JNI —— `nativeLoad` / `nativeRun`（prompt + GBNF 约束解码）/ `nativeFree` /
+  `nativeLastStats`。纯 CPU、`load_mode=MMAP`、只算末位 logits、语法解析失败**直接返回 null**
+  （绝不静默退回无约束解码：那会吐出不合 schema 的 JSON，比"没结果"更糟）。
+- `app/src/main/cpp/CMakeLists.txt`：只建库本体（examples/tools/server/common 全关，OpenMP 关 —— NDK 不带）；
+  llama.cpp 源码目录由 `-DPRICELENS_LLAMA_DIR=` 传进来，**不进本仓库**。
+- `app/build.gradle.kts`：`-Ppricelens.llamaDir=<目录>` 是唯一开关。**默认不开**：
+  ① 现有 CI 的 runner 没装 NDK，无条件开会让 release 链直接红；
+  ② 35MB 第三方源码进 git 会让每次 checkout 变重。
+  开的时候只编 `arm64-v8a`。
+- `com.pricelens.coupon.ai.LlamaNative`（`System.loadLibrary` 唯一一处，`isAvailable` 与 `loadError` 分开：
+  "没编进来"和"编进来了但加载失败"不许混成同一种沉默）与 `LlamaRuntime`（加载/推理/释放，失败一律
+  返回 null = "没参与"，不把整条找券链路带崩）。
+- `app/src/debug/`：一个**只存在于 debug 包**的广播探针 `LlmProbeReceiver`，用 adb 触发一次推理并把
+  结果写进 logcat 与 `filesDir/llm-probe.txt`。正式包不会合并这个文件。
+
+**验证状态（照实写）**
+- ✅ 交叉编译通过：NDK 26.1 + CMake 3.22，产出 `arm64-v8a/libpricelens_llm.so`。
+- ⚠️ **还没在真机上跑过模型**：那个晚上的手机中途掉线，而"模型能加载、能按 GBNF 吐 JSON、每秒多少 token"
+  三件事**只有真机能回答**。跑通之前，这一步都算未验证。
+- 已知要处理的两件事：① debug 变体的 `.so` 有 **61MB**（未 strip、未优化），release 变体应当显著更小，
+  但得实测；② `LlamaRuntime.chatWrap` 的聊天模板是**按 Qwen3 写死**的，换模型必须回来改（见那里的注释）。
+
+**怎么建 / 怎么验（下次照抄）**
+```bash
+# 1) 外部检出 llama.cpp（不要放进本仓库）
+git clone --depth 1 --filter=blob:none --sparse https://github.com/ggml-org/llama.cpp E:/dev/pl-model
+cd E:/dev/pl-model && git sparse-checkout set src include ggml cmake vendor   # vendor 不能漏，根 CMakeLists 会 add_subdirectory(vendor)
+# 2) 出带引擎的包（本机 NDK 26.1.10909125）
+bash E:/dev/pl-build.sh <worktree> :app:assembleDebug --rerun -Ppricelens.llamaDir=E:/dev/pl-model
+# 3) 模型（split delivery：不进 APK、不进仓库；验证阶段用 adb push）
+#    Qwen3-0.6B-Q4_K_M.gguf ≈ 397MB，放仓库外的独立目录
+# 4) 真机探针
+adb push Qwen3-0.6B-Q4_K_M.gguf /sdcard/Download/
+adb shell am broadcast -a com.pricelens.dev.LLM_PROBE \
+  -n com.pricelens.dev/com.pricelens.debug.LlmProbeReceiver --es text "满199减50，券码：ABCD1234"
+adb logcat -d -s PriceLensLLMProbe:'*'      # 或 adb exec-out run-as com.pricelens.dev cat files/llm-probe.txt
+```
+**PC 侧提示词探针**：`tools/llm_prompt_probe.py`（同一份资产、同一个 GGUF，在电脑上先调 prompt/语法，
+省得"改一行装一次包"）。注意它和 `LlamaRuntime` 有三处必须同步（脚本头里写明了）；
+这台机器上跑它踩过一个坑：从脚本里调 `llama-cli` 必须 `stdin=DEVNULL`，否则它生成完会进交互模式**一直等输入**，
+现象是"超时且零输出"，看起来像模型加载不动。
