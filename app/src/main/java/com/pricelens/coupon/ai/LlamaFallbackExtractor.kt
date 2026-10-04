@@ -66,13 +66,26 @@ class LlamaFallbackExtractor(
         }
     }
 
-    /** 原文里这个数值的起始下标；找不到返回 null（模型编数的最直接判据） */
+    /**
+     * 原文里这个数值的起始下标；找不到返回 null（模型编数的最直接判据）。
+     *
+     * 与管线里的守卫**同口径**：紧跟百分号的是费率不是金额（`国家补贴至高省15%`），
+     * 模型说是券也不采信 —— 提示词刚放开「补贴/省」之后，这一类特别容易变成误抽。
+     */
     private fun numberStart(text: String, value: Double): Int? {
         for (found in NUMBER.findAll(text)) {
+            if (followedByPercent(text, found.range.last + 1)) continue
             val parsed = found.value.replace(",", "").toDoubleOrNull() ?: continue
             if (parsed == value) return found.range.first
         }
         return null
+    }
+
+    /** 数字后面紧跟百分号（允许隔一个空格）⇒ 费率 */
+    private fun followedByPercent(text: String, from: Int): Boolean {
+        var i = from
+        while (i < text.length && text[i] == ' ') i++
+        return i < text.length && (text[i] == '%' || text[i] == '％')
     }
 
     private fun amount(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()

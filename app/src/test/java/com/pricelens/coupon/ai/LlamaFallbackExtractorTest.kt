@@ -124,6 +124,14 @@ class LlamaFallbackExtractorTest {
     }
 
     @Test
+    fun `模型把百分比当券面额时也要被挡掉`() {
+        // 提示词 v2 放开了「补贴/省」这些替身说法之后，这一类最容易变成误抽：
+        // `国家补贴至高省15%` 里的 15 是费率。规则层的守卫与这里同口径 —— 都不认百分号。
+        val json = """{"platform":"jd","coupons":[{"discount":15,"threshold":null}],"confidence":0.8}"""
+        assertNull(extractor(json).extract(listOf("国家补贴至高省15%")))
+    }
+
+    @Test
     fun `空分句不调用模型`() {
         val never = LlamaFallbackExtractor(ClauseModel { error("空输入不该调用模型") })
         assertNull(never.extract(emptyList()))
