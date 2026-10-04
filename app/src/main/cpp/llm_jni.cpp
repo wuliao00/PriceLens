@@ -85,99 +85,119 @@ Java_com_pricelens_coupon_ai_LlamaNative_nativeLoad(JNIEnv *env, jclass, jstring
 
 JNIEXPORT jstring JNICALL
 Java_com_pricelens_coupon_ai_LlamaNative_nativeRun(JNIEnv *env, jclass, jlong handle, jstring j_prompt, jstring j_grammar, jint max_tokens) {
-    auto *session = reinterpret_cast<Session *>(handle);
-    if (session == nullptr || session->ctx == nullptr) return nullptr;
+    try {
+        auto *session = reinterpret_cast<Session *>(handle);
+        if (session == nullptr || session->ctx == nullptr) return nullptr;
 
-    const char *prompt_chars = env->GetStringUTFChars(j_prompt, nullptr);
-    std::string prompt(prompt_chars == nullptr ? "" : prompt_chars);
-    if (prompt_chars != nullptr) env->ReleaseStringUTFChars(j_prompt, prompt_chars);
+        const char *prompt_chars = env->GetStringUTFChars(j_prompt, nullptr);
+        std::string prompt(prompt_chars == nullptr ? "" : prompt_chars);
+        if (prompt_chars != nullptr) env->ReleaseStringUTFChars(j_prompt, prompt_chars);
 
-    std::string grammar;
-    if (j_grammar != nullptr) {
-        const char *grammar_chars = env->GetStringUTFChars(j_grammar, nullptr);
-        grammar.assign(grammar_chars == nullptr ? "" : grammar_chars);
-        if (grammar_chars != nullptr) env->ReleaseStringUTFChars(j_grammar, grammar_chars);
-    }
+        std::string grammar;
+        if (j_grammar != nullptr) {
+            const char *grammar_chars = env->GetStringUTFChars(j_grammar, nullptr);
+            grammar.assign(grammar_chars == nullptr ? "" : grammar_chars);
+            if (grammar_chars != nullptr) env->ReleaseStringUTFChars(j_grammar, grammar_chars);
+        }
 
-    // 每次请求都从干净 KV 开始：兜底层是"一段文案进、一段 JSON 出"，不做多轮对话
-    llama_memory_clear(llama_get_memory(session->ctx), true);
+        // 每次请求都从干净 KV 开始：兜底层是"一段文案进、一段 JSON 出"，不做多轮对话
+        llama_memory_clear(llama_get_memory(session->ctx), true);
 
-    // 分词。先按估算开缓冲，不够再按返回值扩容（llama_tokenize 返回负数时是所需长度）
-    std::vector<llama_token> tokens(prompt.size() + 8);
-    int32_t n_tokens = llama_tokenize(session->vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
-    if (n_tokens < 0) {
-        tokens.resize(static_cast<size_t>(-n_tokens) + 8);
-        n_tokens = llama_tokenize(session->vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
-    }
-    if (n_tokens <= 0) {
-        log_error("分词失败或空 prompt");
-        return nullptr;
-    }
-    tokens.resize(static_cast<size_t>(n_tokens));
+        // 分词。先按估算开缓冲，不够再按返回值扩容（llama_tokenize 返回负数时是所需长度）
+        std::vector<llama_token> tokens(prompt.size() + 8);
+        int32_t n_tokens = llama_tokenize(session->vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
+        if (n_tokens < 0) {
+            tokens.resize(static_cast<size_t>(-n_tokens) + 8);
+            n_tokens = llama_tokenize(session->vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()), tokens.data(), static_cast<int32_t>(tokens.size()), true, true);
+        }
+        if (n_tokens <= 0) {
+            log_error("分词失败或空 prompt");
+            return nullptr;
+        }
+        tokens.resize(static_cast<size_t>(n_tokens));
 
-    const int n_ctx = static_cast<int>(llama_n_ctx(session->ctx));
-    if (n_tokens >= n_ctx) {
-        log_error("prompt 超过上下文长度，直接放弃（不做截断：截断会悄悄改变输入语义）");
-        return nullptr;
-    }
+        const int n_ctx = static_cast<int>(llama_n_ctx(session->ctx));
+        __android_log_print(ANDROID_LOG_INFO, kTag, "prompt：%d tokens（n_ctx=%d）", n_tokens, n_ctx);
+        if (n_tokens >= n_ctx) {
+            log_error("prompt 超过上下文长度，直接放弃（不做截断：截断会悄悄改变输入语义）");
+            return nullptr;
+        }
 
-    // 采样链：语法约束在最前面，后面只留贪心（temperature=0 等价物）。
-    // 顺序即语义：grammar 负责"只能吐合法 JSON"，它之后的采样器只是从候选里挑最大概率那个。
-    llama_sampler_chain_params sparams = llama_sampler_chain_default_params();
-    sparams.no_perf = true;
-    llama_sampler *chain = llama_sampler_chain_init(sparams);
-    if (!grammar.empty()) {
-        llama_sampler *grammar_sampler = llama_sampler_init_grammar(session->vocab, grammar.c_str(), "root");
-        if (grammar_sampler == nullptr) {
-            log_error("GBNF 语法解析失败 —— 宁可失败也不静默退回无约束解码（那会产出不合 schema 的 JSON）");
+        // 采样链：语法约束在最前面，后面只留贪心（temperature=0 等价物）。
+        // 顺序即语义：grammar 负责"只能吐合法 JSON"，它之后的采样器只是从候选里挑最大概率那个。
+        llama_sampler_chain_params sparams = llama_sampler_chain_default_params();
+        sparams.no_perf = true;
+        llama_sampler *chain = llama_sampler_chain_init(sparams);
+        if (!grammar.empty()) {
+            llama_sampler *grammar_sampler = llama_sampler_init_grammar(session->vocab, grammar.c_str(), "root");
+            if (grammar_sampler == nullptr) {
+                log_error("GBNF 语法解析失败 —— 宁可失败也不静默退回无约束解码（那会产出不合 schema 的 JSON）");
+                llama_sampler_free(chain);
+                return nullptr;
+            }
+            llama_sampler_chain_add(chain, grammar_sampler);
+        }
+        llama_sampler_chain_add(chain, llama_sampler_init_greedy());
+
+        // prompt 先整体喂进去
+        llama_batch batch = llama_batch_get_one(tokens.data(), static_cast<int32_t>(tokens.size()));
+        if (llama_decode(session->ctx, batch) != 0) {
+            log_error("prompt decode 失败");
             llama_sampler_free(chain);
             return nullptr;
         }
-        llama_sampler_chain_add(chain, grammar_sampler);
-    }
-    llama_sampler_chain_add(chain, llama_sampler_init_greedy());
 
-    // prompt 先整体喂进去
-    llama_batch batch = llama_batch_get_one(tokens.data(), static_cast<int32_t>(tokens.size()));
-    if (llama_decode(session->ctx, batch) != 0) {
-        log_error("prompt decode 失败");
+        std::string out;
+        int generated = 0;
+        const int64_t t_start = ggml_time_us();
+        const int32_t limit = max_tokens > 0 ? max_tokens : 256;
+        const int32_t room = n_ctx - static_cast<int32_t>(tokens.size()) - 1;
+
+        while (generated < limit && generated < room) {
+            llama_token sampled = 0;
+            try {
+                // **不要再手动 accept**：`llama_sampler_sample` 内部已经 accept 过了
+                // （llama-sampler.cpp 里两条返回路径都调了 accept；头文件那段示例注释是旧的）。
+                // accept 两次 = 同一段文本喂给语法两次 ⇒ 语法提前走空 ⇒ "empty grammar stack" 抛异常。
+                // 第一次真机上就是照注释抄、把自己撞成 SIGABRT 的，而语法本身完全没问题。
+                sampled = llama_sampler_sample(chain, session->ctx, -1);
+            } catch (const std::exception &e) {
+                // 把采样链内部的异常翻译成"生成到此为止"，返回已经产出的文本
+                __android_log_print(ANDROID_LOG_INFO, kTag, "采样/语法抛异常，停止生成：%s", e.what());
+                break;
+            }
+            if (llama_vocab_is_eog(session->vocab, sampled)) break;
+
+            char piece[256];
+            const int32_t piece_len = llama_token_to_piece(session->vocab, sampled, piece, sizeof(piece), 0, false);
+            if (piece_len > 0) out.append(piece, static_cast<size_t>(piece_len));
+            generated += 1;
+
+            // llama_batch_get_one 收的是**可写**指针（它会把位置信息填进去），
+            // 所以 sampled 必须是非 const 的局部变量
+            llama_batch next = llama_batch_get_one(&sampled, 1);
+            if (llama_decode(session->ctx, next) != 0) {
+                log_error("生成中 decode 失败");
+                break;
+            }
+        }
+
+        const int64_t t_end = ggml_time_us();
+        session->last_generated_tokens = generated;
+        session->last_tokens_per_second = generated > 0 ? generated * 1e6 / static_cast<double>(t_end - t_start) : 0.0;
         llama_sampler_free(chain);
+
+        __android_log_print(ANDROID_LOG_INFO, kTag, "生成完成：%d tokens, %.2f tok/s", generated, session->last_tokens_per_second);
+        return env->NewStringUTF(out.c_str());
+    } catch (const std::exception &e) {
+        // 第三方 C++ 异常的兜底：穿到 Java 层就是 std::terminate ⇒ SIGABRT ⇒ 整个应用被杀。
+        // 第一次真机跑就撞过（语法接受完最后一个 token 后抛"栈已空"），所以这一层必须有。
+        __android_log_print(ANDROID_LOG_ERROR, kTag, "nativeRun 抛异常（已兜住，不返回结果）：%s", e.what());
+        return nullptr;
+    } catch (...) {
+        __android_log_print(ANDROID_LOG_ERROR, kTag, "nativeRun 抛了非 std::exception 的异常（已兜住）");
         return nullptr;
     }
-
-    std::string out;
-    int generated = 0;
-    const int64_t t_start = ggml_time_us();
-    const int32_t limit = max_tokens > 0 ? max_tokens : 256;
-    const int32_t room = n_ctx - static_cast<int32_t>(tokens.size()) - 1;
-
-    while (generated < limit && generated < room) {
-        const llama_token sampled = llama_sampler_sample(chain, session->ctx, -1);
-        llama_sampler_accept(chain, sampled);
-        if (llama_vocab_is_eog(session->vocab, sampled)) break;
-
-        char piece[256];
-        const int32_t piece_len = llama_token_to_piece(session->vocab, sampled, piece, sizeof(piece), 0, false);
-        if (piece_len > 0) out.append(piece, static_cast<size_t>(piece_len));
-        generated += 1;
-
-        // llama_batch_get_one 收的是**可写**指针（它会把位置信息填进去），
-        // 所以这里必须是一个非 const 的局部变量，不能把上面那个 const 直接传进去
-        llama_token next_token = sampled;
-        llama_batch next = llama_batch_get_one(&next_token, 1);
-        if (llama_decode(session->ctx, next) != 0) {
-            log_error("生成中 decode 失败");
-            break;
-        }
-    }
-
-    const int64_t t_end = ggml_time_us();
-    session->last_generated_tokens = generated;
-    session->last_tokens_per_second = generated > 0 ? generated * 1e6 / static_cast<double>(t_end - t_start) : 0.0;
-    llama_sampler_free(chain);
-
-    __android_log_print(ANDROID_LOG_INFO, kTag, "生成完成：%d tokens, %.2f tok/s", generated, session->last_tokens_per_second);
-    return env->NewStringUTF(out.c_str());
 }
 
 JNIEXPORT jstring JNICALL

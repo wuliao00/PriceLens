@@ -96,6 +96,11 @@ fun SettingsScreen(
             SettingsBand(stringResource(R.string.layout_settings_group_notify)) {
                 NotifySection(settings)
             }
+            // 端侧识别（可选）：能力检测 + 从仓库下载模型。放在通知之后、数据之前 ——
+            // 它是"这台手机能多做一件事"的开关，不是数据管理，也不该挤在账号凭证那一组里
+            SettingsBand(stringResource(R.string.ai_model_title)) {
+                AiModelSection()
+            }
             SettingsBand(stringResource(R.string.layout_settings_group_data)) {
                 DataSection(
                     settings = settings,

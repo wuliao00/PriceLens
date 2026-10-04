@@ -298,3 +298,25 @@ adb logcat -d -s PriceLensLLMProbe:'*'      # 或 adb exec-out run-as com.pricel
 省得"改一行装一次包"）。注意它和 `LlamaRuntime` 有三处必须同步（脚本头里写明了）；
 这台机器上跑它踩过一个坑：从脚本里调 `llama-cli` 必须 `stdin=DEVNULL`，否则它生成完会进交互模式**一直等输入**，
 现象是"超时且零输出"，看起来像模型加载不动。
+
+## 模型的分发位置与"首次进入检测 + 推荐安装"（2026-10-04 晚）
+
+**模型进了分发仓库（不是 git）**：
+
+| 项 | 值 |
+|---|---|
+| 位置 | GitHub Release：tag `model-qwen3-0.6b-q4km-v1`（资产 `Qwen3-0.6B-Q4_K_M.gguf`） |
+| 大小 | 396705472 字节（与本地逐字节同，下载链 `curl -I` 实测 Content-Length 相同） |
+| sha256 | `ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a` |
+| 为什么不是 git | 397MB 进 git 会让每次 checkout/CI 都变重；release 单文件上限 2GB、自带 sha 元数据 |
+| 国内速度 | GitHub 直连可能慢；下载器支持 **Range 断点续传**（失败可重试，`*.part` 会保留），
+  CN 专用镜像等有实测再补进 `ModelRepository.URLS` |
+
+**首次进入检测 + 推荐安装**（`DeviceProbe` / `ModelAdvisor` / `ModelStore` / `AiModelViewModel` / `AiModelSection`）：
+- 检测只读六个标量（总内存/空闲内存/电量/是否计费网络/ABI/SDK），**不做跑分**——
+  真正的"这台机器行不行"由第一次推理的 tok/s 说话（模型下载后可跑一次极短推理得出）；
+- `ModelAdvisor.advice(...)` 把结论翻成六种界面状态；**最要紧的一条**：全新安装（预算 0、开关关）
+  也必须给 `SUGGEST_INSTALL` —— 第一版把真实预算喂给策略，结果全新安装被判成"机型装不下"，
+  而那正是最该推荐的时刻（`ModelAdvisorTest` 里钉住了这条）；
+- 下载三条纪律：下到 `.part`、**校验通过才改名**、校验不过就删；
+- 默认关：点"下载"才算同意（`ai_model_enabled`），`ai_device_checked` 只是"别再弹"的标记、**不是权限**。

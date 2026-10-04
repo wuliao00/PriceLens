@@ -47,6 +47,28 @@ class SettingsRepository @Inject constructor(
     }
 
     /**
+     * 端侧 AI 兜底模型（Qwen3-0.6B GGUF，走分发仓库下载，不进 APK）：
+     *  - `ai_model_enabled` = **用户是否同意**启用端侧模型。默认关 ——
+     *    第一次往用户手机里放别人的权重、还要占几百 MB，这件事必须用户点头，
+     *    与 [com.pricelens.coupon.ai.OnDeviceAiPolicy] 的"默认关"是同一条纪律；
+     *  - `ai_device_checked` = 首次进入的那次性能检测**已经跑过**。它只是"别再弹一次"的标记，
+     *    **不是权限**：能不能跑每次都由 `DeviceProbe` + `ModelAdvisor` 现算（电量/内存都会变）。
+     */
+    val aiModelEnabled: Boolean
+        get() = prefs.getBoolean("ai_model_enabled", false)
+
+    fun setAiModelEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("ai_model_enabled", enabled).apply()
+    }
+
+    val aiDeviceChecked: Boolean
+        get() = prefs.getBoolean("ai_device_checked", false)
+
+    fun setAiDeviceChecked(checked: Boolean) {
+        prefs.edit().putBoolean("ai_device_checked", checked).apply()
+    }
+
+    /**
      * 降价通知闸门（文档 UX「富通知」）：
      *  - 仅 WiFi 时提醒；免打扰时段（[quietStartMinute, quietEndMinute) 半开区间，跨零点自动处理）。
      * 被抑制只是"这一轮不发"，下一轮重新评估（见 worker/NotificationGate）。

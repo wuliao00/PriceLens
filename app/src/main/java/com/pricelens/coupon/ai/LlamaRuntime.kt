@@ -20,7 +20,10 @@ class LlamaRuntime(
     private val promptTemplate: String,
     private val gbnf: String,
     private val nThreads: Int = defaultThreads(),
-    private val nCtx: Int = 512,
+    // 2048 而不是 512：第一次真机跑就撞了 —— 提示词资产（槽位定义表 + 两条 few-shot）本身就上千 token，
+    // 512 的上下文连输入都装不下，nativeRun 直接返回 null（它宁可失败也不截断，见那边的注释）。
+    // 512 是当初拍的数，被一次真机运行否掉了；2048 对 0.6B 的 KV cache 来说很便宜。
+    private val nCtx: Int = 2048,
     private val maxTokens: Int = 256
 ) : Closeable {
 

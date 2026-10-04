@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  端侧识别（可选）的文案。三条纪律：
+  1. 不许出现"已核验/已确认"这类词（本版没有核验层，CouponStringsGuardTest 扫的是 strings_coupon.xml，
+     这份文件同样不写 —— 文字上不给自己留把柄）；
+  2. 推荐要**带依据**：几核、多少内存、电量都摆出来，用户看不到依据的"推荐"就是推销；
+  3. 失败要说清是哪一步（没下完 / 下完但校验不过），不许只说"失败了"。
+-->
+<resources>
+    <string name="ai_model_title">端侧识别（可选）</string>
+    <string name="ai_model_device_summary">本机：%1$d 核 · 内存 %2$d GB（可用 %3$d GB）· 电量 %4$d%%</string>
+    <string name="ai_model_recommend">这台手机可以跑端侧识别。模型（%1$d MB）从项目仓库下载，不进安装包、不占缓存那 30MB 预算。</string>
+    <string name="ai_model_download">下载模型</string>
+    <string name="ai_model_delete">删除模型</string>
+    <string name="ai_model_ready">端侧识别已启用（找券低置信时会用它兜底）</string>
+    <string name="ai_model_installed_off">模型已装，当前关闭</string>
+    <string name="ai_model_wait">现在不适合下载，等条件满足再来</string>
+    <string name="ai_model_unsupported">这台手机不满足端侧识别的条件</string>
+    <string name="ai_model_deleted">模型已删除</string>
+    <string name="ai_model_download_done">下载完成，校验通过</string>
+    <string name="ai_model_download_failed">下载失败或校验不过（文件已删除，可重试）</string>
+    <string name="ai_model_reason_battery">电量低于 %1$d%%，充上电再下载（下载与推理都吃电）</string>
+    <string name="ai_model_reason_ram">可用内存低于 2 GB，先清一下后台</string>
+    <string name="ai_model_reason_metered">当前是移动数据，397MB 建议连 Wi-Fi 再下</string>
+    <string name="ai_model_reason_abi">本安装包不含本机架构的推理引擎</string>
+    <string name="ai_model_reason_not_installed">模型还没下载（约 %1$d MB，可断点续传）</string>
+    <string name="ai_model_reason_device_ram">机型总内存低于 %1$d GB，端侧推理跑不动</string>
+</resources>
