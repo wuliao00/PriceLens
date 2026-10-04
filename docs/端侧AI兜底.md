@@ -320,3 +320,25 @@ adb logcat -d -s PriceLensLLMProbe:'*'      # 或 adb exec-out run-as com.pricel
   而那正是最该推荐的时刻（`ModelAdvisorTest` 里钉住了这条）；
 - 下载三条纪律：下到 `.part`、**校验通过才改名**、校验不过就删；
 - 默认关：点"下载"才算同意（`ai_model_enabled`），`ai_device_checked` 只是"别再弹"的标记、**不是权限**。
+
+## 真机结果（PLB110 / Android 15，2026-10-04 晚）
+
+**引擎与模型（跑通了，不是"应该能跑"）**
+- `libpricelens_llm.so`（arm64，Release 12.5MB）+ `/data/data/com.pricelens.dev/files/models/Qwen3-0.6B-Q4_K_M.gguf`（396705472 字节，sha256 与 `ModelRepository.SHA256` 一致）。
+- 性能：**~14 token/s**；一次抽取约 **22–27 秒**（含加载；其中 931 token 的提示词预填充占大头 ——
+  想提速该精简 few-shot，换更大模型是反方向）。
+- 从设置页下载的真实链路：WiFi 下 ≈8.8MB/s（GitHub CDN），397MB → sha256 校验 → 改名 → UI 变"已启用"，全程无人工干预。
+
+**模型抽对了一半，而那一半正是规则层做不到的**
+输入（规则层当初整条丢掉的那类社区帖）：
+`天猫精选此款目前活动售价5998元，参与官方限时补贴减499元，国家补贴15%减500元优惠活动，实付低至4999元`
+输出：`platform=taobao` ✓、两张券 `discount=499 / 500` ✓ —— 与 golden 一致；
+**但两张券都被编了 `threshold=5998`**（5998 是售价，golden 里 threshold 是 null）。
+
+**这条反例把设计里的那句话变成了硬约束**：`LLM 只抽 span、金额交给确定性解析器复核`。
+接线时必须做：模型给的 threshold/discount 要能在原文里找到对应锚点（门槛要有「满/门槛」类词、
+面额要有「减/省/券」类词），找不到就置 null —— 否则 5998 会变成一张"满5998减499"的不存在券。
+这也解释了为什么"模型抽到的"不能直接进 `Extraction`：它要先过 `CouponPipeline` 的那把尺子。
+
+**还没做的（诚实清单）**：模型尚未接进找券流水线（现在是"接缝 + 可选下载 + 真机可跑"，
+接线与"模型 vs 规则"的 A/B 是下一步）；提示词 931 token 偏长；CN 专用镜像地址未定。
