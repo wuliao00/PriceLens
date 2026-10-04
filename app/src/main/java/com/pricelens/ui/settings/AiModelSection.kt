@@ -47,8 +47,7 @@ fun AiModelSection(modifier: Modifier = Modifier, viewModel: AiModelViewModel = 
     val capability = state.capability
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.ai_model_title), style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.height(Dims.SpacingXS))
+        // 标题不在这里画：外层 SettingsBand 已经给了组名（第一版两边都画，真机上一眼看到两个「端侧识别（可选）」）
         // 依据先摆出来（几核 / 多少内存 / 电池），再给结论
         Text(deviceSummary(capability), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(Dims.SpacingS))
@@ -62,7 +61,7 @@ fun AiModelSection(modifier: Modifier = Modifier, viewModel: AiModelViewModel = 
                 }
             }
             ModelAdvice.State.SUGGEST_INSTALL, ModelAdvice.State.NEEDS_DOWNLOAD -> {
-                val recommendedMb = ModelRepository.BYTES / (1024L * 1024L)
+                val recommendedMb = ModelRepository.BYTES / 1_000_000L
                 Text(stringResource(R.string.ai_model_recommend, recommendedMb), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(Dims.SpacingXS))
                 ReasonText(state.advice)
@@ -138,7 +137,7 @@ private fun reasonLine(advice: ModelAdvice): String = when (advice.reasonKey) {
     ModelAdvisor.REASON_METERED -> stringResource(R.string.ai_model_reason_metered)
     ModelAdvisor.REASON_ABI -> stringResource(R.string.ai_model_reason_abi)
     ModelAdvisor.REASON_NOT_INSTALLED -> {
-        val recommendedMb = ModelRepository.BYTES / (1024L * 1024L)
+        val recommendedMb = ModelRepository.BYTES / 1_000_000L
         stringResource(R.string.ai_model_reason_not_installed, recommendedMb)
     }
     else -> stringResource(R.string.ai_model_reason_device_ram, OnDeviceAiPolicy.MinDeviceRamMb / 1024)
