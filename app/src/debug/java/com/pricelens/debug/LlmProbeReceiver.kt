@@ -85,6 +85,10 @@ class LlmProbeReceiver : BroadcastReceiver() {
             val source = entry.getString("source")
             val text = entry.getString("text")
             val rules = extract(source, text, emptyList())
+            // 模型的**原始输出**也留一行：不然"这条为什么没捞到"只能猜（复核层会丢数字，看不出是模型没给还是被丢掉）
+            val probe = runtime.extract(text)
+            // 用 lines().joinToString 而不是 replace 转义符：这条链路上"反斜杠 n"被工具层吃掉过两次
+            Log.i(TAG, "AB[$index] $id raw=" + (probe?.lines()?.joinToString(" ")?.take(180) ?: "null"))
             val withModel = extract(source, text, fallback)
             rulesLines.add(render(id, source, rules))
             modelLines.add(render(id, source, withModel))

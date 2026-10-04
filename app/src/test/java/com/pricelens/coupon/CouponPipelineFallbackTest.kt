@@ -67,6 +67,21 @@ class CouponPipelineFallbackTest {
     }
 
     @Test
+    fun `低置信时模型只做加法不动规则已经给出的券`() {
+        // 这条是 A/B 第一轮教出来的：最初的策略是"低置信就用模型结果替换规则猜测"，
+        // 结果 cm-faxian-01 上规则抽对两张（角色词给的 0.5 置信）、模型只回 1 张 ⇒ 替换把对的那张也吃了。
+        // 「参与官方限时补贴减499元」只命中角色词（没有模板）⇒ 置信 0.5 = 低置信 ⇒ 会唤起兜底
+        val fallback = CountingFallback()
+        val extraction = extract("参与官方限时补贴减499元", listOf(fallback))
+        assertEquals(1, fallback.calls)
+        // 规则那张还在（499），模型的 17 也进来了 ⇒ 两张，而不是被替换成一张
+        val values = extraction.coupons.map { it.discount }
+        assertTrue("规则那张不许被模型替换掉，实际=$values", values.contains(499.0))
+        assertTrue("模型的新数字应当能补进来，实际=$values", values.contains(17.0))
+        assertEquals(2, extraction.coupons.size)
+    }
+
+    @Test
     fun `没有兜底时行为与改造前完全一致`() {
         val extraction = extract("17元外卖餐补", emptyList())
         assertTrue(extraction.coupons.isEmpty())

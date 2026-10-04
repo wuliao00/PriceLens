@@ -89,10 +89,15 @@ internal object CouponPipeline {
                 if (!extractor.supports(kind)) continue
                 val draft = extractor.extract(clauseTexts) ?: continue
                 val slot = draft.toSlot(clauses, vocabulary) ?: continue
-                // 同一段文本不该出两张券：规则只给了低置信猜测时，用模型的替换它（换掉的是更弱的那条证据）
-                if (ruleConfidenceLow && coupons.isNotEmpty()) coupons.clear()
-                coupons.add(slot)
-                bestConfidence = maxOf(bestConfidence, MODEL_ONLY_CONFIDENCE)
+                // **模型只做加法，不做减法**（这条是 A/B 第一轮教出来的）：
+                // 最初的策略是"低置信时用模型结果替换规则猜测"，结果 cm-faxian-01 上
+                // 规则抽对了两张（499/500，角色词给的 0.5 置信），模型只回了 1 张 ⇒ 替换把对的那张也吃掉了，
+                // 子集 F1 从 0.750 掉到 0.696。规则已经给出来的槽位，模型再准也**不动它**。
+                val duplicate = coupons.any { it.discount == slot.discount && it.threshold == slot.threshold }
+                if (!duplicate) {
+                    coupons.add(slot)
+                    bestConfidence = maxOf(bestConfidence, MODEL_ONLY_CONFIDENCE)
+                }
                 break // 一条证据就够：再多也是同一来源，"跨候选共识"在 ConsensusFallbackExtractor 那边攒
             }
         }
