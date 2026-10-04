@@ -234,7 +234,11 @@ data class CouponVocabulary(
                     WordRule.literal("商品券")
                 )
             ),
-            couponHints = listOf("券", "领", "满", "减", "立减", "到手", "券后", "折", "红包", "省"),
+            // 「补贴」「餐补」是 2026-10-05 从**真机树**补的：`jd_home_20260929.xml` 里的角标节点
+            // `17元外卖餐补` 一个旧形状词都不含 ⇒ 连候选节点都不是（`NodeAdapter.isAnchor` 不放行，
+            // 整行也不带 `¥`，走不了价格行那条放行）。这就是"入口几乎不可能出券"的另一半：
+            // 判据（subsidy-tail）会读这句，但这句话从来没被送到判据面前。
+            couponHints = listOf("券", "领", "满", "减", "立减", "到手", "券后", "折", "红包", "省", "补贴", "餐补"),
             resourceHints = listOf("coupon", "promotion", "youhui", "voucher"),
             // 共享的五个词只有一份：取自 accessibility 那份（PriceNodeMatcher 第 235 行，已转 internal），
             // 这里只写本包按真机补齐的**增量**。

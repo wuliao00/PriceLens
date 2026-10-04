@@ -2,9 +2,11 @@ package com.pricelens.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.content.res.Configuration
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.pricelens.R
+import com.pricelens.coupon.PageCapture
 import com.pricelens.rules.DetectionPipeline
 import com.pricelens.rules.DetectionPipeline.DetectionOutcome
 import com.pricelens.rules.RuleProvider
@@ -89,6 +91,8 @@ class PriceMonitorService : AccessibilityService() {
                     if (lastSignature != null) {
                         lastSignature = null
                         OverlayManager.onLeftProductPage()
+                        // 树跟着内容一起清（#61）：券行不许挂在一棵已经离开的页面上
+                        PageCapture.clear()
                     }
                     return
                 }
@@ -97,10 +101,11 @@ class PriceMonitorService : AccessibilityService() {
                     if (isStateChanged && lastSignature != null) {
                         lastSignature = null
                         OverlayManager.onLeftProductPage()
+                        PageCapture.clear()
                     }
                     return
                 }
-                is DetectionOutcome.Hit -> emitDetection(packageName, platform, outcome.detection)
+                is DetectionOutcome.Hit -> emitDetection(packageName, platform, outcome.detection, snapshot)
             }
         } finally {
             rootNode.recycleCompat()
@@ -112,7 +117,7 @@ class PriceMonitorService : AccessibilityService() {
      * 日志写明"是谁命中的"：规则命中（含规则 id/版本/页面/选择器）或启发式回落 ——
      * 规则失效排查（改版后浮窗内容变旧）的第一现场就是这条。
      */
-    private fun emitDetection(packageName: String, platform: ShopPlatform, detection: DetectionPipeline.Detection) {
+    private fun emitDetection(packageName: String, platform: ShopPlatform, detection: DetectionPipeline.Detection, snapshot: NodeSnapshot) {
         val priceHit = detection.price
         val signature = "$packageName|${detection.itemId ?: ""}|${detection.title ?: ""}|${priceHit.rawText}"
         if (signature == lastSignature) return
@@ -132,6 +137,18 @@ class PriceMonitorService : AccessibilityService() {
                 priceBasis = priceHit.basis,
                 itemId = detection.itemId,
                 sourceText = sourceLabel(platform)
+            )
+        )
+        // #61：把这棵树一并交到单槽 holder，找券 UI 才有 `fromPage` 的输入。
+        // 放在去重闸**之后**：同一页面反复的内容变化事件不该反复重抓重放，
+        // 签名与 Detected 用的是同一串，UI 侧才可能对得上号。
+        PageCapture.publish(
+            PageCapture.Capture(
+                signature = signature,
+                packageName = packageName,
+                itemId = detection.itemId,
+                capturedAtElapsedMs = SystemClock.elapsedRealtime(),
+                root = snapshot
             )
         )
     }
@@ -206,6 +223,8 @@ class PriceMonitorService : AccessibilityService() {
     override fun onDestroy() {
         serviceScope.cancel()
         OverlayManager.stop()
+        // 服务被杀也要清槽：否则 UI 会读到一棵"上一个会话"的树（新鲜度上限只是备胎）
+        PageCapture.clear()
         super.onDestroy()
     }
 

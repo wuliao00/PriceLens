@@ -222,6 +222,9 @@ class CouponPipelineTest {
         val meal = oneSlot("17元外卖餐补")
         assertEquals(17.0, meal.discount!!, 0.0)
         assertNull(meal.threshold)
+        // 证据句必须延伸到**角色词**那里（段原本只截到最后一个数字 ⇒ 显示层会写成"这句里读出来的：17"，
+        // 用户既看不出抽对了也看不出抽错了。2026-10-05 接 #61 时撞出来的）
+        assertEquals("17元外卖餐补", meal.sourceText)
         // 左侧「补贴」直接领数字：`国家补贴500元` 说的是确定减额（评测集 cm-youhui-06 漏的那张）
         assertEquals(500.0, oneSlot("国家补贴500元优惠活动").discount!!, 0.0)
         // 反例（PLB110 抓到的那条，逼出"确定性复核"的同一句）：5998 是**售价**，

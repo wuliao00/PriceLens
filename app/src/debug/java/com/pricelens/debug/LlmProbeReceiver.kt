@@ -3,9 +3,12 @@ package com.pricelens.debug
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import android.util.Log
+import com.pricelens.accessibility.NodeSnapshot
 import com.pricelens.coupon.CouponExtractor
 import com.pricelens.coupon.CouponPipeline
+import com.pricelens.coupon.PageCapture
 import com.pricelens.coupon.ai.ClauseModel
 import com.pricelens.coupon.ai.LlamaFallbackExtractor
 import com.pricelens.coupon.ai.LlamaRuntime
@@ -23,6 +26,9 @@ import org.json.JSONObject
  * 2. A/B（`--es ab <jsonl>`）：逐条跑**规则**与**规则+模型**两条链，各写一份 golden 格式的
  *    predictions —— 这是"模型 vs 规则"的取数口，分数交给 `tools/eval_coupons.py` 算，
  *    探针自己**不判胜负**（量具与裁判分开，是这个仓库的纪律）。
+ * 3. 页面树注入（`--es page_capture "文案1；文案2"`）：**不碰模型**，只往 `PageCapture` 交一棵合成树
+ *    并打出 `fromPage` 的产出 —— 用来在真机上证明 #61 那条接线通（服务发布 → UI 收集 → 门面 → 渲染），
+ *    不需要电商 App 联网、也不动无障碍开关。
  *
  * 用法：
  *   adb shell am broadcast -a com.pricelens.dev.LLM_PROBE -n com.pricelens.dev/com.pricelens.debug.LlmProbeReceiver \
@@ -35,16 +41,23 @@ class LlmProbeReceiver : BroadcastReceiver() {
         val modelPath = intent.getStringExtra("model") ?: "/sdcard/Download/Qwen3-0.6B-Q4_K_M.gguf"
         val text = intent.getStringExtra("text") ?: "满199减50"
         val abPath = intent.getStringExtra("ab")
+        val pageTexts = intent.getStringExtra("page_capture")
         val pending = goAsync()
         Thread {
             try {
-                val prompt = context.assets.open("ai/coupon_prompt_v1.txt").bufferedReader().use { it.readText() }
-                val gbnf = context.assets.open("ai/coupon_schema.gbnf").bufferedReader().use { it.readText() }
-                val runtime = LlmRuntimeHolder.runtimeFor(File(modelPath), prompt, gbnf)
-                if (abPath != null) {
-                    runAb(context, runtime, File(abPath))
+                // 注入模式**不加载模型**：它要证明的是接线（发布→UI 收集→fromPage→合并→渲染），
+                // 而那条路上一个 token 都不需要推理；顺手加载 400MB 只会让排查变慢。
+                if (pageTexts != null) {
+                    publishSyntheticPage(pageTexts)
                 } else {
-                    runSingle(context, runtime, modelPath, text)
+                    val prompt = context.assets.open("ai/coupon_prompt_v1.txt").bufferedReader().use { it.readText() }
+                    val gbnf = context.assets.open("ai/coupon_schema.gbnf").bufferedReader().use { it.readText() }
+                    val runtime = LlmRuntimeHolder.runtimeFor(File(modelPath), prompt, gbnf)
+                    if (abPath != null) {
+                        runAb(context, runtime, File(abPath))
+                    } else {
+                        runSingle(context, runtime, modelPath, text)
+                    }
                 }
             } catch (t: Throwable) {
                 Log.e(TAG, "probe 失败：${t::class.java.name}: ${t.message}", t)
@@ -53,6 +66,48 @@ class LlmProbeReceiver : BroadcastReceiver() {
                 pending.finish()
             }
         }.start()
+    }
+
+    /**
+     * 注入一棵合成树并发布给 [PageCapture]（#61 的真机接线取证）。
+     *
+     * 为什么用合成树而不是"上真机打开京东再看"：那台测试机没有可用 DNS，且这条路要求动
+     * 无障碍开关（改完还得还原）。**内容**的正确性另有 `CouponExtractorTest` 的真机 dump 用例负责
+     * （从 `jd_home_20260929.xml` 这种真实树里挑角标）；这里只证明
+     * "服务发布 → UI 收集 StateFlow → fromPage → 与关键词那一路做加法 → 渲染成行"这一段接得上。
+     */
+    private fun publishSyntheticPage(texts: String) {
+        val clauses = texts.split('；', ';').map { it.trim() }.filter { it.isNotEmpty() }
+        val root = node(text = null, kids = clauses.map { node(text = it, kids = emptyList()) }, cls = "android.widget.LinearLayout")
+        PageCapture.publish(
+            PageCapture.Capture(
+                signature = "probe|${clauses.firstOrNull() ?: ""}",
+                packageName = "com.jingdong.app.mall",
+                itemId = null,
+                capturedAtElapsedMs = SystemClock.elapsedRealtime(),
+                root = root
+            )
+        )
+        val extraction = CouponExtractor.fromPage(root)
+        Log.i(
+            TAG,
+            "PAGE_CAPTURE 注入叶子=${clauses.size} 券数=${extraction.coupons.size} " +
+                "keys=${extraction.coupons.map { slot -> "${slot.discount}|${slot.threshold}" }} " +
+                "conf=${extraction.confidence} 出处=${extraction.coupons.map { slot -> slot.sourceText }}"
+        )
+    }
+
+    /** NodeSnapshot 是纯数据模型：debug 侧手工搭一棵，不需要框架节点也能进生产管线 */
+    private fun node(text: String?, kids: List<NodeSnapshot>, cls: String = "android.widget.TextView"): NodeSnapshot {
+        return NodeSnapshot(
+            text = text,
+            contentDescription = null,
+            className = cls,
+            resourceName = null,
+            clickable = false,
+            children = kids,
+            bounds = null
+        )
     }
 
     private fun runSingle(context: Context, runtime: LlamaRuntime, modelPath: String, text: String) {
@@ -100,7 +155,14 @@ class LlmProbeReceiver : BroadcastReceiver() {
         Log.i(TAG, "AB 完成：$index 条 → files/ab-rules.jsonl / files/ab-model.jsonl")
     }
 
-    /** 与 `CouponGoldenPredictionTest` 同口径：三个入口按 source 走各自的门面，page_node 喂单条子句 */
+    /**
+     * 与 `CouponGoldenPredictionTest` 同口径，但**写明一件事**：
+     * `page_node` 这里喂的是**一条子句文本**直接进管线，没有经过 `NodeAdapter`/`CouponExtractor.fromPage`
+     * —— 因为评测集里 page_node 的 `raw` 本来就是一条节点文案，不是整棵树
+     * （#61 之后生产路径是 `fromPage(整棵树)`，那条路的覆盖在 `CouponExtractorTest` 的真机 dump 用例里）。
+     * 所以 A/B 各轮表里的 `page_node` 分数衡量的是"给定一条节点文案，规则/模型读得对不对"，
+     * 不是"从一棵真实树里能不能挑出这些文案"—— 两件事别混着说。
+     */
     private fun extract(source: String, text: String, fallback: List<LlamaFallbackExtractor>): Extraction = when (source) {
         "clipboard" -> CouponExtractor.fromClipboard(text, fallback)
         "community" -> CouponExtractor.fromPost(text, 0L, fallback)

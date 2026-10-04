@@ -149,8 +149,28 @@ internal object CouponPipeline {
                 }
             }
         }
-        val slots = slotsOf(discounts, clause, state, clauseScope, expiry, code, url, vocabulary, hits)
+        val slots = slotsOf(discounts, clause, state, clauseScope, expiry, code, url, vocabulary, hits, hitSpanEndOf(hits))
         return ClauseOutcome(slots, priceOf(prices), confidenceOf(hits, slots))
+    }
+
+    /**
+     * 每个被模板声明的数字，它所属**整段命中**的右端点（不含）。
+     *
+     * 证据段原本只截到"这张券最后一个数字"，那对 `满199减50` 是对的（角色词都在数字前面），
+     * 但 `17元外卖餐补` 这类**角色词在数字后面**的形状就会被截成"17"——
+     * 展示层写着"这句里读出来的：17"，用户既看不出抽对了也看不出抽错了（2026-10-05 接 #61 时撞出来的）。
+     * 所以段要延伸到模板实际吃下的那一段原文末尾。
+     */
+    private fun hitSpanEndOf(hits: List<TemplateHit>): Map<Int, Int> {
+        val out = HashMap<Int, Int>()
+        for (hit in hits) {
+            val end = hit.start + hit.text.length
+            for (amount in hit.amounts) {
+                val previous = out[amount.start]
+                if (previous == null || end > previous) out[amount.start] = end
+            }
+        }
+        return out
     }
 
     /**
@@ -167,7 +187,8 @@ internal object CouponPipeline {
         code: String?,
         url: String?,
         vocabulary: CouponVocabulary,
-        hits: List<TemplateHit>
+        hits: List<TemplateHit>,
+        hitEnds: Map<Int, Int>
     ): List<CouponSlot> {
         val out = ArrayList<CouponSlot>()
         var pending: AmountValue? = null
@@ -183,7 +204,8 @@ internal object CouponPipeline {
                 pending = value
                 continue
             }
-            val stop = maxOf(value.end, pending?.end ?: value.end)
+            // 段尾三个来源取最右：本数字末尾、上一张券留下的门槛末尾、模板实际吃下的那段原文末尾
+            val stop = maxOf(value.end, pending?.end ?: value.end, hitEnds[value.start] ?: value.end)
             val segment = segmentOf(clause, consumedEnd, stop)
             val scope = scopeOf(segment, clauseScope, vocabulary)
             val threshold = thresholdValue(pending?.value, clause.text, vocabulary)

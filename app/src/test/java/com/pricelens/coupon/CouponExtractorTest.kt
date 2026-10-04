@@ -144,4 +144,60 @@ class CouponExtractorTest {
         assertEquals("unknown", CouponExtractor.fromClipboard("满199减50").platform)
         assertNull(CouponExtractor.fromClipboard("满199减50").coupons.single().url)
     }
+
+    /**
+     * #61 的端到端一半：**真机 dump 的整棵树**走 `fromPage`。
+     *
+     * 为什么必须用真树而不是合成树：评测集里 page_node 那 26 条的 `raw` 是单条节点文案，
+     * 从这里只能证明"给到这句话读得对"，证不了"能不能从一棵真实树里把这句话挑出来"——
+     * 而后者才是用户看到的"入口几乎不可能出券"。这两件事在 LlmProbeReceiver 的注释里也写明了分工。
+     */
+    @Test
+    fun `真机首页树里角标券被挑出来`() {
+        val extraction = CouponExtractor.fromPage(loadRealDump("jd_home_20260929.xml").root)
+        val keys = extraction.coupons.map { Pair(it.discount, it.threshold) }
+        assertTrue("「17元外卖餐补」这条角标必须成券，实际=$keys", keys.contains(Pair(17.0, null)))
+        // 「试用专享券」这类"有券名没金额"的节点：留一张全 null 券，而不是静默没有
+        assertTrue("首页角标「试用专享券」要留一张空券，实际=$keys", keys.contains(Pair(null, null)))
+    }
+
+    @Test
+    fun `真机商详底栏的领券按钮留成一张空券`() {
+        val extraction = CouponExtractor.fromPage(loadRealDump("jd_detail_instock_20260929.xml").root)
+        val nullSlots = extraction.coupons.filter { it.discount == null && it.threshold == null }
+        assertTrue("底栏「领券」该产一张全 null 券（页面确有可领券），实际=${extraction.coupons}", nullSlots.isNotEmpty())
+        // 证据句是那张券自己那一段，不许是空串（空串在展示层会被读成"这句没内容"）
+        assertTrue("空券也要带得出证据句", nullSlots.all { it.sourceText.isNotBlank() })
+    }
+
+    /** #61 的加法合并：两路读到同一张券只算一张，另一路独有的必须补进来 */
+    @Test
+    fun `两路输入做加法而重复的券只算一张`() {
+        val tree = CouponExtractor.fromPage(pageOf("满199减50"))
+        val text = CouponExtractor.fromClipboard("满199减50；17元外卖餐补")
+        val merged = CouponExtractor.merge(tree, text)
+        val keys = merged.coupons.map { Pair(it.discount, it.threshold) }
+        assertEquals("同面额同门槛不许出现两遍，实际=$keys", 2, keys.size)
+        assertTrue(keys.contains(Pair(50.0, 199.0)))
+        assertTrue("关键词那一路独有的 17 元不许被树换掉，实际=$keys", keys.contains(Pair(17.0, null)))
+        // 补进来的那张保留**它自己的**证据句（出处逐行可追，不是合并后才编的）
+        assertEquals("17元外卖餐补", merged.coupons[1].sourceText)
+        // 置信取较大值：档位说的是"这一组里最强的一条"，不是平均数
+        assertEquals(maxOf(tree.confidence, text.confidence), merged.confidence, 0.0001)
+        // 主路一张都不许丢
+        assertEquals(tree.coupons[0], merged.coupons[0])
+    }
+
+    @Test
+    fun `合并不拿次路的价格槽覆盖主路已读出的价格`() {
+        // 一行里同时有价格词与券词才会成为券的一路输入（`NodeAdapter` 的候选闸）：
+        // 纯价格行「原价5499」单独成行时**不归找券这条链读**（那是浮窗价格链路的事）
+        val tree = CouponExtractor.fromPage(pageOf("原价5499 满199减50"))
+        val text = CouponExtractor.fromClipboard("到手3999 满199减50")
+        val merged = CouponExtractor.merge(tree, text)
+        assertEquals(5499.0, merged.price.listPrice!!, 0.0001)
+        // 主路没有的槽位才由次路补：这就是"只填不盖"
+        assertEquals(3999.0, merged.price.finalPrice!!, 0.0001)
+        assertEquals(1, merged.coupons.size)
+    }
 }

@@ -3,8 +3,10 @@ package com.pricelens.ui.product
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Column
@@ -48,7 +50,9 @@ import com.pricelens.coupon.CouponExtractor
 import com.pricelens.coupon.CouponMisreadFiles
 import com.pricelens.coupon.CouponMisreadJsonl
 import com.pricelens.coupon.CouponMisreadStore
+import com.pricelens.coupon.LocalCouponInputPlanner
 import com.pricelens.coupon.MisreadLedger
+import com.pricelens.coupon.PageCapture
 import com.pricelens.data.remote.GwdangApi
 import com.pricelens.ui.common.AsyncValue
 import com.pricelens.ui.common.valueOrDefault
@@ -79,11 +83,14 @@ import kotlinx.coroutines.withContext
  *
  * 任务书 B2 之后这里并排放**两组券**（B2 口径：不许悄悄替换/吞掉 Gwdang 那条路）：
  *  - 远端组：`GwdangApi.Coupon`，什么值得买券频道给的列表，渲染一行都不改；
- *  - 本机组：[CouponExtractor] 从当前搜索文案（用户贴进来的分享文本正是剪贴板入口的本命）
- *    逐句读出的 [com.pricelens.coupon.model.CouponSlot]，带三档置信、逐槽"未识别"与证据句；
- *    每张券一个"这条不对"按钮，点了只进内存清单，导出走 files 下的本地通道
- *    （[CouponMisreadJsonl] 与 `tools/golden/coupons.jsonl` 逐字段兼容，人工放进评测集才参与回归）。
- * 节点树入口（浮窗侧的 page_node）不在本刀接线，展示层按 Extraction 类型写一份即可复用。
+ *  - 本机组：[CouponExtractor] 从**两路输入**逐句读出的 [com.pricelens.coupon.model.CouponSlot]，
+ *    带三档置信、逐槽"未识别"与证据句；每张券一个"这条不对"按钮，点了只进内存清单，
+ *    导出走 files 下的本地通道（[CouponMisreadJsonl] 与 `tools/golden/coupons.jsonl` 逐字段兼容，
+ *    人工放进评测集才参与回归）。
+ *    两路输入是 #61（2026-10-05）接上的：浮窗侧的页面节点树经 [PageCapture] 单槽交接喂 `fromPage`，
+ *    关键词/分享文本喂 `fromClipboard`；两路都有时 [CouponExtractor.merge] **做加法**
+ *    （面额+门槛都相同的券只算一张），谁都不许被悄悄换掉。用哪一路由纯函数
+ *    [LocalCouponInputPlanner.plan] 判，出处写在组标题下面一行。
  */
 @Composable
 fun ProductCouponSection(searchViewModel: SearchViewModel) {
@@ -92,8 +99,26 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
     val netPrice by searchViewModel.netPrice.collectAsStateWithLifecycle()
     val coupons = couponsAsync.valueOrDefault(emptyList())
     val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
-    // 本机识别只走门面（统一流水线不许绕）；每轮关键词算一次，重排不重算
-    val localExtraction = remember(keyword) { CouponExtractor.fromClipboard(keyword.trim()) }
+    val capture by PageCapture.latest.collectAsStateWithLifecycle()
+    // #61：本机识别从此有**两路输入**。"用哪一路/两路都用"是判据，写在纯函数里
+    // （`LocalCouponInputPlanner.plan`，可在 JVM 里测），这里只负责取当下时钟与按判据跑管线。
+    // 两路都有时两路都跑、结果做加法 —— 关键词那条路是 B2 的本命（用户贴进来的分享文本
+    // 富得很），不许因为树上有了东西就把它悄悄换掉（同"模型只做加法，不做减法"一条纪律）。
+    val plan = LocalCouponInputPlanner.plan(capture, keyword, SystemClock.elapsedRealtime())
+    val localExtraction = remember(capture, keyword, plan.kind) {
+        val kind = plan.kind
+        val tree = if (kind == LocalCouponInputPlanner.Kind.PAGE_ONLY || kind == LocalCouponInputPlanner.Kind.BOTH) {
+            capture?.let { CouponExtractor.fromPage(it.root) }
+        } else {
+            null
+        }
+        val text = if (kind == LocalCouponInputPlanner.Kind.PAGE_ONLY) null else CouponExtractor.fromClipboard(keyword.trim())
+        when {
+            tree != null && text != null -> CouponExtractor.merge(tree, text)
+            tree != null -> tree
+            else -> checkNotNull(text) { "判据是 $kind，就该至少有一路输入被跑起来" }
+        }
+    }
     val localRows = localCouponRows(localExtraction)
     val ledger = remember { MisreadLedger() }
     var markedCount by remember { mutableStateOf(0) }
@@ -192,11 +217,11 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
             // **标题与空态不许一起藏起来**：真机 2026-10-04 搜「雷神ZERO」时整段消失，
             // 用户无法区分"这功能没做 / 被我关了 / 这次没识别到"——静默没有正是这一批要消灭的形状。
             item(key = "local_header") {
-                LocalGroupHeader()
+                LocalGroupHeader(plan.kind)
             }
             if (localRows.isEmpty()) {
                 item(key = "local_empty") {
-                    LocalGroupEmpty(keyword)
+                    LocalGroupEmpty(plan.kind, keyword)
                 }
             } else {
                 itemsIndexed(localRows, key = { _, row -> "local:${row.index}_${row.sourceText.hashCode()}" }) { _, row ->
@@ -307,7 +332,7 @@ private fun CouponCard(coupon: GwdangApi.Coupon, onCopy: () -> Unit) {
 
 /** 本机识别组的小标题：明说这组是"从当前文案里识别的"，与上面远端券列表是两回事 */
 @Composable
-private fun LocalGroupHeader() {
+private fun LocalGroupHeader(kind: LocalCouponInputPlanner.Kind) {
     Column {
         Spacer(Modifier.height(Dims.SpacingL))
         Text(stringResource(R.string.coupon_local_header), style = MaterialTheme.typography.titleSmall)
@@ -316,8 +341,24 @@ private fun LocalGroupHeader() {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        // 出处单独一行：这一组东西**是从哪儿读的**（#61 之后有两路输入，不写清就等于没说）。
+        // 关键词那一路读的是标题还是用户贴的分享文本、树是不是刚抓的，用户看这一行就知道。
+        Text(
+            stringResource(sourceLineRes(kind)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(Dims.SpacingM))
     }
+}
+
+/** 判据的四种输入组合 → 出处文案（映射表在这里，判据本体在 `LocalCouponInputPlanner`） */
+@StringRes
+private fun sourceLineRes(kind: LocalCouponInputPlanner.Kind): Int = when (kind) {
+    LocalCouponInputPlanner.Kind.PAGE_ONLY -> R.string.coupon_local_source_page
+    LocalCouponInputPlanner.Kind.BOTH -> R.string.coupon_local_source_both
+    LocalCouponInputPlanner.Kind.KEYWORD_ONLY -> R.string.coupon_local_source_keyword
+    LocalCouponInputPlanner.Kind.NONE -> R.string.coupon_local_source_none
 }
 
 /**
@@ -329,8 +370,14 @@ private fun LocalGroupHeader() {
  * —— 后者正是"这条不对"要报的东西。
  */
 @Composable
-private fun LocalGroupEmpty(keyword: String) {
-    val shown = keyword.trim()
+private fun LocalGroupEmpty(kind: LocalCouponInputPlanner.Kind, keyword: String) {
+    // 树没有"一句原文"可以回显，所以那一路回显的是**读过的东西的名字**；
+    // 关键词那一路继续原样回显（用户要靠它判断是"这词本来没券"还是"贴的文案没认出来"）
+    val shown = when (kind) {
+        LocalCouponInputPlanner.Kind.PAGE_ONLY -> stringResource(R.string.coupon_local_input_page)
+        LocalCouponInputPlanner.Kind.BOTH -> stringResource(R.string.coupon_local_input_page) + " / " + keyword.trim()
+        LocalCouponInputPlanner.Kind.KEYWORD_ONLY, LocalCouponInputPlanner.Kind.NONE -> keyword.trim()
+    }
     Column {
         Text(
             text = stringResource(R.string.coupon_local_empty, shown),

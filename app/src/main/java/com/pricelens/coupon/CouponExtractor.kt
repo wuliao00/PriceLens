@@ -71,6 +71,33 @@ object CouponExtractor {
             fallback = fallback
         )
     }
+
+    /**
+     * 两路输入的**加法合并**（页面树 + 关键词文本；2026-10-05 接 #61 时定下的口径）。
+     *
+     * 规则与兜底层是同一条纪律："只做加法，不做减法"（A/B 第一轮教出来的：替换策略把
+     * 规则抽对的一张券吃掉了）。所以 [primary] 的一张券都不动，只把 [secondary] 里
+     * **面额与门槛都不同**的券补进来 —— 两路读到同一张券时必须只出现一次，
+     * 否则用户会以为有两张可领。
+     *
+     * 为什么不"二选一"：树里没有券而用户贴进来的分享文本里有（B2 本命场景），选树就整段空手；
+     * 反过来树里有券而标题读不出东西。两种失败都真实存在，所以两路都跑。
+     * 置信取较大值：档位描述的是"这一组里最强的一条证据"，不是平均数。
+     */
+    fun merge(primary: Extraction, secondary: Extraction): Extraction {
+        val known = primary.coupons.map { Pair(it.discount, it.threshold) }.toSet()
+        val added = secondary.coupons.filter { Pair(it.discount, it.threshold) !in known }
+        return primary.copy(
+            coupons = primary.coupons + added,
+            price = primary.price.copy(
+                finalPrice = primary.price.finalPrice ?: secondary.price.finalPrice,
+                listPrice = primary.price.listPrice ?: secondary.price.listPrice,
+                drop = primary.price.drop ?: secondary.price.drop
+            ),
+            stackNote = primary.stackNote ?: secondary.stackNote,
+            confidence = maxOf(primary.confidence, secondary.confidence)
+        )
+    }
 }
 
 /** 置信档位：高（能直接展示）/ 中（要带"待核验"字样）/ 低（只进"可能的券"列表） */
