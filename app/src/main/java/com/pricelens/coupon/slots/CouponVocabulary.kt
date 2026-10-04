@@ -131,7 +131,11 @@ data class CouponVocabulary(
                     WordRule.literal("原价"),
                     WordRule.literal("划线"),
                     WordRule.literal("日常价"),
-                    WordRule.literal("标价")
+                    WordRule.literal("标价"),
+                    // 「售价」：真机社区帖里 `目前活动售价5998元` 就靠它把 5998 钉成**价格**。
+                    // 不登记它的后果，端侧模型那次真机输出已经演示过：模型把 5998 写成了门槛，
+                    // 而复核层当时判不出它的角色、只能降置信收下 ⇒ 一张"满5998减499"的不存在券。
+                    WordRule.literal("售价")
                 ),
                 AmountRole.DROP to listOf(
                     WordRule.literal("降"),

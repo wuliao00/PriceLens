@@ -6,6 +6,7 @@ import com.pricelens.accessibility.extractItemId
 import com.pricelens.coupon.adapters.NodeAdapter
 import com.pricelens.coupon.adapters.PostAdapter
 import com.pricelens.coupon.adapters.TextAdapter
+import com.pricelens.coupon.ai.FallbackExtractor
 import com.pricelens.coupon.model.ExtractSource
 import com.pricelens.coupon.model.Extraction
 import com.pricelens.coupon.normalize.Links
@@ -30,7 +31,7 @@ object CouponExtractor {
     val templates: CouponTemplates = CouponTemplates.BUILTIN
 
     /** 剪贴板分享文案 */
-    fun fromClipboard(text: String): Extraction {
+    fun fromClipboard(text: String, fallback: List<FallbackExtractor> = emptyList()): Extraction {
         val clauses = TextAdapter.normalize(text)
         val joined = clauses.joinToString(" ") { it.text }
         return CouponPipeline.extract(
@@ -38,12 +39,13 @@ object CouponExtractor {
             source = ExtractSource.CLIPBOARD,
             platform = Links.platformHint(joined),
             itemRef = PriceNodeMatcher.findJdSku(joined),
-            templates = templates
+            templates = templates,
+            fallback = fallback
         )
     }
 
     /** 社区帖。[ageDays] 是发帖距今天数（调用方知道就传，>30 天按历史信息衰减） */
-    fun fromPost(post: String, ageDays: Long): Extraction {
+    fun fromPost(post: String, ageDays: Long, fallback: List<FallbackExtractor> = emptyList()): Extraction {
         val clauses = PostAdapter.normalize(post, LocalDate.now().toEpochDay())
         val joined = clauses.joinToString(" ") { it.text }
         return CouponPipeline.extract(
@@ -52,19 +54,21 @@ object CouponExtractor {
             platform = Links.platformHint(joined),
             itemRef = PriceNodeMatcher.findJdSku(joined),
             templates = templates,
-            ageDays = ageDays
+            ageDays = ageDays,
+            fallback = fallback
         )
     }
 
     /** 商品页无障碍节点树 */
-    fun fromPage(root: NodeSnapshot): Extraction {
+    fun fromPage(root: NodeSnapshot, fallback: List<FallbackExtractor> = emptyList()): Extraction {
         val clauses = NodeAdapter.clauses(root)
         return CouponPipeline.extract(
             clauses = clauses,
             source = ExtractSource.PAGE_NODE,
             platform = NodeAdapter.platform(root),
             itemRef = extractItemId(root),
-            templates = templates
+            templates = templates,
+            fallback = fallback
         )
     }
 }

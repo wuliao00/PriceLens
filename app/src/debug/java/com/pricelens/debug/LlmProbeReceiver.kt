@@ -4,60 +4,126 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.pricelens.coupon.CouponExtractor
+import com.pricelens.coupon.CouponPipeline
+import com.pricelens.coupon.ai.ClauseModel
+import com.pricelens.coupon.ai.LlamaFallbackExtractor
 import com.pricelens.coupon.ai.LlamaRuntime
+import com.pricelens.coupon.model.ExtractSource
+import com.pricelens.coupon.model.Extraction
+import com.pricelens.coupon.normalize.Clause
 import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
- * **只在 debug 包里的探针**：用 adb 广播触发一次端侧推理，把结果写到 logcat 与
- * `filesDir/llm-probe.txt`，供"这个模型在这台机器上到底跑不跑得动、吐的对不对"取证。
+ * **只在 debug 包里的探针**（正式包不会合并这个文件）。两种模式：
  *
- * 为什么不塞进正式代码路径：验完就要能删。找券的 UI 入口那条路（搜索关键词）已经报出
- * "几乎不可能出券"的问题（见任务 #61），把一个测试开关挂进去只会让两件事混在一起。
+ * 1. 单发（`--es text`）：跑一次推理，把结果写 logcat 与 `files/llm-probe.txt`；
+ * 2. A/B（`--es ab <jsonl>`）：逐条跑**规则**与**规则+模型**两条链，各写一份 golden 格式的
+ *    predictions —— 这是"模型 vs 规则"的取数口，分数交给 `tools/eval_coupons.py` 算，
+ *    探针自己**不判胜负**（量具与裁判分开，是这个仓库的纪律）。
  *
  * 用法：
- *   adb push Qwen3-0.6B-Q4_K_M.gguf /sdcard/Download/
- *   adb shell am broadcast -a com.pricelens.dev.LLM_PROBE \
- *     -n com.pricelens.dev/com.pricelens.debug.LlmProbeReceiver \
- *     --es text "满199减50，券码：ABCD1234"
- * 默认模型路径 = `/sdcard/Download/Qwen3-0.6B-Q4_K_M.gguf`（应用有读 sdcard 的权限时直接用，
- * 免去再拷一份 400MB 进私有目录）；也可以用 `--es model /path/to.gguf` 覆盖。
+ *   adb shell am broadcast -a com.pricelens.dev.LLM_PROBE -n com.pricelens.dev/com.pricelens.debug.LlmProbeReceiver \
+ *     --es model /data/data/com.pricelens.dev/files/models/Qwen3-0.6B-Q4_K_M.gguf --es ab /data/local/tmp/ab.jsonl
+ * 输入每行：`{"id":"…","source":"clipboard|community|page_node","text":"…"}`。
  */
 class LlmProbeReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val modelPath = intent.getStringExtra("model") ?: "/sdcard/Download/Qwen3-0.6B-Q4_K_M.gguf"
         val text = intent.getStringExtra("text") ?: "满199减50"
+        val abPath = intent.getStringExtra("ab")
         val pending = goAsync()
         Thread {
-            val out = File(context.filesDir, "llm-probe.txt")
             try {
                 val prompt = context.assets.open("ai/coupon_prompt_v1.txt").bufferedReader().use { it.readText() }
                 val gbnf = context.assets.open("ai/coupon_schema.gbnf").bufferedReader().use { it.readText() }
                 val runtime = LlmRuntimeHolder.runtimeFor(File(modelPath), prompt, gbnf)
-                val started = System.currentTimeMillis()
-                val json = runtime.extract(text)
-                val elapsed = System.currentTimeMillis() - started
-                val stats = runtime.lastStats()
-                val line = buildString {
-                    append("engine=").append(runtime.isEngineAvailable)
-                    append(" ready=").append(runtime.isReady)
-                    append(" engineError=").append(runtime.engineError ?: "-")
-                    append("\nmodel=").append(modelPath)
-                    append("\ntext=").append(text)
-                    append("\nelapsedMs=").append(elapsed)
-                    append("\nstats=").append(stats ?: "-")
-                    append("\njson=").append(json ?: "null")
+                if (abPath != null) {
+                    runAb(context, runtime, File(abPath))
+                } else {
+                    runSingle(context, runtime, modelPath, text)
                 }
-                Log.i(TAG, line)
-                out.writeText(line, Charsets.UTF_8)
             } catch (t: Throwable) {
-                val line = "probe 失败：${t::class.java.name}: ${t.message}"
-                Log.e(TAG, line, t)
-                runCatching { out.writeText(line, Charsets.UTF_8) }
+                Log.e(TAG, "probe 失败：${t::class.java.name}: ${t.message}", t)
+                runCatching { File(context.filesDir, "llm-probe.txt").writeText("probe 失败：${t.message}", Charsets.UTF_8) }
             } finally {
                 pending.finish()
             }
         }.start()
+    }
+
+    private fun runSingle(context: Context, runtime: LlamaRuntime, modelPath: String, text: String) {
+        val started = System.currentTimeMillis()
+        val json = runtime.extract(text)
+        val line = buildString {
+            append("engine=").append(runtime.isEngineAvailable)
+            append(" ready=").append(runtime.isReady)
+            append(" engineError=").append(runtime.engineError ?: "-")
+            append("\nmodel=").append(modelPath)
+            append("\ntext=").append(text)
+            append("\nelapsedMs=").append(System.currentTimeMillis() - started)
+            append("\nstats=").append(runtime.lastStats() ?: "-")
+            append("\njson=").append(json ?: "null")
+        }
+        Log.i(TAG, line)
+        File(context.filesDir, "llm-probe.txt").writeText(line, Charsets.UTF_8)
+    }
+
+    /** A/B：同一条文本走两条链，各写一份 predictions（格式与 golden 对齐，直接喂 eval 脚本） */
+    private fun runAb(context: Context, runtime: LlamaRuntime, input: File) {
+        val fallback = listOf(LlamaFallbackExtractor(ClauseModel { runtime.extract(it) }))
+        val rulesLines = ArrayList<String>()
+        val modelLines = ArrayList<String>()
+        var index = 0
+        for (raw in input.readLines()) {
+            if (raw.isBlank()) continue
+            val entry = JSONObject(raw)
+            val id = entry.getString("id")
+            val source = entry.getString("source")
+            val text = entry.getString("text")
+            val rules = extract(source, text, emptyList())
+            val withModel = extract(source, text, fallback)
+            rulesLines.add(render(id, source, rules))
+            modelLines.add(render(id, source, withModel))
+            Log.i(TAG, "AB[$index] $id rules=${rules.coupons.size} model=${withModel.coupons.size}")
+            index += 1
+        }
+        File(context.filesDir, "ab-rules.jsonl").writeText(rulesLines.joinToString("\n", postfix = "\n"), Charsets.UTF_8)
+        File(context.filesDir, "ab-model.jsonl").writeText(modelLines.joinToString("\n", postfix = "\n"), Charsets.UTF_8)
+        Log.i(TAG, "AB 完成：$index 条 → files/ab-rules.jsonl / files/ab-model.jsonl")
+    }
+
+    /** 与 `CouponGoldenPredictionTest` 同口径：三个入口按 source 走各自的门面，page_node 喂单条子句 */
+    private fun extract(source: String, text: String, fallback: List<LlamaFallbackExtractor>): Extraction = when (source) {
+        "clipboard" -> CouponExtractor.fromClipboard(text, fallback)
+        "community" -> CouponExtractor.fromPost(text, 0L, fallback)
+        else -> CouponPipeline.extract(
+            clauses = listOf(Clause(text = text)),
+            source = ExtractSource.PAGE_NODE,
+            platform = "unknown",
+            itemRef = null,
+            templates = CouponExtractor.templates,
+            fallback = fallback
+        )
+    }
+
+    private fun render(id: String, source: String, extraction: Extraction): String {
+        val coupons = JSONArray()
+        extraction.coupons.forEach { slot ->
+            coupons.put(
+                JSONObject()
+                    .put("discount", slot.discount ?: JSONObject.NULL)
+                    .put("threshold", slot.threshold ?: JSONObject.NULL)
+                    .put("scope", slot.scope.name.lowercase())
+                    .put("state", slot.state.name.lowercase())
+                    .put("expiry", slot.expiry ?: JSONObject.NULL)
+                    .put("url", slot.url ?: JSONObject.NULL)
+            )
+        }
+        return JSONObject().put("id", id).put("source", source).put("coupons", coupons).toString()
     }
 
     companion object {
@@ -66,8 +132,7 @@ class LlmProbeReceiver : BroadcastReceiver() {
 }
 
 /**
- * 进程内单例：加载 400MB 权重要好几秒，一次广播加载一次就够，
- * 连续几次广播（不同文案）应该复用同一份运行时 —— 不然测出来的耗时里大半是加载时间。
+ * 进程内单例：加载 400MB 权重要好几秒，连续几次广播应复用同一份运行时。
  */
 private object LlmRuntimeHolder {
     private var cached: LlamaRuntime? = null

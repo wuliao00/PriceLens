@@ -1,6 +1,8 @@
 package com.pricelens.coupon
 
 import com.pricelens.coupon.adapters.PostAdapter
+import com.pricelens.coupon.ai.FallbackDraft
+import com.pricelens.coupon.ai.FallbackExtractor
 import com.pricelens.coupon.model.AmountRole
 import com.pricelens.coupon.model.CouponScope
 import com.pricelens.coupon.model.CouponSlot
@@ -53,7 +55,8 @@ internal object CouponPipeline {
         itemRef: String?,
         templates: CouponTemplates,
         ageDays: Long? = null,
-        vocabulary: CouponVocabulary = CouponVocabulary.DEFAULT
+        vocabulary: CouponVocabulary = CouponVocabulary.DEFAULT,
+        fallback: List<FallbackExtractor> = emptyList()
     ): Extraction {
         val coupons = ArrayList<CouponSlot>()
         var finalPrice: Double? = null
@@ -71,6 +74,27 @@ internal object CouponPipeline {
             bestConfidence = maxOf(bestConfidence, outcome.confidence)
             stack = stack ?: clause.stackNote
             staleSeen = staleSeen || clause.stale
+        }
+        // 兜底：**只在这一句什么都没抽到时**才唤起（规则先行、AI 兜底）。
+        // 顺序不是优化而是纪律：模型每次要跑几十秒，而且在"规则已经读出来"的地方它只会带来分歧。
+        // 唤醒条件（用户方案里的"规则先行、AI 兜底"）：规则**什么都没抽到**，
+        // 或者只给出"形状词级"的低置信结果（CONTEXT_ONLY_CONFIDENCE）——
+        // 后者才是模型真正有信息增量的地方：有券的形状、但模板一个都没套上。
+        // 模板命中（≥0.75）一律不唤起：那里模型没有增量，只有几十秒的等待。
+        val ruleConfidenceLow = bestConfidence <= CouponTemplates.CONTEXT_ONLY_CONFIDENCE
+        if ((coupons.isEmpty() || ruleConfidenceLow) && fallback.isNotEmpty() && clauses.isNotEmpty()) {
+            val kind = source.toInputKind()
+            val clauseTexts = clauses.map { it.text }
+            for (extractor in fallback) {
+                if (!extractor.supports(kind)) continue
+                val draft = extractor.extract(clauseTexts) ?: continue
+                val slot = draft.toSlot(clauses, vocabulary) ?: continue
+                // 同一段文本不该出两张券：规则只给了低置信猜测时，用模型的替换它（换掉的是更弱的那条证据）
+                if (ruleConfidenceLow && coupons.isNotEmpty()) coupons.clear()
+                coupons.add(slot)
+                bestConfidence = maxOf(bestConfidence, MODEL_ONLY_CONFIDENCE)
+                break // 一条证据就够：再多也是同一来源，"跨候选共识"在 ConsensusFallbackExtractor 那边攒
+            }
         }
         val nothing = coupons.isEmpty() && finalPrice == null && listPrice == null && drop == null
         val decay = decayFactor(staleSeen, ageDays)
@@ -279,6 +303,40 @@ internal object CouponPipeline {
 
     /** 句内一个带角色的数字（[end] 是"数字之后第一个下标"，配对时用它切出每张券自己的那段） */
     internal data class AmountValue(val value: Double, val start: Int, val end: Int, val role: AmountRole)
+
+    /**
+     * 只有模型参与时那份券的基准置信。
+     * 取 0.6：低于任何模板（0.8~0.95）、高于纯上下文兜底（0.5）——
+     * "模型读出来的"比"只有形状词"可信，但比"模板与模型都认"弱，这是事实层面的排序。
+     */
+    internal const val MODEL_ONLY_CONFIDENCE = 0.6
+
+    /**
+     * 把兜底草稿变成一张券槽位。
+     *
+     * 能填的只有两个金额：scope/state 由**原文那句**判（判不出就是 UNKNOWN），expiry/code/url 一律 null ——
+     * 兜底层不仲裁那三个槽位（见接缝契约），拿它的猜测当状态比留 UNKNOWN 更糟。
+     * `sourceText` 取**含这张券数字的那一句**，与规则路径的证据句同口径。
+     */
+    private fun FallbackDraft.toSlot(clauses: List<Clause>, vocabulary: CouponVocabulary): CouponSlot? {
+        val anchorValue = discount ?: threshold ?: return null
+        val literal = amountLiteral(anchorValue)
+        val evidence = clauses.firstOrNull { it.text.contains(literal) } ?: clauses.first()
+        return CouponSlot(
+            discount = discount,
+            threshold = threshold,
+            scope = ScopeWords.of(evidence.text, evidence.ancestors, vocabulary),
+            state = StateWords.of(evidence.text, evidence.ancestors, vocabulary),
+            expiry = null,
+            code = null,
+            url = null,
+            sourceText = evidence.text,
+            nodePath = evidence.nodePath
+        )
+    }
+
+    /** 金额在文本里的常见写法（整数不带小数点；与 NUMBER 的两种形态对应） */
+    private fun amountLiteral(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
 }
 
 /** 来源可靠度：剪贴板是用户自己复制的原文，节点树是二手呈现，社区帖是别人写的 */
