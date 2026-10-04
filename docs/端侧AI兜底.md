@@ -351,7 +351,7 @@ adb logcat -d -s PriceLensLLMProbe:'*'      # 或 adb exec-out run-as com.pricel
 - 取数口：debug 探针 `--es ab <jsonl>` 逐条跑两臂、各写一份 golden 格式 predictions，
   打分只由 `tools/eval_coupons.py` 做（探针不判胜负）。
 
-**四轮的账**（真机 PLB110，同一 10 条子集、同一把尺子）
+**四轮的账**（真机 PLB110，同一 10 条子集、同一把尺子；第五轮是同夜规则层补完判据后的复测，一并记在这里）
 
 | 轮 | 提示词 | 规则臂 | 规则+模型臂 | 说明 |
 |----|--------|--------|-------------|------|
@@ -359,6 +359,7 @@ adb logcat -d -s PriceLensLLMProbe:'*'      # 或 adb exec-out run-as com.pricel
 | 2 | v1 | 0.750 | 0.750 | 不加不减 |
 | 3 | v2（抽象规则：补贴/餐补/红包/返现 = 券面额替身） | 0.750 | 0.750 | 逐条 diff 0：**0.6B 不执行"讲道理"式条款** |
 | 4 | v3（v2 + 同形示例「25元外卖餐补 → discount:25」） | 0.750 | 0.750 | 逐条 diff 0：**抄格式不抄映射**（见下） |
+| 5 | v3（规则层同夜补了"数字在前"等四类判据后重跑） | **0.9630** | 0.9630 | diff 仍 0，但原因换了：子集里四类漏抽**规则已经接住**，模型没有增量位置（餐补句模板置信 0.8 ⇒ 兜底根本不唤起） |
 
 **第四轮的决定性单发证据**（`E:/dev/pl-builds/round4-ab4-single-raw.txt`）：对「17元外卖餐补」，
 v3 下模型输出 `discount:null, threshold:null` —— 但把示例 3 独有的 `scope:"CATEGORY"` 照抄了过来。
