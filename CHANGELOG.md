@@ -42,6 +42,16 @@
   且**逐字段**做（整行脱敏会毁掉 JSON 结构）。默认不自动进 golden —— 要人工放进 `tools/golden/` 才参与回归
 - **理解层 ↔ 兜底层唯一一处接线**（`coupon/CouponFallbackBridge.kt`）：入口类型穷尽 `when`（加第四个入口时
   这里编译失败，逼着表态），候选只搬两个金额（scope/state/expiry/url 不许兜底层碰）
+- **端侧 AI 引擎进包（llama.cpp，默认关）**：`app/src/main/cpp/` 的 CMake + JNI 只做
+  load / run(prompt + GBNF 约束解码) / free / stats；Kotlin 侧 `LlamaNative` + `LlamaRuntime`
+  （加载与推理失败一律当"没参与"，不把找券链路带崩）。用 `-Ppricelens.llamaDir=< llama.cpp 源码目录>`
+  打开——**默认关**是因为 CI 没有 NDK，无条件开会让 release 链直接红。模型走 split delivery（不进 APK）。
+  debug 包里有一个 adb 可触发的广播探针用于取证。**真机尚未跑过模型**（手机收尾时掉线），
+  验证脚本与步骤见 `docs/端侧AI兜底.md`
+- **找券第一次有真实准确率数字**：新增"真实流水线导出 predictions → `tools/eval_coupons.py` 打分"
+  这一环（此前只有 golden 自反性 F1=1.0，那证明的是量具不撒谎）。同一天按它给出的诊断修掉四处
+  词表/口径缺口后：**P 0.850→0.926，R 0.586→0.862，F1 0.694→0.893**；`discount` 与 `threshold`
+  两栏的槽位错误都降到 0（剩下的 scope/state 差异是标注侧词汇表不统一，不是抽取错误）
 
 ### 变更
 - **浮窗尺寸收进单一真相源**（`OverlayMetrics.kt`）：窗口宽 = 内容宽 + 左右外圈**算出来**（值仍是 304），
