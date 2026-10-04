@@ -28,7 +28,9 @@ class AiAssetContractTest {
         val shots = body.indexOf("【第 2 段 · 示例】")
         val target = body.indexOf("【第 3 段 · 待抽取文案】")
         assertTrue("三段标记必须齐备且有序，实际 $slots/$shots/$target", slots in 0..shots && shots < target)
-        assertEquals("few-shot 必须恰好 2 条", 2, Regex("示例 \\d").findAll(body).count())
+        // 恰好 3 条：数不对就红，逼着每次增删示例都过一遍这条断言（示例是模型的行为契约，不是注释）。
+        // 锚行首：正文里"看示例 3"这类引用不许被数进来（v3 加指针时就撞过这个，非锚定版数出 4 条）
+        assertEquals("few-shot 必须恰好 3 条", 3, Regex("(?m)^示例 \\d").findAll(body).count())
     }
 
     @Test
@@ -96,7 +98,7 @@ class AiAssetContractTest {
         val perCoupon = GbnfScan.fieldKeys(text, includeAllFields = false, rule = "coupon-obj")
         val body = AiPromptAsset.body(asset("coupon_prompt_v1.txt"))
         val outputs = Regex("(?m)^输出：(\\{.*)$").findAll(body).map { it.groupValues[1] }.toList()
-        assertEquals(2, outputs.size)
+        assertEquals(3, outputs.size)
         outputs.forEach { json ->
             assertEquals("顶层字段次序：语法与 few-shot 不一致", topLevel, GbnfScan.jsonKeys(json, 1))
             // distinct 是因为示例 1 有两张券，同一套字段次序会出现两遍；这里断言的是次序不是张数

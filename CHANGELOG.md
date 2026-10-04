@@ -46,8 +46,13 @@
   load / run(prompt + GBNF 约束解码) / free / stats；Kotlin 侧 `LlamaNative` + `LlamaRuntime`
   （加载与推理失败一律当"没参与"，不把找券链路带崩）。用 `-Ppricelens.llamaDir=< llama.cpp 源码目录>`
   打开——**默认关**是因为 CI 没有 NDK，无条件开会让 release 链直接红。模型走 split delivery（不进 APK）。
-  debug 包里有一个 adb 可触发的广播探针用于取证。**真机尚未跑过模型**（手机收尾时掉线），
-  验证脚本与步骤见 `docs/端侧AI兜底.md`
+  **真机已验证**：引擎 13-14 tok/s、GBNF 约束下吐完整 JSON；模型从设置页经 GitHub Release 下载
+  （397MB，sha256 校验后才改名启用）。debug 包里有 adb 可触发的广播探针（单发 + A/B 两种模式）
+- **「模型 vs 规则」A/B 取数口与四道防哑闸**（debug 探针 `--es ab` + `E:/dev/pl-builds/ab-run.sh`）：
+  同一把尺子（`tools/eval_coupons.py`）给两臂打分，四轮的账（0.696 → 0.750 → 0.750 → 0.750）与
+  "抄格式不抄映射"的单发取证见 `docs/端侧AI兜底.md`。防哑闸含：装包前查 APK 内引擎 `.so`
+  （漏 `-Ppricelens.llamaDir` 时构建照常成功、两臂分数"恰好一致"地骗人 —— 第四轮第一跑就栽在这，
+  被"raw 全 null + 总耗时 50ms"抓到）、"AB 完成"硬闸、raw 全 null 拒判、预删设备侧旧产物
 - **找券第一次有真实准确率数字**：新增"真实流水线导出 predictions → `tools/eval_coupons.py` 打分"
   这一环（此前只有 golden 自反性 F1=1.0，那证明的是量具不撒谎）。同一天按它给出的诊断修掉四处
   词表/口径缺口后：**P 0.850→0.926，R 0.586→0.862，F1 0.694→0.893**；`discount` 与 `threshold`

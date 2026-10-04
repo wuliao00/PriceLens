@@ -1,6 +1,6 @@
 # coupon_schema.gbnf
 # grammar-version: 1
-# 配套 prompt: coupon_prompt_v1.txt（ai-prompt-version 1）—— 两份文件的名字与槽位字面量必须同步改
+# 配套 prompt: coupon_prompt_v1.txt（ai-prompt-version 3）—— 两份文件的名字与槽位字面量必须同步改
 # 用途: 端侧模型的**约束解码**语法（llama.cpp 的 GBNF 形式），本版只是资产，运行时未接线
 # 自检: app/src/test/java/com/pricelens/coupon/ai/AiAssetContractTest.kt 逐行扫描，
 #       确认每条产生式右侧引用的符号都在左侧定义过、无重复定义、且都能从 root 到达
