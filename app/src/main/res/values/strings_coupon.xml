@@ -26,9 +26,9 @@
     <string name="coupon_local_empty">这句文案里没有券形态（满 / 减 / 券后 / 到手 …）。识别读的就是你搜的这句：%1$s</string>
 
     <!-- 三档措辞（高=可直接看、中=要自己点进去核、低=只是可能是券） -->
-    <string name="coupon_local_tier_high">高置信 · 可直接看</string>
-    <string name="coupon_local_tier_medium">中置信 · 自己点进去核</string>
-    <string name="coupon_local_tier_low">低置信 · 只是可能是券</string>
+    <string name="coupon_local_tier_high">规则提取 · 高置信</string>
+    <string name="coupon_local_tier_medium">规则提取 · 待核验</string>
+    <string name="coupon_local_tier_low">疑似 · 未核验</string>
 
     <!-- 槽位标签（固定七格，顺序与 LocalCouponRow.cells 一致） -->
     <string name="coupon_local_slot_discount">面额</string>
