@@ -1070,64 +1070,75 @@ TB  tb_detail_plb110_20261003.xml           itemId=null
 **六、账。** 单测 **933 条全绿**（新增这条测量），ktlint 同轮绿；判据与 golden 都没动。
 
 
-### 9.21 第十八批（2026-10-05 傍晚）——#73 身份闸真机验收过了，代价是又拆掉一件量具
+### 9.21 第十八批（2026-10-05 傍晚）——#73 的签名同源修完了，但**真机验收没拿到**，而且我先报了一次假的"过了"
 
-**一、结论先说。** 换到那台 vivo V2156A（Android 11，1080×2408）之后，#73 的两条验收都在真机上拿到了：
+**〇、先把最要紧的一条摆前面：这一批我犯了一次必须记下来的错。**
+我在本节初稿（已提交已推送，提交 `32719b5` / 合并 `bcf1b03`）里写了"正例反例都在真机上拿到了"，
+依据是两张截图。**那两张截图根本不是找券页，是概览页。** 实际内容是：
 
-| 场景 | 槽里的树 | 当前页 | 「页面」芯片 | 出处行 |
-| --- | --- | --- | --- | --- |
-| 正例 | 刚检测的 MacBook（新鲜） | 就是这台 MacBook | **出现** | 从这一页读到 **1** 张券 |
-| 反例 | 还是那棵 MacBook（没超 120 秒） | 盯价列表里的农夫山泉 | **不出现** | 从**关键词**里读到 1 张券 |
+- `shots/zp-try0.png`：概览页，正文写着「未匹配到与「自营Apple/苹果苹果AI笔记本MacBook Pro/M5 Pro」
+  直接相关的商品，试试更完整的型号名」，上面压着浮窗胶囊「页面价 ¥17,876」。
+- `shots/zr-case2.png`：还是概览页（搜索框空的、商品卡、各源报价、最底下一行入口）。
 
-反例这一条才是 #73 存在的理由：**树是新鲜的，但它是别的商品的**。闸门把它挡住了，
-本机识别组没有因此消失（关键词那一路照常出券），也没有把 MacBook 的券挂到水上面。
+**为什么会看错，两条成因都得堵：**
 
-**二、这条闸为什么长成"比较同一次识别的两个产物"。** §9.20 量完的前提是 7 棵真机商详树 `itemId`
-可得率 0/7，所以身份不能取自页面文本。落地的形状就是当时列的第 3 条：
+1. 工具把截图**缩放渲染**了，我按肉眼读出来的坐标去点，系统性偏小（点"查看历史价格"点到了京东的
+   规格芯片、把 SKU 点换了一次）。后来所有坐标改成从 PNG 原图像素反推，才不再点错。
+2. 更要命的是**页面身份判错**：概览页最底下那一行入口写着
+   「**看详情 · 价格 / 找券 / 评测**」，商品详情页的分段标签也叫「价格 / 找券 / 评测」——
+   同一串字出现在两个页面上，我扫到"找券"两个字就认定"这是详情页、芯片已经选中"，
+   于是把"进不去找券段"这件事**在脑子里补成了"进去了而且过了"**。
+   以后判页面身份**不许用文案里出现某个词**，要用只有那一页才有的结构件
+   （详情页的分段行是三个等宽芯片；概览页有搜索框和「各源报价」标题）。
 
-1. `emitDetection` 里**只有一份签名** —— 原来它自己拼 `$pkg|${itemId ?: ""}|${title ?: ""}|$price`，
-   而 `Detected.signature` 是 `$pkg|${itemId ?: title ?: ""}|$price`。`itemId` 为空时两串**永远不等**，
-   而旁边那行旧注释还写着"与 Detected 用的是同一串"。现在直接 `val signature = event.signature`，
-   去重、发事件、发布页面树三处共用它。
-2. 浮窗 CTA 跳转时把这次的身份带过去（`focus_signature`），冷启动那条路上
-   `PriceEvents` 是无 replay 的 SharedFlow，不带就会丢。
-3. `LocalCouponInputPlanner.plan` 多收一个 `currentSignature`，`null` 按**已知为否**处理，
-   不是"信息不足所以放行"。
+**所以 #73 现在的真实状态是**：代码与单测在分支上、已并入 `feat/2.8.0.2`；
+`PAGE_TREE` 在真机上到底有没有被身份闸放行/挡住，**仍未观测到**。
+判据本身没动（golden、baseline、`tools/eval_coupons.py` 一行未改），
+所以这条不影响任何已交付的分数，影响的是"#73 算不算完成"——**不算**。
 
-**三、"日志为空"在这台机上不能当负证据 —— 而且两种级别都不出。** 为了分辨"槽里没有树"和
-"有树但签名对不上"，我在 `ProductCouponSection` 顶部打了一行 `TREE-GATE`，把三个值一起印出来。
-真机上跑了八九轮，**一条都没有**，一度以为找券段根本没组合。最后是靠截图直接看到
-「本机识别 [页面][关键词]」和「从这一页读到 1 张券」已经渲染出来，才反证代码路径走过了、丢的是日志通道。
-逐项排掉的可能性：
+**一、这一批真正做完的部分（这些是有据的）。**
 
-- 这台机全局 `log.tag=E`（App 进程默认只有 error 出得来）。设 `log.tag.PriceLens=D` 后
-  shell 自己的 `log -t PriceLens -p d` 能出来，**同一个 tag 的 App 进程 D 行仍然一条没有**；
-  `persist.sys.log.ctrl=no` 才是真正的闸，非 root 改不动（`setprop` 直接被拒）。
-- 于是把那行改成 **error 级重出一版包**（`classes13.dex` 里查到 `TREE-GATE` 字符串，确认代码在包里），
-  装完跑真机：日志**还是零条**。而同进程的 `I/PriceLens`、`W/PriceLens` 行一直在正常出来。
-  也就是说这台机上"只有这一行的 tag/级别组合"出不来，我没有解释。
-- 结论写进了代码注释：**判据看渲染出来的芯片，不看这行日志**。日志留着对别的机器仍有价值。
+1. **签名全链路只留一份算法。** `emitDetection` 原来自己拼 `$pkg|${itemId ?: ""}|${title ?: ""}|$price`，
+   而 `Detected.signature` 是 `$pkg|${itemId ?: title ?: ""}|$price`；`itemId` 为空时两串**永远不等**，
+   旁边那行旧注释却写着"与 Detected 用的是同一串"。现在去重、发事件、发布页面树三处共用
+   `event.signature`。§9.20 量的前提（7 棵真机树 `itemId` 可得率 0/7）正是这条路才走得通。
+2. **跳转自己带身份**：浮窗 CTA 多传一个 `focus_signature`，补上冷启动时那个无 replay 的
+   SharedFlow 收不到事件的缺口；`SearchViewModel` 存 `detectedSignature`，进搜索/改关键词时清掉。
+3. **闸的形状**：`LocalCouponInputPlanner.plan` 多收 `currentSignature`，
+   只有 `capture.signature == currentSignature` 才把 `PAGE_TREE` 放进清单；
+   `null` 按**已知为否**处理，不是"信息不足就放行"。
+4. 单测 **934 条全绿**（debug/release 两个变体各一份 = 1868 条记录，230 份 XML 全是本轮新的），
+   ktlint 同轮绿。含 `ClipboardCaptureTest` 里"页面树必须与本次商品身份同签名才参与"那条。
 
-顺带拆掉的另外两件假量具：
+**二、这台 vivo 上被拆掉的三件量具**（这部分是真结论，不是猜的）。
 
-- `uiautomator dump` 对**自家 Compose 页**报 `null root node returned by UiTestAutomationBridge`，
-  对京东的页面却正常出树。所以"dump 为空"不代表页面没渲染。
-- 从工具里看到的截图是**缩放过的**，肉眼读出来的坐标系统性偏小（我按它点"查看历史价格"，
-  结果点到了京东页面上的规格芯片，把 SKU 点换了）。后来所有坐标都改成"从 PNG 原图像素反推"
-  （找底色带、找暗字团），一次没再点错。
+- **logcat 收不到本 App 的这一行日志。** 为了分辨"槽里没有树"和"有树但签名对不上"，
+  我在 `ProductCouponSection` 顶部打了一行 `TREE-GATE`（同时印 `captureNull`/`captureSig`/`currentSig`）。
+  真机跑了八九轮**一条都没有**。逐项排下来：这台机全局 `log.tag=E`（App 进程默认只有 error 出得来）；
+  设 `log.tag.PriceLens=D` 后 shell 自己的 `log -t PriceLens -p d` 能出来，**同 tag 的 App 进程 D 行仍一条没有**；
+  `persist.sys.log.ctrl=no` 改不动（`setprop` 被拒，非 root）。于是**把那行改成 error 级重出一版包**
+  （`classes13.dex` 里查到 `TREE-GATE` 字符串，确认代码在包里）、装机、跑真机：**还是零条**，
+  而同进程的 `I/PriceLens`、`W/PriceLens` 一直正常出。我没有解释。
+  结论写进了代码注释：**这一路的真机判据要看渲染，不拿"日志为空"当负证据**。
+- **`uiautomator dump` 对自家 Compose 页报 `null root node returned by UiTestAutomationBridge`**，
+  对京东页面正常出树。所以"dump 为空"不代表页面没渲染。
+  反过来也不成立：这一批最后一次重跑时，京东首页的 dump **超时**了（永不 idle），
+  量具在同一台机器上时好时坏，不能当基线。
 
-**四、这台机自己的三件事**（下次真机前直接照做）：装包会落到 **user 10**，要
-`pm install-existing --user 0 com.pricelens.dev` 才 `am start` 得动；`am force-stop` 和重装都会
-把 `enabled_accessibility_services` 清成 `null`（不只是解绑），要重新写全限定组件名；
-新装的 `.dev` 包 `SYSTEM_ALERT_WINDOW` appop 默认是 `ignore`（权限 `granted=true` 也没用），
-浮窗一条不出来 —— 症状看起来完全像"检测没命中"。
+**三、这台机自己的四件事**（下次真机前直接照做）：装包落到 **user 10**，要
+`pm install-existing --user 0 com.pricelens.dev` 才 `am start` 得动；`am force-stop` 和重装会把
+`enabled_accessibility_services` 清成 `null`（不只解绑），要重写全限定组件名；
+新装 `.dev` 包 `SYSTEM_ALERT_WINDOW` appop 默认 `ignore`（权限 `granted=true` 也没用），
+浮窗一条不出来 —— 症状完全像"检测没命中"；**概览页进商品详情页要点最底下那行「看详情」，
+点商品卡本身没反应**（这一条是这一批拿到的、能直接解释前面所有点击失败的事实）。
 
-**五、设备改动与复位。** 测量期间动过四项，全部按 `E:/dev/pl-builds/a11y-baseline-v2156a.txt`
-复位并核对过：`enabled_accessibility_services` → `null`、`accessibility_enabled` → `0`、
+**四、设备改动与复位。** 测量期间动过四项，全部按 `E:/dev/pl-builds/a11y-baseline-v2156a.txt`
+复位并核对：`enabled_accessibility_services` → `null`、`accessibility_enabled` → `0`、
 `com.pricelens.dev` 的 `SYSTEM_ALERT_WINDOW` → `ignore`、`log.tag.PriceLens` → 空。
-另外在真机上跳过了一次 PriceLens 新手引导（那是 `.dev` 包的状态，不影响正式包）。
-`persist.sys.log.ctrl` 没改成（被拒），原值 `no` 未动。
+（更正后为拿真机证据又重开过一次无障碍登记，收尾时按同一张清单再复位一遍并核对。）
+另外在真机上跳过了一次 `.dev` 包的新手引导（不影响正式包）。`persist.sys.log.ctrl` 原值 `no` 未动。
 
-**六、账。** 单测 **934 条全绿**（debug/release 两个变体各跑一遍 = 1868 条记录，230 份 XML 全是本轮新的），
-ktlint 同轮绿。判据、golden、baseline 都没动 —— 这一批改的是"什么时候允许用那棵树"，不是"从树里读出什么"。
-`feat/73-identity-wip` 验收完成后并进 `feat/2.8.0.2`。
+**五、下一步（#73 还欠什么）。** 一条脚本就够：京东搜索 → 商详 → 等 `A11Y 命中` →
+回 App → 概览 → 点「看详情」行 → 分段行点「找券」→ **逐张看图确认页面身份**（正例）；
+再在树没超 120 秒时从盯价列表打开**另一个**商品走同一条路（反例，「页面」芯片必须不出现）。
+两张图都必须先确认"这是商品详情页"再谈芯片。
