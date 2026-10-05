@@ -215,4 +215,20 @@ class CouponLocalLogicTest {
         assertFalse(withCards.shimmer)
         assertTrue(withCards.localGroup)
     }
+
+    /**
+     * 树龄档位（#72）：页面树从"离开商详就清"改成"活到新鲜度窗口过为止"，
+     * 出处行就必须说清它是多久前抓的，否则"刚看的这页"和"两分钟前的那页"在屏幕上长得一样。
+     * 边界取 60 秒这个**单位**，不是照样本凑的阈值。
+     */
+    @Test
+    fun `树龄按秒与分钟两档说，边界是60秒这个单位`() {
+        assertFalse(TreeAgeLabel.inMinutes(59_999L))
+        assertEquals(59, TreeAgeLabel.value(59_999L))
+        assertTrue(TreeAgeLabel.inMinutes(60_000L))
+        assertEquals(1, TreeAgeLabel.value(60_000L))
+        // 上限 120s 之内只会是 1 或 2 分钟；超过窗口那一路根本不在 inputs 里
+        assertEquals(1, TreeAgeLabel.value(119_999L))
+        assertEquals("负龄（时钟不可比）不许显示成 -3 秒前", 1, TreeAgeLabel.value(-3_000L))
+    }
 }

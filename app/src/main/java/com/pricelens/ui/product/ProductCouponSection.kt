@@ -70,6 +70,7 @@ import com.pricelens.ui.theme.fg
 import com.pricelens.util.PriceFormatter
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -228,7 +229,7 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
             // 用户无法区分"这功能没做 / 被我关了 / 这次没识别到"——静默没有正是这一批要消灭的形状。
             if (blocks.localGroup) {
                 item(key = "local_header") {
-                    LocalGroupHeader(plan.inputs)
+                    LocalGroupHeader(plan.inputs, capture?.capturedAtElapsedMs)
                 }
                 if (localRows.isEmpty()) {
                     item(key = "local_empty") {
@@ -344,8 +345,20 @@ private fun CouponCard(coupon: GwdangApi.Coupon, onCopy: () -> Unit) {
 
 /** 本机识别组的小标题：明说这组是"从当前文案里识别的"，与上面远端券列表是两回事 */
 @Composable
-private fun LocalGroupHeader(inputs: List<LocalCouponInputPlanner.Input>) {
+private fun LocalGroupHeader(inputs: List<LocalCouponInputPlanner.Input>, treeCapturedAtMs: Long?) {
     val context = LocalContext.current
+    // 树龄要**自己走**：#72 之后页面树不再"离开商详就清"，而是活到新鲜度窗口过为止。
+    // 用户可能就在这一页停着不动，那时写"12 秒前"而实际已经是两分钟前 —— 那是说谎，
+    // 而这一行存在的全部理由就是让用户能判断"读的东西是不是我现在看的这页"。
+    var now by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    if (treeCapturedAtMs != null && LocalCouponInputPlanner.Input.PAGE_TREE in inputs) {
+        LaunchedEffect(treeCapturedAtMs) {
+            while (true) {
+                delay(TREE_AGE_TICK_MS)
+                now = SystemClock.elapsedRealtime()
+            }
+        }
+    }
     Column {
         Spacer(Modifier.height(Dims.SpacingL))
         Text(stringResource(R.string.coupon_local_header), style = MaterialTheme.typography.titleSmall)
@@ -362,7 +375,7 @@ private fun LocalGroupHeader(inputs: List<LocalCouponInputPlanner.Input>) {
             } else {
                 context.getString(
                     R.string.coupon_local_source_inputs,
-                    inputs.joinToString(" + ") { context.getString(inputLabelRes(it)) }
+                    inputs.joinToString(" + ") { inputLabel(context, it, treeCapturedAtMs, now) }
                 )
             },
             style = MaterialTheme.typography.bodySmall,
@@ -370,6 +383,25 @@ private fun LocalGroupHeader(inputs: List<LocalCouponInputPlanner.Input>) {
         )
         Spacer(Modifier.height(Dims.SpacingM))
     }
+}
+
+/** 树龄标签的刷新间隔：5 秒比"秒"这个单位粗，比人眼能察觉的停顿细，且只在页面那一路在场时跑 */
+private const val TREE_AGE_TICK_MS = 5_000L
+
+/** 一路输入的名字；页面那一路额外带上树龄（档位见纯函数 `TreeAgeLabel`，措辞只有一份资源） */
+private fun inputLabel(context: Context, input: LocalCouponInputPlanner.Input, treeCapturedAtMs: Long?, nowElapsedMs: Long): String {
+    val name = context.getString(inputLabelRes(input))
+    if (input != LocalCouponInputPlanner.Input.PAGE_TREE || treeCapturedAtMs == null) return name
+    val ageMs = nowElapsedMs - treeCapturedAtMs
+    // 这里的"负龄"不是接线错（那是 planner 里 `isFresh` 管的事），而是**本组件自己的快照滞后**：
+    // `now` 是上一次重组时取的，树可能是那一瞬之后发布的 ⇒ 按 0 处理，显示"1 秒前"，
+    // 而不是整段年龄都不显示（真机 14:24 那张截图上就是因为这个看不到树龄的）。
+    val clampedMs = ageMs.coerceAtLeast(0L)
+    return context.getString(
+        if (TreeAgeLabel.inMinutes(clampedMs)) R.string.coupon_local_tree_age_minutes else R.string.coupon_local_tree_age_seconds,
+        name,
+        TreeAgeLabel.value(clampedMs)
+    )
 }
 
 /** 一路输入的名字（出处行与空态回显共用同一份措辞，避免两处各写一套） */

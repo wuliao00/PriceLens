@@ -87,21 +87,25 @@ class PriceMonitorService : AccessibilityService() {
             // DetectionPipeline 里逐行保留旧行为，服务只做"取根节点 → 调管线 → 执行动作"。
             when (val outcome = DetectionPipeline.detect(snapshot, platform, packageName, RuleProvider.snapshot(), activityName)) {
                 is DetectionOutcome.NotProductPage -> {
-                    // 离开商详（首页/列表/购物车/其他）：收窗 + 清内容，允许下次进入重新 emit
+                    // 离开商详（首页/列表/购物车/其他）：收窗，允许下次进入重新 emit。
+                    // **不清 PageCapture**（#72，2026-10-05 真机改的）：用户恰恰是从那一页点进我们 App 的，
+                    // 一离开就清等于让"页面树"这一路输入永远到不了详情页的找券 UI（注入取证能看到、
+                    // 真实路径看不到，就是这个原因）。时效改由两处兜：
+                    //  `LocalCouponInputPlanner.MAX_AGE_MS`（两分钟）+ 出处行上明说的树龄。
+                    // 浮窗那边照旧由 OverlayManager.onLeftProductPage() 收起，所以"券行挂在离开的页面上"
+                    // 这件事在浮窗侧不存在——两边读的不是同一个生命周期。
                     if (lastSignature != null) {
                         lastSignature = null
                         OverlayManager.onLeftProductPage()
-                        // 树跟着内容一起清（#61）：券行不许挂在一棵已经离开的页面上
-                        PageCapture.clear()
                     }
                     return
                 }
                 is DetectionOutcome.NoPrice -> {
-                    // 商详但读不到价（页面加载中/改版）：窗口切换事件收窗；内容变化事件等渲染完成
+                    // 商详但读不到价（页面加载中/改版）：窗口切换事件收窗；内容变化事件等渲染完成。
+                    // 同上：这里也不再 PageCapture.clear()。
                     if (isStateChanged && lastSignature != null) {
                         lastSignature = null
                         OverlayManager.onLeftProductPage()
-                        PageCapture.clear()
                     }
                     return
                 }

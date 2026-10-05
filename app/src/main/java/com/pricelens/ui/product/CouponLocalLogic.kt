@@ -155,3 +155,23 @@ object CouponSectionShape {
      */
     data class Blocks(val shimmer: Boolean, val remoteEmpty: Boolean, val localGroup: Boolean)
 }
+
+/**
+ * 页面树"有多旧"的措辞档位（纯函数，资源 id 由 UI 侧解析）。
+ *
+ * 为什么需要它：#72 把"离开商详立刻清树"改成"交给新鲜度窗口"之后，
+ * 出处行里那句"这一页的节点文案"就不再自动等于"你现在看的这一页"——
+ * 用户可能是两分钟前从那一页跳过来的。**明说树龄**是这次放宽口径的唯一对价。
+ *
+ * 分档边界取 60 秒这个**单位本身**，不是照样本凑的阈值（"为什么不是 45 秒"答不上来）；
+ * 上限不归这里管：超过 `LocalCouponInputPlanner.MAX_AGE_MS` 那一路根本不参与，
+ * 所以这里永远不会算出"三分钟"这种已经过期的值。
+ */
+object TreeAgeLabel {
+
+    /** 满一分钟起用"分钟"说（120s 上限内只会是 1 或 2） */
+    fun inMinutes(ageMs: Long): Boolean = ageMs >= 60_000L
+
+    /** 要显示的数字；负龄（时钟不可比）按 1 说，不显示"−3 秒前"这种荒话 */
+    fun value(ageMs: Long): Int = (if (inMinutes(ageMs)) ageMs / 60_000L else ageMs / 1_000L).coerceAtLeast(1L).toInt()
+}

@@ -31,6 +31,13 @@
     <string name="coupon_local_source_none">输入：暂时没有可读的内容（既没抓到页面，也没有文本）</string>
     <!-- 三路输入的名字：出处行与空态回显共用，措辞只有一份 -->
     <string name="coupon_local_input_page">这一页的节点文案</string>
+    <!--
+      树龄（#72）：页面树不再"离开商详就清掉"，而是交给两分钟的新鲜度窗口，
+      所以"这一页的节点文案"必须能说出它是多久前抓的——否则"刚看的页"和"两分钟前的页"
+      在屏幕上长得一样，那正是本批一直在消灭的形状。
+    -->
+    <string name="coupon_local_tree_age_seconds">%1$s · %2$d 秒前</string>
+    <string name="coupon_local_tree_age_minutes">%1$s · %2$d 分钟前</string>
     <string name="coupon_local_input_clipboard">刚复制的文本</string>
     <string name="coupon_local_input_keyword">关键词</string>
     <!--

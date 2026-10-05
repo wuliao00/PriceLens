@@ -16,8 +16,10 @@ import kotlinx.coroutines.flow.StateFlow
  * SharedFlow，树一进去就意味着**最多同时驻留 4 棵 4000 节点的树**；而唯一要它的消费方
  * 需要的永远只是"当前这一页"。单槽 + 覆盖写才是这件事的形状（与 `OverlayManager.content` 同理）。
  *
- * 谁负责清（清理点唯一，别处不许自己留一份）：`PriceMonitorService` 的
- * NotProductPage / 窗口切换的 NoPrice / `onDestroy` 三处。
+ * 谁负责清（2026-10-05 #72 之后）：**只有 `PriceMonitorService.onDestroy`**。
+ * 原本"离开商详就清"也清，那等于把这一路输入做成"只有浮窗能用、详情页永远看不到"——
+ * 而用户是从那一页跳进 App 的。现在时效由两处兜：`LocalCouponInputPlanner.MAX_AGE_MS`（两分钟）
+ * 与出处行上明说的树龄（`TreeAgeLabel`）。服务被系统杀掉时进程内单槽自然消失，不留残值。
  */
 object PageCapture {
 
