@@ -7,6 +7,16 @@ on:
     branches: [main, develop]
   release:
     types: [published]
+  # 手动跑一次：让"找券真实流水线打分"那道硬门禁能在**非 main 分支**上被真正执行过。
+  # 它原来只在 main/develop 的 push 与 PR 上触发，所以新加的那一步在合并进 main 之前
+  # 从来没有在任何真实 runner 上跑过一次 —— 而"本地 dry-run 绿"和"runner 上绿"不是一回事
+  # （runner 的 python3/JDK/缓存与本机不同，缺文件时的失败形状也只有真跑才看得到）。
+  # 安全性：会改外部状态的 job 全都钉在 `github.ref == 'refs/heads/main' && event_name == 'push'`
+  # （update-manifest / desktop 发布）与 `event_name == 'release'`（release 产物）上，
+  # 手动 dispatch 只会跑 android-build 与 desktop 的构建测试，不推镜像、不发版。
+  # 故意**不声明 inputs**：dispatch 输入是事件字段，一旦哪天被 echo 进 run: 就成了注入面，
+  # 这里没有需要它传参的理由。
+  workflow_dispatch:
 
 env:
   JAVA_VERSION: '21'
