@@ -1130,7 +1130,9 @@ TB  tb_detail_plb110_20261003.xml           itemId=null
 `enabled_accessibility_services` 清成 `null`（不只解绑），要重写全限定组件名；
 新装 `.dev` 包 `SYSTEM_ALERT_WINDOW` appop 默认 `ignore`（权限 `granted=true` 也没用），
 浮窗一条不出来 —— 症状完全像"检测没命中"；**概览页进商品详情页要点最底下那行「看详情」，
-点商品卡本身没反应**（这一条是这一批拿到的、能直接解释前面所有点击失败的事实）。
+点商品卡本身没反应**（(540,560)/(540,770)/(540,1000) 三处都原地不动；那条胶囊按原图量出来是
+y 1030..1096、x 60..1018，中心 ≈ (540,1060) —— **位置是量出来的，但"点它就能进"还没被一次
+成功导航验证过**，因为量具在那之前先坏了，见本节末）。
 
 **四、设备改动与复位。** 测量期间动过四项，全部按 `E:/dev/pl-builds/a11y-baseline-v2156a.txt`
 复位并核对：`enabled_accessibility_services` → `null`、`accessibility_enabled` → `0`、
@@ -1142,3 +1144,14 @@ TB  tb_detail_plb110_20261003.xml           itemId=null
 回 App → 概览 → 点「看详情」行 → 分段行点「找券」→ **逐张看图确认页面身份**（正例）；
 再在树没超 120 秒时从盯价列表打开**另一个**商品走同一条路（反例，「页面」芯片必须不出现）。
 两张图都必须先确认"这是商品详情页"再谈芯片。
+
+**六、今天没跑完的原因：量具在 18:4x 之后彻底死了。** `uiautomator dump` 连 17:11 那次能出
+83 个节点的京东首页都开始 40 秒超时；而 `PriceMonitorService.onAccessibilityEvent` 第 78 行是
+`val rootNode = rootInActiveWindow ?: return` —— 同一个 API。于是出现
+**服务 Bound、Enabled、Crashed 为空，却一条 `A11Y 命中` 都不出**，症状和"规则没命中"一模一样。
+成因是我把多次 dump 挂进脚本连发、其中有被超时杀掉的（设备侧已无残留进程，
+`accessibility_enabled 0→1` 重绑两次都救不回来）。剩下唯一没试的是重启手机，
+那是用户设备的动作，我没有做，**设备按基线复位后收工**（`enabled_accessibility_services` → `null`、
+`accessibility_enabled` → `0`、`.dev` 包 `SYSTEM_ALERT_WINDOW` → `ignore`、`log.tag.PriceLens` → 空，
+正式包 `com.pricelens` 2.7.0 未动）。立规矩：dump 一开始超时就该停手报告"量具坏了"，
+而不是改用"截图猜坐标"把验收硬推完 —— 那样产出的就是我今天这种"没做成却差点写成做成了"的验收。
