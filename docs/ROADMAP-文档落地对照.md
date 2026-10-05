@@ -1155,3 +1155,15 @@ y 1030..1096、x 60..1018，中心 ≈ (540,1060) —— **位置是量出来的
 `accessibility_enabled` → `0`、`.dev` 包 `SYSTEM_ALERT_WINDOW` → `ignore`、`log.tag.PriceLens` → 空，
 正式包 `com.pricelens` 2.7.0 未动）。立规矩：dump 一开始超时就该停手报告"量具坏了"，
 而不是改用"截图猜坐标"把验收硬推完 —— 那样产出的就是我今天这种"没做成却差点写成做成了"的验收。
+
+**六之二、这条"量具坏了"是拿正证据钉的，不是猜的。** 最后一轮换了一个**不经过日志**的判据：
+浮窗窗口 `com.pricelens.dev:<hash>` 只在检测真的成立时才会 `addView`
+（`NotProductPage` 那条分支压根不打日志，所以"日志零条"分辨不了"没收到事件"和"收到了但判成非商详页"）。
+在**同一个 `ProductDetailActivity`**（17:3x 与 18:3x 各出过一次检测的那台 MacBook Pro 页）、
+**新进程**（先 `am force-stop` 清掉 `lastSignature`）、服务 `Bound`+`Enabled`+`Crashed` 为空、
+`SYSTEM_ALERT_WINDOW` 临时放开、并连续滑动催内容变化的条件下，
+连等 12 轮：**浮窗窗口零次出现，日志零条**。
+⇒ 结论只能是"这台机此刻的无障碍取树通道坏了"（`uiautomator` 与 `rootInActiveWindow` 是同一条通道，
+两者同时拿不到树正好互相印证）。**重启手机后再跑 `E:/dev/pl-builds/step73z.py` 就是完整验收**，
+脚本已经按本轮所有教训写好：换商品避开去重、坐标全部从 PNG 原图量、检测信号看浮窗窗口、
+正例走「看详情」行、反例走盯价列表另一个商品。
