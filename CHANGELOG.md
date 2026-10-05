@@ -11,6 +11,14 @@
 > 也不再需要"改一处必须记得改另一处"的口头约定。
 
 ### 新增
+- **CI/CD 支持手动触发**（`workflow_dispatch`）：让"找券真实流水线打分"那道硬门禁能在
+  **非 main 分支**上被真正执行一次。它加进来之后一直只在 `main`/`develop` 的 push 与 PR 上触发，
+  所以在合并进 main 前**从未在任何真实 runner 上跑过**，手上只有本机 dry-run 绿。
+  已在 `feat/2.8.0.2` 上实测（run `37315592207`）：打分步真跑、输出与 baseline 逐位一致
+  （page_node 1.0000 / clipboard 0.9333 / community 0.9714 / 合计 0.9730），
+  `[价格槽对照]` 诊断也正常渲染；`update-manifest`（推 Gitee 镜像）、`docs-deploy`（发站点）、
+  `release`（发版）三个 job 全部 skipped —— "手动触发不会误伤外部状态"从"我读 YAML 的推断"
+  变成"观察到的事实"。故意不声明 `inputs`：dispatch 输入是事件字段，被 echo 进 `run:` 就是注入面
 - **门控词表可远程改**：`rules/<id>.json` 增加可选 `gate` 块，`PageVocabulary` 承载出厂词表，
   启发式路径的词表跟随该宿主规则。京东国补页那次改底栏文案（2.8.0.1 靠发 APK 修的）现在推一条规则就能修。
   `schemaVersion` 保持 1（可选新增字段 + 未知字段忽略 ⇒ 已出厂版本不会整包拒绝新规则）

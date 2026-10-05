@@ -1167,3 +1167,38 @@ y 1030..1096、x 60..1018，中心 ≈ (540,1060) —— **位置是量出来的
 两者同时拿不到树正好互相印证）。**重启手机后再跑 `E:/dev/pl-builds/step73z.py` 就是完整验收**，
 脚本已经按本轮所有教训写好：换商品避开去重、坐标全部从 PNG 原图量、检测信号看浮窗窗口、
 正例走「看详情」行、反例走盯价列表另一个商品。
+
+### 9.22 第十九批（2026-10-05 晚）——找券硬门禁第一次在真实 runner 上跑过了
+
+**一、这是一笔早就欠着的账。** "找券真实流水线打分"那道硬门禁（缺 `coupon-predictions.jsonl`
+直接红、相对 baseline 回退 > 0.01 直接红）是这一批加进 `ci-cd.yml` 的，
+但整条 workflow 只在 `main`/`develop` 的 push 与 PR 上触发 —— 也就是说
+**它在合并进 main 之前，从来没有在任何真实 runner 上执行过一次**，我手上只有本机 dry-run 绿。
+本机绿不等于 runner 绿：python3/JDK/Gradle 缓存都不一样，"缺文件时到底红成什么样"也只有真跑看得到。
+
+**二、修法是把门禁变成可手动触发，而不是提前往 main 推。** `ci-cd.yml` 加 `workflow_dispatch`
+（提交 `660aca0`），然后在 `feat/2.8.0.2` 上 dispatch 一次：run `37315592207`，
+**Android Build & Test 5m46s 绿**，打分步真跑了，输出是
+
+```
+source         TP   FP   FN        P        R       F1
+page_node      12    0    0   1.0000   1.0000   1.0000
+clipboard       7    1    0   0.8750   1.0000   0.9333
+community      17    1    0   0.9444   1.0000   0.9714
+— 合计 —       36    2    0   0.9474   1.0000   0.9730
+```
+
+与 `tools/golden/baseline.json` 记的数字逐位一致，`--tolerance 0.01` 因此没有触发。
+新加的 `[价格槽对照]` 诊断也在 runner 上正常渲染：`final 一致 53 / 比对 58`，
+5 条不一致全是"golden 有到手价、预测没读到"（`→ n/a`），不参与判定、只是把缺口摆出来。
+
+**三、顺手把"手动触发会不会误伤外部状态"从推理变成观察。** 我先逐 job 读 `if:` 条件
+（不靠记忆）判断 dispatch 只会跑 android-build / desktop-build / security-scan，
+而 `update-manifest`（推 Gitee 镜像）、`docs-deploy`（发站点）、`release`（发版）
+都钉在 `main` push 或 release 事件上。这一次运行结果里那三个 job 全是 **skipped** ——
+**结论被观察证实了，不再只是我读 YAML 读出来的**。
+`workflow_dispatch` 故意**不声明 inputs**：dispatch 输入属于事件字段，
+哪天被 echo 进 `run:` 就是注入面，这里没有需要它传参的理由。
+
+**四、账。** 纯 CI 与文档改动，未动代码、判据、golden、baseline；
+`feat/2.8.0.2` 已推 GitHub 与 Gitee。
