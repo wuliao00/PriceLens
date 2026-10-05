@@ -1,6 +1,7 @@
 package com.pricelens.coupon.ai
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -129,6 +130,16 @@ class LlamaFallbackExtractorTest {
         // `国家补贴至高省15%` 里的 15 是费率。规则层的守卫与这里同口径 —— 都不认百分号。
         val json = """{"platform":"jd","coupons":[{"discount":15,"threshold":null}],"confidence":0.8}"""
         assertNull(extractor(json).extract(listOf("国家补贴至高省15%")))
+    }
+
+    @Test
+    fun `模型把折扣率当券面额时同样被挡掉`() {
+        // 与上面那条共用**同一个**守卫 `slots.followedByRatioUnit`（2026-10-05 之前这里是同名的一份拷贝）。
+        // 真样本：`国庆出行好物低至5折` 是京东搜索页上的节点（评测集 jd-search-02，期望不产券也不产价格）。
+        val json = """{"platform":"jd","coupons":[{"discount":5,"threshold":null}],"confidence":0.8}"""
+        assertNull(extractor(json).extract(listOf("国庆出行好物低至5折")))
+        // 正例对照：同一个数字后面不跟「折」时守卫不该拦它（否则这条闸会退化成"5 一律不采信"）
+        assertNotNull(extractor(json).extract(listOf("领券满199减5")))
     }
 
     @Test

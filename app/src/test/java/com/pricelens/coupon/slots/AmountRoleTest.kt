@@ -52,6 +52,20 @@ class AmountRoleTest {
         assertEquals(AmountRole.DROP, AmountRole.of("比原价还便宜300", 6))
     }
 
+    /**
+     * `实付低至4999元`（#68，2026-10-05）：`实付` 本来就是 FINAL 词，卡住的是词与数字之间隔着 `低至`
+     * —— 连接字类 `[\s¥￥了至到价]` 里没有「低」，所以这句此前**判不出角色**（到手价槽一直是空的）。
+     * 修法是把 `低至` 登记成 FINAL 词（词表归词表），而不是往连接字类里塞一个带语义的「低」。
+     */
+    @Test
+    fun `实付低至的 4999 判成到手价`() {
+        assertEquals(AmountRole.FINAL, AmountRole.of("下单1件，实付低至4999元", 9))
+        // 反面：`低于` 是**比较**，不是"低+至"的那种连接结构（真样本 cm-faxian-05 的 5699）
+        assertNull(AmountRole.of("低于上次爆料价5699元", 7))
+        // 反面：`995天新低` 的数字在词**前面**，左邻判据看不见它（smzdm 夹具里的"N天新低"角标）
+        assertNull(AmountRole.of("近995天新低", 1))
+    }
+
     @Test
     fun `判不出就是 null，绝不默认成 DISCOUNT`() {
         // 数字前面没有任何角色词（`库存` 还是 excludedNumberWords 里的词）

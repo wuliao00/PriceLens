@@ -66,6 +66,25 @@ fun AmountRole.Companion.of(clause: String, numberStart: Int, vocabulary: Coupon
 private val ROLE_NUMBER_GLUE = Regex("[\\s¥￥了至到价]*")
 
 /**
+ * 数字后面紧跟**费率单位**（`%` `％` `折`，允许隔一个空格）⇒ 这个数说的是比率，不是金额。
+ *
+ * 真样本一共三类，全部来自采过的夹具（2026-10-05 数过：整份评测集里 `数字+折` 只有 3 处，
+ * 期望产出都是"不产券也不产价格"）：`参与立减15%`、`国庆出行好物低至5折`（京东搜索页节点，
+ * 评测集 jd-search-02）、`下单返9折券`（京东国补页三棵树里都有）。
+ *
+ * 为什么这条闸在**角色判定之前**、对三种角色一视同仁：`15%` 不能变成 ¥15 的券，
+ * `低至5折` 也不能变成"到手 ¥5" —— 前者是 2026-10-04 第一次评测抓出来的误抽，
+ * 后者是 2026-10-05 把 `低至` 补进 FINAL 词表之后**才出现**的风险（词表说"这数是到手价"，
+ * 而它连着「折」）。两处调用方（管线 `consume` 与模型输出的确定性复核）**共用这一个函数**，
+ * 因为"两边口径必须一致"这件事靠注释维持过一次，注释不管用。
+ */
+internal fun followedByRatioUnit(text: String, from: Int): Boolean {
+    var i = from
+    while (i < text.length && text[i] == ' ') i++
+    return i < text.length && (text[i] == '%' || text[i] == '％' || text[i] == '折')
+}
+
+/**
  * 券状态判定：先判整句，判不出再判祖先/同层文案（[ancestors]）。
  *
  * [ancestors] 的口径由 `NodeAdapter` 决定：祖先链文案 **+ 同一行的兄弟按钮文案**

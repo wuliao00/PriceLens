@@ -234,13 +234,63 @@ class CouponPipelineTest {
         assertEquals(499.0, post.slots[0].discount!!, 0.0)
         assertNull(post.slots[0].threshold)
         assertEquals(5998.0, post.price.listPrice!!, 0.0)
-        // `实付低至4999元` 的 4999 判不出角色：尺子允许的连接字是 `[\s¥￥了至到价]`，里面**没有「低」**，
-        // 所以它既不进券也不进价格槽。这是既有口径、不是这批改出来的，已单立待办（补 FINAL 侧的
-        // 「低至」要单独跑一次全量 eval，别和这批混在一起）。
-        assertNull(post.price.finalPrice)
+        // `实付低至4999元` 的 4999 现在是**到手价**（#68，2026-10-05）。此前它判不出角色：
+        // 尺子允许的连接字是 `[\s¥￥了至到价]`，里面没有「低」，所以既不进券也不进价格槽。
+        // 真值表（两条 smzdm 夹具里 9 句 `实付低至X元`）见下面那两条测试的注释。
+        assertEquals(4999.0, post.price.finalPrice!!, 0.0)
         // 反例：`至高减500元 晒单返红包` 的 500 落在模板间隙里，但整句带「晒单」⇒ 一个数字都不采信
         val claim = consume("国家补贴 至高减500元 晒单返红包")
         assertTrue("晒单句一张券都不许产，实际=${claim.slots}", claim.slots.isEmpty())
+    }
+
+    /**
+     * `实付低至X元` 是社区帖写到手价的**正字法**，不是罕见变体（2026-10-05 真值表）：
+     * 夹具 `smzdm_faxian.html` / `smzdm_youhui.html` 里共 9 句，覆盖评测集
+     * cm-youhui-01/02/03/04/06 与 cm-faxian-01/02/03/04 —— 判不出等于**每帖都少一个到手价**。
+     *
+     * 这条同时钉住三件容易各自做错的事：多句取**最早**那个数（cm-youhui-03 的 7.35，
+     * 不是后面的 7.16，也不是「实付可低至2.9元以下」的 2.9）、标价照常、券一张都不许被挤掉。
+     */
+    @Test
+    fun `社区帖里实付低至X元落进到手价槽，多句取最早那条`() {
+        val post = CouponExtractor.fromPost(
+            "口碑钢化膜，耐磨抗摔~天猫精选此款目前活动售价19.87元，下单领取满15减8元优惠券，下单1件，实付低至7.35元。" +
+                "淘金币可抵扣0.19元，实付低至7.16元。今日有天猫app专属红包，满5.01减5，实付可低至2.9元以下，更有零元购。",
+            0L
+        )
+        assertEquals(7.35, post.price.finalPrice!!, 0.0001)
+        assertEquals(19.87, post.price.listPrice!!, 0.0001)
+        assertEquals("补 FINAL 词不许把券挤掉，实际=${post.coupons.map { it.discount to it.threshold }}", 2, post.coupons.size)
+    }
+
+    /**
+     * 数字紧跟「折」是**折扣率**不是金额（与 `%` 同一条费率闸）。
+     * 真样本：`国庆出行好物低至5折` 是京东搜索页上的一个节点（夹具 jd_search_20260929.xml，评测集 jd-search-02）。
+     * 这条是 `低至` 进 FINAL 词表**之后**才出现的风险：词表说"这数是到手价"，费率闸说"它连着折，不是金额"，
+     * 少一道就会把"5 折"显示成"到手 ¥5"。正例对照放在最后，防止这条闸退化成"低至一律判不出"。
+     */
+    @Test
+    fun `低至5折的 5 是折扣率不是到手价`() {
+        val outcome = consume("国庆出行好物低至5折")
+        assertNull("5折不许进到手价槽，实际=${outcome.price.finalPrice}", outcome.price.finalPrice)
+        assertTrue("这句没有券，实际=${outcome.slots}", outcome.slots.isEmpty())
+        assertEquals(4999.0, consume("下单1件，实付低至4999元").price.finalPrice!!, 0.0)
+    }
+
+    /** 「低」字面相似、但**不是**到手价词的两个真形状：比较句与「N天新低」角标 */
+    @Test
+    fun `低于上次爆料价与天新低角标都不许变成到手价`() {
+        // 真样本 cm-faxian-05：到手价来自「当前到手价5499.00元」；5699 是**上一次爆料价**（比较句）
+        val faxian = CouponExtractor.fromPost(
+            "天猫商城该商品参加1件8.5折的促销活动，当前到手价5499.00元，降价前售价为5999.00元，本次降幅8%，低于上次爆料价5699.00元。",
+            0L
+        )
+        assertEquals(5499.0, faxian.price.finalPrice!!, 0.0001)
+        assertTrue("这句没有券，实际=${faxian.coupons}", faxian.coupons.isEmpty())
+        // 比较句单拎出来判：`低于` 里那个 `低` 后面跟的是「于」，不是数字，`低至` 不许跨字命中
+        assertNull(consume("低于上次爆料价5699.00元").price.finalPrice)
+        // 角标 `995天新低`：数字在 `新低` **前面**，而判据只看数字左邻
+        assertNull(consume("近995天新低").price.finalPrice)
     }
 
     /** 虚拟货币抵扣（淘金币/京豆）与券不是一回事：整句数字不采信，但不许牵连同帖别的句子 */

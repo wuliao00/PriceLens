@@ -60,6 +60,30 @@ jobs:
       - name: 单元测试
         run: ./gradlew test --no-daemon
 
+      # 找券**真实流水线**的回归门禁。上面那步里的 `CouponGoldenPredictionTest` 已经把 golden
+      # 过了一遍真流水线并导出 `app/build/coupon-predictions.jsonl`，这里拿它对着 baseline 打分：
+      # 任一 source 的 F1 相对基线回退 > 0.01 就红。
+      # 两个文件缺任何一个都**直接红**，不写 `if: 文件存在才跑` —— skipped 的步骤看起来和绿的一样，
+      # 但它其实是"什么都没测"（这一步在 2026-10-05 之前就是这么静默地从来没跑过）。
+      - name: 找券真实流水线打分（相对 baseline 回退 > 0.01 即红）
+        run: |
+          mkdir -p reports
+          test -f app/build/coupon-predictions.jsonl || { echo "::error::预测文件没生成：CouponGoldenPredictionTest 没跑或输出路径漂了"; exit 1; }
+          test -f tools/golden/baseline.json || { echo "::error::没有 tools/golden/baseline.json，门禁无基线可比（生成方式见 docs/DEVELOPMENT.md）"; exit 1; }
+          python3 tools/eval_coupons.py \
+            tools/golden/coupons.jsonl app/build/coupon-predictions.jsonl tools/golden/baseline.json \
+            --tolerance 0.01 --report reports/coupon-real.txt
+
+      - name: 上传找券预测与报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coupon-real-predictions
+          path: |
+            app/build/coupon-predictions.jsonl
+            reports/
+          if-no-files-found: warn
+
       - name: ktlint 风格门禁
         run: ./gradlew ktlintCheck --no-daemon
 

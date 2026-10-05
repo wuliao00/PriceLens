@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-05T04:38:24Z",
+  "golden": "tools/golden/coupons.jsonl",
+  "pred": "app/build/coupon-predictions.jsonl",
+  "sources": {
+    "page_node": {
+      "tp": 12,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "clipboard": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null
+    },
+    "community": {
+      "tp": 17,
+      "fp": 1,
+      "fn": 0,
+      "precision": 0.9444444444444444,
+      "recall": 1.0,
+      "f1": 0.9714285714285714
+    }
+  },
+  "overall": {
+    "tp": 29,
+    "fp": 1,
+    "fn": 0,
+    "precision": 0.9666666666666667,
+    "recall": 1.0,
+    "f1": 0.983050847457627
+  }
+}

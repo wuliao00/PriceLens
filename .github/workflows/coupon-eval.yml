@@ -36,16 +36,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 1/4 量具自测（内置 6 条样本，手算 P/R/F1 断言）
+      - name: 1/3 量具自测（内置 6 条样本，手算 P/R/F1 断言）
         run: python3 tools/eval_coupons.py --self-test
 
-      - name: 2/4 golden 来源核对（raw 必须逐字节来自夹具，金额不许编）
+      - name: 2/3 golden 来源核对（raw 必须逐字节来自夹具，金额不许编）
         run: python3 tools/eval_coupons.py --lint tools/golden/coupons.jsonl
 
       # clipboard 本轮没有券样本（仓库里的剪贴板用例全是裸链接/口令），所以**不**require 它 ——
       # require 一个空 source 会让这一步永远红，反而掩盖真问题。golden 补上含券口令后把
       # --require-source clipboard 加回来。
-      - name: 3/4 自反性：golden vs golden 必须 F1=1.0
+      - name: 3/3 自反性：golden vs golden 必须 F1=1.0
         run: |
           mkdir -p reports
           python3 tools/eval_coupons.py \
@@ -53,21 +53,12 @@ jobs:
             --expect-perfect --require-source page_node --require-source community \
             --report reports/coupon-reflexive.txt
 
-      # 门禁只有 baseline 存在时才跑：baseline 必须来自一次**真实 pred** 的产出（App 侧导出），
-      # 拿 golden-vs-golden 的满分当 baseline 会让第一次真实运行直接红，那是假门禁。
-      # 生成方式见 docs/DEVELOPMENT.md：eval_coupons.py golden pred --write-baseline。
-      - name: 探测 baseline
-        id: baseline
-        run: echo "exists=$(test -f tools/golden/baseline.json && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
-
-      - name: 4/4 回归门禁（相对 baseline 任一 source F1 回退 > 0.01 即红）
-        if: steps.baseline.outputs.exists == '1'
-        run: |
-          mkdir -p reports
-          python3 tools/eval_coupons.py \
-            tools/golden/coupons.jsonl tools/golden/pred.latest.jsonl \
-            tools/golden/baseline.json --tolerance 0.01 \
-            --report reports/coupon-gate.txt
+      # 第 4 步（真实流水线的回归门禁）**不在这个 workflow 里**。
+      # 它需要一份来自当前代码的 pred，而只有跑完 `./gradlew test` 的那个 job 才有
+      # `app/build/coupon-predictions.jsonl` —— 所以它在 ci-cd.yml 的 "Android Build & Test" 里，
+      # 对着 tools/golden/baseline.json 打分。
+      # 原来这里写的是"pred.latest vs baseline"，那是同一次运行的两份拷贝互相比对，
+      # 永远绿；加上"baseline 不存在就 skip"，等于一道从来没跑过却显示为通过的闸（2026-10-05 拆掉）。
 
       - name: 上传评测报告
         if: always()

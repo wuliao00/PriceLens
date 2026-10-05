@@ -397,8 +397,14 @@ Windows 本机把 `python3` 换成 `py`（`python` 是 Microsoft Store 存根，
 python3 tools/eval_coupons.py tools/golden/coupons.jsonl pred.jsonl --write-baseline tools/golden/baseline.json
 ```
 
-同时把当次 pred 存成 `tools/golden/pred.latest.jsonl`，CI 的第 4 步（门禁）才会跑；
-这两个文件不存在时 CI 只跑前三步（量具自检），不会假装门禁过了。
+同时把当次 pred 一起提交（`app/build/coupon-predictions.jsonl` 的内容，作为 artifact 留存即可）。
+门禁现在长在 **ci-cd.yml 的 "Android Build & Test"** 里：那里跑完 `./gradlew test` 才有一份
+**来自当前代码**的 `app/build/coupon-predictions.jsonl`，这一步拿它对着 `tools/golden/baseline.json` 打分，
+两个文件缺任何一个都**直接红**。
+
+> 2026-10-05 之前它长在 coupon-eval.yml 里，条件是"baseline 不存在就 skip"、比对的又是同一次运行
+> 存下来的两份拷贝（`pred.latest.jsonl` vs `baseline.json`）—— 那是一道永远绿、实际从来没跑过的闸。
+> skipped 的步骤在页面上和 passed 长得一样，所以"有没有真的在把关"必须看步骤**执行**了没有。
 
 ### 错例上报包（与 golden 同格式）
 

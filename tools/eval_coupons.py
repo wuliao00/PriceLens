@@ -135,7 +135,8 @@ def parse_entry(obj, where: str, is_golden: bool, errors: list) -> dict:
     parsed = [c for c in parsed if c]
 
     price: dict = {k: None for k in PRICE_KEYS}
-    if "price" in obj:
+    has_price = "price" in obj
+    if has_price:
         praw = obj.get("price")
         if not isinstance(praw, dict):
             errors.append(f"{eid}: price 必须是对象（或整段省略）")
@@ -156,7 +157,8 @@ def parse_entry(obj, where: str, is_golden: bool, errors: list) -> dict:
     if is_golden and (raw is None or raw == ""):
         errors.append(f"{eid}: golden 的 raw 必须是从夹具/测试里原样抄来的非空字符串")
 
-    return {"id": eid, "source": source, "raw": raw or "", "coupons": parsed, "price": price}
+    return {"id": eid, "source": source, "raw": raw or "", "coupons": parsed,
+            "price": price, "has_price": has_price}
 
 
 def load_jsonl(path: Path, is_golden: bool) -> "tuple[dict, list, dict]":
@@ -251,6 +253,14 @@ def evaluate(golden: dict, pred: dict) -> dict:
     overall = {"tp": 0, "fp": 0, "fn": 0}
     slot_errors: Counter = Counter()
     examples: dict = {}
+    # 价格槽（final/list/drop）**不参与命中判定**：券级分数只由 discount+threshold 决定。
+    # 但它们是用户看得见的东西，而 2026-10-05 之前整个量具对它们一个字都不说 ——
+    # "#68 的 `实付低至` 判不出角色"就是这么藏了两周：单测里那句 assertNull 看着像口径，
+    # 其实是没人测过。这里只出诊断榜，不改任何指标（自反性门禁与 baseline 格式都不受影响）。
+    price_compared: Counter = Counter()
+    price_diff: Counter = Counter()
+    price_missing: Counter = Counter()   # 只有一侧有 price 段（pred 或 golden 没写）⇒ 没法比
+    price_examples: dict = {}
     unknown_ids = []       # pred 里 golden 没有的 id（要报错，不能当"多检"混进指标）
     missing_entries = []   # golden 有、pred 整条没有（券全部算漏，但必须显式点名）
     source_mismatch = []   # 同 id 两边 source 不同（会让条目被算进另一个 source 的分母）
@@ -302,6 +312,20 @@ def evaluate(golden: dict, pred: dict) -> dict:
         if g_left and p_left:
             pair_and_diagnose(g_left, p_left, eid, slot_errors, examples)
 
+        # 价格槽逐键比：`None` 也是一种取值（"这句没写到手价"与"到手价是 0"必须分得开，
+        # 与门槛那个 0.0/null 的口径同一个道理）。两侧都没有 price 段时**不算比过**，
+        # 免得"pred 没输出 price"被读成"价格全对"。
+        for pk in PRICE_KEYS:
+            if not (g.get("has_price") and p.get("has_price")):
+                price_missing[pk] += 1
+                continue
+            gv, pv = g["price"].get(pk), p["price"].get(pk)
+            price_compared[pk] += 1
+            if gv != pv:
+                price_diff[pk] += 1
+                ex = f"{fmt_num(gv)} → {fmt_num(pv)}"
+                price_examples.setdefault(pk, Counter())[f"{eid} {ex}"] += 1
+
     for eid, p in pred.items():
         if eid not in golden:
             unknown_ids.append(eid)
@@ -315,6 +339,8 @@ def evaluate(golden: dict, pred: dict) -> dict:
             overall[f] += stats[s][f]
 
     result = {"sources": {}, "overall": {}, "slot_errors": slot_errors, "examples": examples,
+              "price_compared": price_compared, "price_diff": price_diff,
+              "price_missing": price_missing, "price_examples": price_examples,
               "unknown_ids": unknown_ids, "missing_entries": missing_entries,
               "source_mismatch": source_mismatch,
               "matched_entries": matched_entries, "counts": dict(stats)}
@@ -391,6 +417,23 @@ def render(result: dict, golden_path: Path, pred_path: Path) -> list:
             top = ", ".join(f"{k} ×{c}" for k, c in ex.most_common(3))
             head += f"   错成什么：{top}"
         lines.append(head)
+
+    if "price_compared" in result:
+        lines.append("")
+        lines.append("[价格槽对照]（仅诊断，不参与命中判定；口径：与 golden 精确相等，"
+                     "None 也是一种取值 —— 「没写价格」与「价格是 0」必须分得开）")
+        for pk in PRICE_KEYS:
+            compared = result["price_compared"].get(pk, 0)
+            diff = result["price_diff"].get(pk, 0)
+            uncomparable = result["price_missing"].get(pk, 0)
+            head = f"  {pk:<6} 一致 {compared - diff:>3} / 比对 {compared:>3}   不一致 {diff:>3}"
+            if uncomparable:
+                head += f"   没法比（一侧整段没写 price）{uncomparable}"
+            lines.append(head)
+            ex = result["price_examples"].get(pk)
+            if ex:
+                for k, c in ex.most_common(6):
+                    lines.append(f"      · {k}" + (f" ×{c}" if c > 1 else ""))
     return lines
 
 

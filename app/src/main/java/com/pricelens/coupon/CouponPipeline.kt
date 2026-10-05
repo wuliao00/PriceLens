@@ -19,6 +19,7 @@ import com.pricelens.coupon.slots.CouponHints
 import com.pricelens.coupon.slots.CouponVocabulary
 import com.pricelens.coupon.slots.ScopeWords
 import com.pricelens.coupon.slots.StateWords
+import com.pricelens.coupon.slots.followedByRatioUnit
 import com.pricelens.coupon.slots.of
 
 /**
@@ -130,10 +131,11 @@ internal object CouponPipeline {
         if (CouponHints.numbersUsable(clause.text, vocabulary)) {
             for (found in NUMBER.findAll(clause.text)) {
                 val start = found.range.first
-                // 百分号后面跟的是**费率**不是金额：`参与立减15%` 的 15 不是 15 元。
-                // 评测集里这一条被抽成过一张 ¥15 的券（误抽），而误抽比漏抽更贵 ——
+                // 紧跟**费率单位**（`%` `折`）的是比率不是金额：`参与立减15%` 的 15 不是 15 元，
+                // `国庆出行好物低至5折` 的 5 也不是到手价。
+                // 评测集里前者被抽成过一张 ¥15 的券（误抽），而误抽比漏抽更贵 ——
                 // 它会带着正确的 scope/state 一起出现，看起来像真券。
-                if (followedByPercent(clause.text, found.range.last + 1)) continue
+                if (followedByRatioUnit(clause.text, found.range.last + 1)) continue
                 val value = found.value.replace(",", "").toDoubleOrNull() ?: continue
                 // 角色的优先级不是风格问题：**价格词是比模板形状更强的信号**。
                 // 尺子在数字左侧认出 售价/原价/划线/到手/券后/领后/降/跌 这类词时，那个数字就是价格，
@@ -251,16 +253,6 @@ internal object CouponPipeline {
      */
     private fun thresholdValue(explicit: Double?, clauseText: String, vocabulary: CouponVocabulary): Double? =
         explicit ?: if (vocabulary.zeroThresholdWords.any { clauseText.contains(it) }) 0.0 else null
-
-    /**
-     * 数字后面紧跟百分号（允许隔一个空格）⇒ 是费率不是金额。
-     * `立减15%` 的 15、`补贴15%起减500` 里的 15 都属于这一类。
-     */
-    private fun followedByPercent(text: String, from: Int): Boolean {
-        var i = from
-        while (i < text.length && text[i] == ' ') i++
-        return i < text.length && (text[i] == '%' || text[i] == '％')
-    }
 
     /**
      * 这个角色是不是**价格**（到手/标价/降幅）。
