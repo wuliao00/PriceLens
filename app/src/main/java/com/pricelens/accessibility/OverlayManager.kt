@@ -767,6 +767,11 @@ object OverlayManager {
                                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     .putExtra("focus_title", cleaned)
                                     .putExtra("focus_price", detected.price)
+                                    // #73：把"这是哪一次识别"一起带过去。
+                                    // 没有它，冷启动时（App 的 SearchViewModel 还没建起来，
+                                    // PriceEvents 是无 replay 的 SharedFlow）那次检测的身份就丢了，
+                                    // 页面树会因为对不上身份而被闸掉 —— 真机 15:47 那轮就是这么撞出来的。
+                                    .putExtra("focus_signature", detected.signature)
                             )
                         },
                         onConfirmIdentity = { confirmIdentity() },

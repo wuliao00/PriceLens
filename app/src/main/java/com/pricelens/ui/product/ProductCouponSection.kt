@@ -67,6 +67,7 @@ import com.pricelens.ui.theme.MotionDurations
 import com.pricelens.ui.theme.PriceLensEasing
 import com.pricelens.ui.theme.PriceType
 import com.pricelens.ui.theme.fg
+import com.pricelens.util.LogT
 import com.pricelens.util.PriceFormatter
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -103,11 +104,22 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
     val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
     val capture by PageCapture.latest.collectAsStateWithLifecycle()
     val clipboard by ClipboardCapture.latest.collectAsStateWithLifecycle()
+    // #73：这一次商品上下文是不是"某一次识别带进来的"，以及是哪一次（身份闸的右值）
+    val detectedSignature by searchViewModel.detectedSignature.collectAsStateWithLifecycle()
     // #61 + #63：本机识别有**三路输入**（这一页的节点 / 刚复制的文本 / 关键词）。
     // "哪几路可用"是判据，写在纯函数 `LocalCouponInputPlanner.plan` 里（JVM 可测边界），
     // 这里只取当下时钟、按判据把每一路跑起来，再 mergeAll **做加法**
     // （同面额同门槛只算一张）—— 任何一路都不许因为别路有东西就被换掉。
-    val plan = LocalCouponInputPlanner.plan(capture, clipboard, keyword, SystemClock.elapsedRealtime())
+    val plan = LocalCouponInputPlanner.plan(capture, clipboard, keyword, SystemClock.elapsedRealtime(), detectedSignature)
+    // 一次性诊断（#73 的真机验收卡在这）：一次分辨两种解释 ——
+    // "槽里根本没有树"（服务被系统重绑 → onDestroy 清了）与"有树但两串签名对不上"（还有第二处算法）。
+    // 留着它有长期价值：这一路不生效时，屏幕上只有一句"暂时没有可读的内容"，什么都看不出来。
+    // 注意（2026-10-05 vivo V2156A 实测）：这台机**收不到本 App 的这行日志**（同进程的 I/W 行正常出，
+    // 换成 error 级也一条没有），所以真机判据要看渲染出来的「页面」芯片，不能拿"日志为空"当负证据。
+    LogT.d(
+        "TREE-GATE captureNull=" + (capture == null) + " captureSig=" + capture?.signature +
+            " currentSig=" + detectedSignature + " inputs=" + plan.inputs + " age=" + plan.treeAgeMs
+    )
     val localExtraction = remember(capture, clipboard, keyword, plan.inputs) {
         CouponExtractor.mergeAll(
             plan.inputs.map { input ->

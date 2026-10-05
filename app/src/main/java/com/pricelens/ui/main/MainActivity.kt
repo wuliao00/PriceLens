@@ -95,7 +95,7 @@ import kotlinx.coroutines.delay
  * 为什么要 nonce：Compose 的 `LaunchedEffect(key)` 在 key 相等时不会重跑，
  * 而"同一段文本再来一次"（比如用户又分享了一次同一个链接）必须能再次触发搜索。
  */
-data class IncomingSearch(val text: String, val nonce: Long)
+data class IncomingSearch(val text: String, val nonce: Long, val signature: String? = null)
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -160,7 +160,8 @@ class MainActivity : ComponentActivity() {
             else -> intent?.getStringExtra("focus_title")
         }?.trim()
         if (text.isNullOrBlank()) return
-        incomingSearch = IncomingSearch(text, System.currentTimeMillis())
+        // 只有浮窗"去比价"那条路会带签名（分享/浏览器进来的没有"刚才那一页"可言）
+        incomingSearch = IncomingSearch(text, System.currentTimeMillis(), intent?.getStringExtra("focus_signature"))
     }
 
     companion object {
@@ -249,6 +250,9 @@ fun MainScreen(
         if (!text.isNullOrBlank()) {
             tab = Tab.OVERVIEW
             searchViewModel.search(text)
+            // 顺序要紧：search() 会把身份连同上一个商品的实时价一起复位（#73），
+            // 所以"这一次是检测带上来的"必须在它之后登记。
+            incomingSearch.signature?.let { searchViewModel.adoptDetectionContext(it) }
         }
     }
 

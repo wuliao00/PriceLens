@@ -1069,3 +1069,65 @@ TB  tb_detail_plb110_20261003.xml           itemId=null
 
 **六、账。** 单测 **933 条全绿**（新增这条测量），ktlint 同轮绿；判据与 golden 都没动。
 
+
+### 9.21 第十八批（2026-10-05 傍晚）——#73 身份闸真机验收过了，代价是又拆掉一件量具
+
+**一、结论先说。** 换到那台 vivo V2156A（Android 11，1080×2408）之后，#73 的两条验收都在真机上拿到了：
+
+| 场景 | 槽里的树 | 当前页 | 「页面」芯片 | 出处行 |
+| --- | --- | --- | --- | --- |
+| 正例 | 刚检测的 MacBook（新鲜） | 就是这台 MacBook | **出现** | 从这一页读到 **1** 张券 |
+| 反例 | 还是那棵 MacBook（没超 120 秒） | 盯价列表里的农夫山泉 | **不出现** | 从**关键词**里读到 1 张券 |
+
+反例这一条才是 #73 存在的理由：**树是新鲜的，但它是别的商品的**。闸门把它挡住了，
+本机识别组没有因此消失（关键词那一路照常出券），也没有把 MacBook 的券挂到水上面。
+
+**二、这条闸为什么长成"比较同一次识别的两个产物"。** §9.20 量完的前提是 7 棵真机商详树 `itemId`
+可得率 0/7，所以身份不能取自页面文本。落地的形状就是当时列的第 3 条：
+
+1. `emitDetection` 里**只有一份签名** —— 原来它自己拼 `$pkg|${itemId ?: ""}|${title ?: ""}|$price`，
+   而 `Detected.signature` 是 `$pkg|${itemId ?: title ?: ""}|$price`。`itemId` 为空时两串**永远不等**，
+   而旁边那行旧注释还写着"与 Detected 用的是同一串"。现在直接 `val signature = event.signature`，
+   去重、发事件、发布页面树三处共用它。
+2. 浮窗 CTA 跳转时把这次的身份带过去（`focus_signature`），冷启动那条路上
+   `PriceEvents` 是无 replay 的 SharedFlow，不带就会丢。
+3. `LocalCouponInputPlanner.plan` 多收一个 `currentSignature`，`null` 按**已知为否**处理，
+   不是"信息不足所以放行"。
+
+**三、"日志为空"在这台机上不能当负证据 —— 而且两种级别都不出。** 为了分辨"槽里没有树"和
+"有树但签名对不上"，我在 `ProductCouponSection` 顶部打了一行 `TREE-GATE`，把三个值一起印出来。
+真机上跑了八九轮，**一条都没有**，一度以为找券段根本没组合。最后是靠截图直接看到
+「本机识别 [页面][关键词]」和「从这一页读到 1 张券」已经渲染出来，才反证代码路径走过了、丢的是日志通道。
+逐项排掉的可能性：
+
+- 这台机全局 `log.tag=E`（App 进程默认只有 error 出得来）。设 `log.tag.PriceLens=D` 后
+  shell 自己的 `log -t PriceLens -p d` 能出来，**同一个 tag 的 App 进程 D 行仍然一条没有**；
+  `persist.sys.log.ctrl=no` 才是真正的闸，非 root 改不动（`setprop` 直接被拒）。
+- 于是把那行改成 **error 级重出一版包**（`classes13.dex` 里查到 `TREE-GATE` 字符串，确认代码在包里），
+  装完跑真机：日志**还是零条**。而同进程的 `I/PriceLens`、`W/PriceLens` 行一直在正常出来。
+  也就是说这台机上"只有这一行的 tag/级别组合"出不来，我没有解释。
+- 结论写进了代码注释：**判据看渲染出来的芯片，不看这行日志**。日志留着对别的机器仍有价值。
+
+顺带拆掉的另外两件假量具：
+
+- `uiautomator dump` 对**自家 Compose 页**报 `null root node returned by UiTestAutomationBridge`，
+  对京东的页面却正常出树。所以"dump 为空"不代表页面没渲染。
+- 从工具里看到的截图是**缩放过的**，肉眼读出来的坐标系统性偏小（我按它点"查看历史价格"，
+  结果点到了京东页面上的规格芯片，把 SKU 点换了）。后来所有坐标都改成"从 PNG 原图像素反推"
+  （找底色带、找暗字团），一次没再点错。
+
+**四、这台机自己的三件事**（下次真机前直接照做）：装包会落到 **user 10**，要
+`pm install-existing --user 0 com.pricelens.dev` 才 `am start` 得动；`am force-stop` 和重装都会
+把 `enabled_accessibility_services` 清成 `null`（不只是解绑），要重新写全限定组件名；
+新装的 `.dev` 包 `SYSTEM_ALERT_WINDOW` appop 默认是 `ignore`（权限 `granted=true` 也没用），
+浮窗一条不出来 —— 症状看起来完全像"检测没命中"。
+
+**五、设备改动与复位。** 测量期间动过四项，全部按 `E:/dev/pl-builds/a11y-baseline-v2156a.txt`
+复位并核对过：`enabled_accessibility_services` → `null`、`accessibility_enabled` → `0`、
+`com.pricelens.dev` 的 `SYSTEM_ALERT_WINDOW` → `ignore`、`log.tag.PriceLens` → 空。
+另外在真机上跳过了一次 PriceLens 新手引导（那是 `.dev` 包的状态，不影响正式包）。
+`persist.sys.log.ctrl` 没改成（被拒），原值 `no` 未动。
+
+**六、账。** 单测 **934 条全绿**（debug/release 两个变体各跑一遍 = 1868 条记录，230 份 XML 全是本轮新的），
+ktlint 同轮绿。判据、golden、baseline 都没动 —— 这一批改的是"什么时候允许用那棵树"，不是"从树里读出什么"。
+`feat/73-identity-wip` 验收完成后并进 `feat/2.8.0.2`。
