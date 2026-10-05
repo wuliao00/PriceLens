@@ -128,6 +128,16 @@
   两栏的槽位错误都降到 0（剩下的 scope/state 差异是标注侧词汇表不统一，不是抽取错误）
 
 ### 变更
+- **页面树要认出"是哪一次识别的树"才参与**（#73，真机正反例都验过）：`LocalCouponInputPlanner.plan`
+  多收一个 `currentSignature`，只有 `capture.signature == 本次商品上下文的签名` 时 `PAGE_TREE` 才进清单，
+  `null` 按**已知为否**处理（不是"信息不足就放行"）。签名全链路只留一份算法 ——
+  `emitDetection` 原来自己拼 `$pkg|${itemId ?: ""}|${title ?: ""}|$price`，与 `Detected.signature` 的
+  `$pkg|${itemId ?: title ?: ""}|$price` 在 `itemId` 为空时**永远不等**（而旧注释写着"同一串"），
+  现在去重、发事件、发布页面树三处共用 `event.signature`；浮窗 CTA 跳转多带一个 `focus_signature`，
+  补上冷启动时那个无 replay 的 SharedFlow 收不到的缺口。
+  真机（vivo V2156A）：刚检测的 MacBook 页上「页面」芯片出现、出处行写"从这一页读到 1 张券"；
+  同一棵**还在 120 秒窗口内**的树，切到盯价列表里的农夫山泉页时「页面」芯片**不出现**，
+  本机识别组照常由关键词出券 —— 挡的是"挂错商品"，不是"这一路没了"
 - **页面树活到新鲜度窗口，出处行开始说树龄**（#72）：`PriceMonitorService` 里"离开商详就 `PageCapture.clear()`"
   那两句删掉（只剩 `onDestroy` 一处）。旧策略让"这一页的节点文案"这一路输入**永远到不了详情页的找券 UI**，
   而用户恰恰是从那一页跳进来的。时效改由 `MAX_AGE_MS`（两分钟）+ 明说树龄兜：
