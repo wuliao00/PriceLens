@@ -6,6 +6,7 @@ import com.pricelens.domain.LinkParser
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -15,7 +16,7 @@ import org.junit.Test
  *  - **同一次读取**必须既给出链接结果又给出原文（旧版只在认出链接时才返回，
  *    分享文本里的券因此永远进不了找券链；而找券段自己再读一次就是二次读取）；
  *  - 三路输入（页面树 / 剪贴板文本 / 关键词）的取舍是**都做加法**，
- *    只有"过期"和"空"才让某一路退出，不存在谁覆盖谁。
+ *    只有"过期"、"空"，以及页面树**对不上本次商品身份**（#73）才让某一路退出，不存在谁覆盖谁。
  */
 class ClipboardCaptureTest {
 
@@ -60,7 +61,8 @@ class ClipboardCaptureTest {
             capture = tree(1_000L),
             clipboard = ClipboardCapture.Reading("领券满199减50", 1_500L),
             keyword = "小米14",
-            nowElapsedMs = 1_500L
+            nowElapsedMs = 1_500L,
+            currentSignature = "sig"
         )
         assertEquals(
             listOf(LocalCouponInputPlanner.Input.PAGE_TREE, LocalCouponInputPlanner.Input.CLIPBOARD_TEXT),
@@ -82,7 +84,8 @@ class ClipboardCaptureTest {
             capture = null,
             clipboard = ClipboardCapture.Reading("【￥K8Z3￥】m.tb.cn/h.abc 领券满199减50", 5_000L),
             keyword = "",
-            nowElapsedMs = 5_000L
+            nowElapsedMs = 5_000L,
+            currentSignature = null
         )
         assertEquals(listOf(LocalCouponInputPlanner.Input.CLIPBOARD_TEXT), plan.inputs)
     }
@@ -95,7 +98,8 @@ class ClipboardCaptureTest {
             capture = null,
             clipboard = ClipboardCapture.Reading("很久以前复制的", at),
             keyword = "小米14",
-            nowElapsedMs = at + limit + 1
+            nowElapsedMs = at + limit + 1,
+            currentSignature = null
         )
         assertEquals(listOf(LocalCouponInputPlanner.Input.KEYWORD_TEXT), plan.inputs)
     }
@@ -108,7 +112,8 @@ class ClipboardCaptureTest {
             capture = tree(at),
             clipboard = ClipboardCapture.Reading("旧文本", at),
             keyword = "  ",
-            nowElapsedMs = at + limit + 1
+            nowElapsedMs = at + limit + 1,
+            currentSignature = "sig"
         )
         assertEquals(emptyList<LocalCouponInputPlanner.Input>(), plan.inputs)
     }
@@ -124,17 +129,41 @@ class ClipboardCaptureTest {
                 tree(at),
                 ClipboardCapture.Reading("文本", at),
                 "",
-                at + limit
+                at + limit,
+                "sig"
             ).inputs
         )
         // 时钟回拨按过期处理，而不是"永远新鲜"
         assertEquals(
             emptyList<LocalCouponInputPlanner.Input>(),
-            LocalCouponInputPlanner.plan(tree(at), null, "", at - 1).inputs
+            LocalCouponInputPlanner.plan(tree(at), null, "", at - 1, "sig").inputs
         )
         // 年龄随判据一起交出去（日志与出处行要用）
-        assertEquals(3_000L, LocalCouponInputPlanner.plan(tree(at), null, "券", at + 3_000L).treeAgeMs)
-        assertEquals(-1L, LocalCouponInputPlanner.plan(null, null, "券", at).treeAgeMs)
+        assertEquals(3_000L, LocalCouponInputPlanner.plan(tree(at), null, "券", at + 3_000L, "sig").treeAgeMs)
+        assertEquals(-1L, LocalCouponInputPlanner.plan(null, null, "券", at, null).treeAgeMs)
+    }
+
+    /**
+     * #73 身份闸：页面树只有在"这一次商品上下文就是那次识别带进来的"时才作数。
+     * 治的是 #72 留下的污染路径 —— 看 A 商品 → 回 App 自己搜 B → 屏上挂着 A 那一页的券，
+     * 而出处行写着"这一页的节点文案"。
+     */
+    @Test
+    fun `页面树必须与本次商品身份同签名才参与`() {
+        val at = 1_000L
+        // 正例：签名对得上 ⇒ 树参与（#72 修好的那条真机路径不许被这道闸关掉）
+        val same = LocalCouponInputPlanner.plan(tree(at), null, "小米14", at + 1_000L, "sig")
+        assertTrue("签名相同就要用树，实际=${same.inputs}", LocalCouponInputPlanner.Input.PAGE_TREE in same.inputs)
+        // 反例一：用户自己在 App 里换了商品 ⇒ 身份是别的签名 ⇒ 新鲜也不作数
+        val other = LocalCouponInputPlanner.plan(tree(at), null, "小米14", at + 1_000L, "别的签名")
+        assertTrue("对不上身份就不许挂 A 的树，实际=${other.inputs}", LocalCouponInputPlanner.Input.PAGE_TREE !in other.inputs)
+        // 反例二：这次上下文不是任何一次识别带进来的（手动搜的）⇒ null 是**已知的否定**，不是"信息不足"
+        val none = LocalCouponInputPlanner.plan(tree(at), null, "小米14", at + 1_000L, null)
+        assertTrue("没有身份就不能用树，实际=${none.inputs}", LocalCouponInputPlanner.Input.PAGE_TREE !in none.inputs)
+        // 关键词那一路不受身份闸影响（它本来就是用户自己给的）
+        assertEquals(listOf(LocalCouponInputPlanner.Input.KEYWORD_TEXT), none.inputs)
+        // 年龄照旧交出去：闸掉的是"用不用"，不是"有没有抓到"
+        assertEquals(1_000L, none.treeAgeMs)
     }
 
     // ---------- 三路结果的加法合并 ----------

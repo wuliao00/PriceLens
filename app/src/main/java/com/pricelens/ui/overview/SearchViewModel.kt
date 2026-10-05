@@ -63,6 +63,17 @@ class SearchViewModel @Inject constructor(
     private val _keyword = MutableStateFlow("")
     val keyword: StateFlow<String> = _keyword
 
+    /**
+     * 这一次商品上下文的**身份**（#73）：只有当它是某一次无障碍检测带进来的，
+     * 那一页的节点树才允许参与找券（`LocalCouponInputPlanner.plan` 拿它比对 `capture.signature`）。
+     *
+     * 为什么放在这里而不是让 UI 直接读 holder：身份的"生效路径"就是"用户现在看的是哪件商品"，
+     * 而这归本 VM 管 —— `search()`（用户自己搜/换词）与检测回填都走这里，两个方向的复位
+     * 才能落在同一个点上（漏一个就是"A 的券挂在 B 上"或者"这一路永远不生效"）。
+     */
+    private val _detectedSignature = MutableStateFlow<String?>(null)
+    val detectedSignature: StateFlow<String?> = _detectedSignature
+
     /** 最近搜索（顶栏聚焦时的历史 chips；与「我的」页同一数据源） */
     val recentSearches: StateFlow<List<String>> =
         repository.recentSearches().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -176,6 +187,20 @@ class SearchViewModel @Inject constructor(
         // 评审修复：仅更新状态；搜索只由提交（onSubmit）/research()/无障碍检测触发，
         // 键入防抖自动搜索会改变「提交即搜」契约并污染搜索历史（recordSearch）
         _keyword.value = text
+        // 用户开始改词 = 他正在离开"刚才那一页"的上下文 ⇒ 页面树立刻不作数（#73）
+        _detectedSignature.value = null
+    }
+
+    /**
+     * 登记"这一次商品上下文来自哪一次识别"（#73）。
+     *
+     * 调用方有两条：① 消费 `PriceEvents.detections` 时（App 活着，检测当场进来）；
+     * ② 浮窗 CTA 用 intent 带进来（冷启动那条路 —— 检测发生时本 VM 还不存在，
+     * 而 `PriceEvents` 是无 replay 的 SharedFlow，事件已经丢了）。
+     * 两条都必须排在 `search()` 之后：`search()` 会把身份清掉（换商品复位清单里的一项）。
+     */
+    fun adoptDetectionContext(signature: String) {
+        _detectedSignature.value = signature
     }
 
     /** 从历史/收藏快速重新搜索 */
@@ -190,6 +215,8 @@ class SearchViewModel @Inject constructor(
         _loading.value = true
         // A2 生命周期复位：换商品时清掉"上一个商品的实时价/来源/到手价"。
         // 旧版三者从无复位 → 手动搜 B 后概览仍显示"本机京东账号 · 实时价 ¥A"（A 的价标在 B 上）。
+        // #73 把同一个道理用到**页面树**上：搜 B 之后 A 那一页的券也不许再挂在这里。
+        _detectedSignature.value = null
         _livePrice.value = null
         _realtimeSource.value = null
         _netPrice.value = null
@@ -405,6 +432,9 @@ class SearchViewModel @Inject constructor(
                     search(query)
                 }
                 if (cleaned != null) _keyword.value = cleaned
+                // #73：登记身份。必须排在 search() 之后 —— search() 会把它连同实时价一起复位
+                // （上面那句"下面的赋值必须发生在其后"是同一个顺序要求）。
+                adoptDetectionContext(signature)
                 _livePrice.value = detected.price
                 _realtimeSource.value = source
             }

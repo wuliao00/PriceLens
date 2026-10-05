@@ -123,7 +123,22 @@ class PriceMonitorService : AccessibilityService() {
      */
     private fun emitDetection(packageName: String, platform: ShopPlatform, detection: DetectionPipeline.Detection, snapshot: NodeSnapshot) {
         val priceHit = detection.price
-        val signature = "$packageName|${detection.itemId ?: ""}|${detection.title ?: ""}|${priceHit.rawText}"
+        val event = PriceEvents.Detected(
+            price = priceHit.value,
+            rawPriceText = priceHit.rawText,
+            title = detection.title,
+            packageName = packageName,
+            platform = platform,
+            priceBasis = detection.price.basis,
+            itemId = detection.itemId,
+            sourceText = sourceLabel(platform)
+        )
+        // #73 身份闸的前提：**全链路只有一份签名的算法**。
+        // 这里原来自己拼了一串 `$pkg|${itemId ?: ""}|${title ?: ""}|$price`，而 `Detected.signature`
+        // 是 `$pkg|${itemId ?: title ?: ""}|$price` —— itemId 为空时前者留一个空段、后者把标题前移，
+        // 两串**永远不相等**，而下面那行旧注释还写着"签名与 Detected 用的是同一串"。
+        // 真机 #72 那轮看不出来（当时没人比较这两个值），#73 一比较就会静默地永远判成"不是这一页"。
+        val signature = event.signature
         if (signature == lastSignature) return
         lastSignature = signature
 
@@ -131,21 +146,10 @@ class PriceMonitorService : AccessibilityService() {
             "A11Y 命中来源=${detection.source.label} ${detection.matchedBy} " +
                 "price=${priceHit.rawText}(basis=${priceHit.basis}) title=${detection.title?.take(24)} itemId=${detection.itemId}"
         )
-        PriceEvents.emit(
-            PriceEvents.Detected(
-                price = priceHit.value,
-                rawPriceText = priceHit.rawText,
-                title = detection.title,
-                packageName = packageName,
-                platform = platform,
-                priceBasis = priceHit.basis,
-                itemId = detection.itemId,
-                sourceText = sourceLabel(platform)
-            )
-        )
+        PriceEvents.emit(event)
         // #61：把这棵树一并交到单槽 holder，找券 UI 才有 `fromPage` 的输入。
         // 放在去重闸**之后**：同一页面反复的内容变化事件不该反复重抓重放，
-        // 签名与 Detected 用的是同一串，UI 侧才可能对得上号。
+        // 签名直接取 `event.signature`，UI 侧的身份比较才可能对得上号（#73）。
         PageCapture.publish(
             PageCapture.Capture(
                 signature = signature,

@@ -103,11 +103,13 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
     val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
     val capture by PageCapture.latest.collectAsStateWithLifecycle()
     val clipboard by ClipboardCapture.latest.collectAsStateWithLifecycle()
+    // #73：这一次商品上下文是不是"某一次识别带进来的"，以及是哪一次（身份闸的右值）
+    val detectedSignature by searchViewModel.detectedSignature.collectAsStateWithLifecycle()
     // #61 + #63：本机识别有**三路输入**（这一页的节点 / 刚复制的文本 / 关键词）。
     // "哪几路可用"是判据，写在纯函数 `LocalCouponInputPlanner.plan` 里（JVM 可测边界），
     // 这里只取当下时钟、按判据把每一路跑起来，再 mergeAll **做加法**
     // （同面额同门槛只算一张）—— 任何一路都不许因为别路有东西就被换掉。
-    val plan = LocalCouponInputPlanner.plan(capture, clipboard, keyword, SystemClock.elapsedRealtime())
+    val plan = LocalCouponInputPlanner.plan(capture, clipboard, keyword, SystemClock.elapsedRealtime(), detectedSignature)
     val localExtraction = remember(capture, clipboard, keyword, plan.inputs) {
         CouponExtractor.mergeAll(
             plan.inputs.map { input ->

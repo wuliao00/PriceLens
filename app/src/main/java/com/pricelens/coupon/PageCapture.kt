@@ -81,18 +81,35 @@ object LocalCouponInputPlanner {
      */
     const val MAX_AGE_MS = 120_000L
 
+    /**
+     * @param currentSignature **这一次商品上下文的身份**（`Detected.signature`，由浮窗那一次识别带进来）。
+     *  页面树只有在 `capture.signature == currentSignature` 时才作数（#73）。
+     *
+     *  为什么必须有这道闸：#72 让树活到窗口过为止，于是"看 A 商品 → 回 App 自己搜 B"这段时间里，
+     *  屏上会挂着 A 那一页的券，而出处行写着"这一页的节点文案"—— 那三个字指的不是这一页。
+     *
+     *  为什么是"对不上就不作数"（而不是"判不出就保留"）：`currentSignature == null` 不是"信息不足"，
+     *  而是一个**已知的否定**——这次的商品上下文是用户自己搜出来的，没有任何一次识别产出过它，
+     *  所以那棵树必然不属于它。保留才是猜。
+     *
+     *  代价要说清：调试注入（`--es page_capture`）造的签名不等于任何一次真实检测，
+     *  所以**这一路从今往后只能用真机真实跳转验**，注入验不了（这是正确的：注入本来也造不出身份归属）。
+     */
     fun plan(
         capture: PageCapture.Capture?,
         clipboard: ClipboardCapture.Reading?,
         keyword: String,
         nowElapsedMs: Long,
+        currentSignature: String?,
         maxAgeMs: Long = MAX_AGE_MS
     ): Plan {
         val inputs = ArrayList<Input>(3)
         var treeAge = -1L
         if (capture != null) {
             treeAge = nowElapsedMs - capture.capturedAtElapsedMs
-            if (isFresh(treeAge, maxAgeMs)) inputs.add(Input.PAGE_TREE)
+            if (isFresh(treeAge, maxAgeMs) && currentSignature != null && capture.signature == currentSignature) {
+                inputs.add(Input.PAGE_TREE)
+            }
         }
         if (clipboard != null && clipboard.raw.isNotBlank() && isFresh(nowElapsedMs - clipboard.capturedAtElapsedMs, maxAgeMs)) {
             inputs.add(Input.CLIPBOARD_TEXT)
