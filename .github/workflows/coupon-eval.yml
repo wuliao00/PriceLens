@@ -42,15 +42,16 @@ jobs:
       - name: 2/3 golden 来源核对（raw 必须逐字节来自夹具，金额不许编）
         run: python3 tools/eval_coupons.py --lint tools/golden/coupons.jsonl
 
-      # clipboard 本轮没有券样本（仓库里的剪贴板用例全是裸链接/口令），所以**不**require 它 ——
-      # require 一个空 source 会让这一步永远红，反而掩盖真问题。golden 补上含券口令后把
-      # --require-source clipboard 加回来。
+      # clipboard 从 2026-10-05 起**有正样本了**（#70：4 条 clip-copy-* 按 clipboard 重标真实分享文案，
+      # 其中一条故意带上已知误抽），所以这条 require 加回来 —— 之前它一直是 `0 0 0 n/a`，
+      # 也就是"这一路根本没测到东西"，而不是"测过且全对"。
       - name: 3/3 自反性：golden vs golden 必须 F1=1.0
         run: |
           mkdir -p reports
           python3 tools/eval_coupons.py \
             tools/golden/coupons.jsonl tools/golden/coupons.jsonl \
             --expect-perfect --require-source page_node --require-source community \
+            --require-source clipboard \
             --report reports/coupon-reflexive.txt
 
       # 第 4 步（真实流水线的回归门禁）**不在这个 workflow 里**。
