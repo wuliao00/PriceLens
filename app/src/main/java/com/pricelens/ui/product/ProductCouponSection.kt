@@ -122,34 +122,29 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
     val ledger = remember { MisreadLedger() }
     var markedCount by remember { mutableStateOf(0) }
 
-    when {
-        couponsAsync is AsyncValue.Loading<*> || (loading && coupons.isEmpty()) -> {
-            ShimmerList()
-            return
-        }
-        couponsAsync is AsyncValue.Error<*> -> {
-            // 失败：友好提示；有旧数据仍展示（本机组不依赖远端，有它自己在就不空手退出）
-            Column(Modifier.fillMaxSize().padding(Dims.SpacingXL)) {
-                EmptyState(
-                    icon = Icons.Filled.Warning,
-                    title = stringResource(R.string.error_load_failed),
-                    desc = stringResource(R.string.error_retry_hint)
-                )
-                if (coupons.isEmpty() && localRows.isEmpty()) return
-                Spacer(Modifier.height(Dims.SpacingL))
-            }
-        }
-        coupons.isEmpty() && localRows.isEmpty() -> {
-            // 搜索后也可能"确实没有券"（券源只展示显式券文案，不做价差反推）
+    // "这一屏该出现哪几块"是判据，写在纯函数 `CouponSectionShape` 里（JVM 可测），这里只照着渲染。
+    // 旧形状里有两处 `return` 会把**本机识别组**整段藏掉：一处在"远端为空且本机也没抽到"，
+    // 一处在错误块中间。真机 2026-10-05 从京东商详页回到 App 时抓到了前者：
+    // 屏幕上只剩一张"请先搜索商品"的大空卡，怎么划都不出本机组（见 docs/ROADMAP §9.17）。
+    val blocks = CouponSectionShape.of(
+        loading = couponsAsync is AsyncValue.Loading<*> || (loading && coupons.isEmpty()),
+        failed = couponsAsync is AsyncValue.Error<*>,
+        remoteCouponCount = coupons.size
+    )
+    if (blocks.shimmer) {
+        ShimmerList()
+        return
+    }
+    if (couponsAsync is AsyncValue.Error<*>) {
+        // 失败：友好提示。**不提前退出**——本机组读的是页面树/剪贴板/关键词，和网络无关，
+        // 远端挂了它照样有东西可说（旧代码在这里 return，等于用一次网络失败把两条路一起藏掉）
+        Column(Modifier.fillMaxSize().padding(Dims.SpacingXL)) {
             EmptyState(
-                icon = Icons.Filled.ConfirmationNumber,
-                title = stringResource(
-                    if (keyword.isNotBlank()) R.string.coupon_empty_title else R.string.empty_search_first
-                ),
-                desc = stringResource(R.string.coupon_empty_hint),
-                modifier = Modifier.padding(Dims.SpacingXL)
+                icon = Icons.Filled.Warning,
+                title = stringResource(R.string.error_load_failed),
+                desc = stringResource(R.string.error_retry_hint)
             )
-            return
+            Spacer(Modifier.height(Dims.SpacingL))
         }
     }
 
@@ -212,54 +207,72 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
                 }
                 Spacer(Modifier.height(Dims.SpacingM))
             }
+            // 远端这条路"查过了、确实没有"要单独说一句：它和本机那条路的空态是两回事
+            // （旧代码只在"两边都空"时才显示这块，于是本机抽出券时远端查没查过反而看不出来）。
+            // 失败时**不**显示：`blocks.remoteEmpty` 已经把 failed 排除掉了，
+            // 把"没连上"说成"查过了没有"是同一个病根的另一种说法。
+            if (blocks.remoteEmpty) {
+                item(key = "remote_empty") {
+                    EmptyState(
+                        icon = Icons.Filled.ConfirmationNumber,
+                        title = stringResource(
+                            if (keyword.isNotBlank()) R.string.coupon_empty_title else R.string.empty_search_first
+                        ),
+                        desc = stringResource(R.string.coupon_empty_hint)
+                    )
+                    Spacer(Modifier.height(Dims.SpacingL))
+                }
+            }
             // 本机识别组（B2 交付一/二）：小标题明说来源，逐卡三档+逐槽+证据句+纠错按钮。
             // **标题与空态不许一起藏起来**：真机 2026-10-04 搜「雷神ZERO」时整段消失，
             // 用户无法区分"这功能没做 / 被我关了 / 这次没识别到"——静默没有正是这一批要消灭的形状。
-            item(key = "local_header") {
-                LocalGroupHeader(plan.inputs)
-            }
-            if (localRows.isEmpty()) {
-                item(key = "local_empty") {
-                    LocalGroupEmpty(plan.inputs, keyword, clipboard?.raw.orEmpty())
+            if (blocks.localGroup) {
+                item(key = "local_header") {
+                    LocalGroupHeader(plan.inputs)
                 }
-            } else {
-                itemsIndexed(localRows, key = { _, row -> "local:${row.index}_${row.sourceText.hashCode()}" }) { _, row ->
-                    LocalCouponCard(
-                        row = row,
-                        marked = ledger.isMarked(localExtraction, row.index),
-                        onMark = {
-                            if (ledger.mark(localExtraction, row.index, System.currentTimeMillis())) {
-                                markedCount = ledger.markedCount()
-                            }
-                        }
-                    )
-                    Spacer(Modifier.height(Dims.SpacingM))
-                }
-                if (markedCount > 0) {
-                    item(key = "local_export") {
-                        MisreadExportRow(
-                            markedCount = markedCount,
-                            onWriteLocal = {
-                                val marks = ledger.snapshot()
-                                val jsonl = CouponMisreadJsonl.export(marks)
-                                scope.launch {
-                                    val outcome = withContext(Dispatchers.IO) {
-                                        runCatching {
-                                            CouponMisreadStore(File(context.filesDir, CouponMisreadFiles.DIR_NAME))
-                                                .write(jsonl, System.currentTimeMillis())
-                                        }
-                                    }
-                                    val result = outcome.getOrNull()
-                                    val msg = if (result != null) {
-                                        context.getString(R.string.coupon_local_export_saved, marks.size, result.name)
-                                    } else {
-                                        context.getString(R.string.coupon_local_export_failed)
-                                    }
-                                    snackbar.showSnackbar(msg)
+                if (localRows.isEmpty()) {
+                    item(key = "local_empty") {
+                        LocalGroupEmpty(plan.inputs, keyword, clipboard?.raw.orEmpty())
+                    }
+                } else {
+                    itemsIndexed(localRows, key = { _, row -> "local:${row.index}_${row.sourceText.hashCode()}" }) { _, row ->
+                        LocalCouponCard(
+                            row = row,
+                            marked = ledger.isMarked(localExtraction, row.index),
+                            onMark = {
+                                if (ledger.mark(localExtraction, row.index, System.currentTimeMillis())) {
+                                    markedCount = ledger.markedCount()
                                 }
-                            },
-                            onExportSaf = { safMisreadExport.launch(CouponMisreadFiles.fileName(System.currentTimeMillis())) }
+                            }
                         )
+                        Spacer(Modifier.height(Dims.SpacingM))
+                    }
+                    if (markedCount > 0) {
+                        item(key = "local_export") {
+                            MisreadExportRow(
+                                markedCount = markedCount,
+                                onWriteLocal = {
+                                    val marks = ledger.snapshot()
+                                    val jsonl = CouponMisreadJsonl.export(marks)
+                                    scope.launch {
+                                        val outcome = withContext(Dispatchers.IO) {
+                                            runCatching {
+                                                CouponMisreadStore(File(context.filesDir, CouponMisreadFiles.DIR_NAME))
+                                                    .write(jsonl, System.currentTimeMillis())
+                                            }
+                                        }
+                                        val result = outcome.getOrNull()
+                                        val msg = if (result != null) {
+                                            context.getString(R.string.coupon_local_export_saved, marks.size, result.name)
+                                        } else {
+                                            context.getString(R.string.coupon_local_export_failed)
+                                        }
+                                        snackbar.showSnackbar(msg)
+                                    }
+                                },
+                                onExportSaf = { safMisreadExport.launch(CouponMisreadFiles.fileName(System.currentTimeMillis())) }
+                            )
+                        }
                     }
                 }
             }

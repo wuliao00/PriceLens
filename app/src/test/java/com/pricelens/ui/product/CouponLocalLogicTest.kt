@@ -12,6 +12,7 @@ import com.pricelens.coupon.model.ExtractorKind
 import com.pricelens.coupon.model.PriceSlots
 import com.pricelens.ui.theme.BadgeTone
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -187,5 +188,31 @@ class CouponLocalLogicTest {
         val conf = 0.85
         assertEquals(Tiers.of(conf), localCouponRows(extractionOf(slot(), confidence = conf)).single().tier)
         assertNotEquals(Tier.LOW, localCouponRows(extractionOf(slot(), confidence = conf)).single().tier)
+    }
+
+    /**
+     * 真机 2026-10-05 抓到的形状：远端为空 + 本机也没抽出券 ⇒ 旧代码直接 return，
+     * 本机组的标题与空态整段消失，屏幕上只剩一张"请先搜索商品"的大空卡（截图 `61-local-group-missing.png`）。
+     * 这里钉的是**结论**：远端任何状态下本机组都要在，而"远端为空"要明说、"远端失败"不许说成"没有券"。
+     */
+    @Test
+    fun `远端为空或失败都不许把本机识别组藏掉`() {
+        val loading = CouponSectionShape.of(loading = true, failed = false, remoteCouponCount = 0)
+        assertTrue("在途只画骨架", loading.shimmer)
+        assertFalse("在途不评价空不空", loading.remoteEmpty)
+        assertTrue(loading.localGroup)
+
+        val empty = CouponSectionShape.of(loading = false, failed = false, remoteCouponCount = 0)
+        assertTrue("远端为空要明说，不许静默", empty.remoteEmpty)
+        assertTrue("本机组永远在", empty.localGroup)
+
+        val failed = CouponSectionShape.of(loading = false, failed = true, remoteCouponCount = 0)
+        assertFalse("失败不许说成「没有券」", failed.remoteEmpty)
+        assertTrue("错误块下面本机组照样要出", failed.localGroup)
+
+        val withCards = CouponSectionShape.of(loading = false, failed = false, remoteCouponCount = 3)
+        assertFalse(withCards.remoteEmpty)
+        assertFalse(withCards.shimmer)
+        assertTrue(withCards.localGroup)
     }
 }

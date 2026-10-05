@@ -119,3 +119,39 @@ private fun stateLabelRes(state: CouponState): Int? = when (state) {
     CouponState.REGION_LIMITED -> R.string.coupon_local_state_region_limited
     CouponState.UNKNOWN -> null
 }
+
+/**
+ * 找券段"这一屏该出现哪几块"的判据（纯函数，Compose 侧只照着渲染）。
+ *
+ * 病根（2026-10-05 真机，从京东商详页回到 App 时抓到，截图 `61-local-group-missing.png`）：
+ * 远端券列表为空**且**本机这次也没抽出券时，旧代码在 `when` 里直接 `return`，
+ * 于是本机组的标题与空态**整段消失** —— 屏幕上只剩一张"请先搜索商品"的大空卡，
+ * 用户分不清"这功能没做 / 我没开 / 这次没识别到"。那正是 2026-10-04 已经立过规矩的形状
+ * （"标题与空态不许一起藏起来"），只是这次是**远端那一侧**把它挡住了。
+ *
+ * 反面一起修：本机抽出券、远端为空时，旧代码**不**显示远端空态，用户不知道远端那条路查过没有。
+ * 合起来就一句话：**远端为空要明说，本机组永远在**。
+ */
+object CouponSectionShape {
+
+    /**
+     * @param loading 远端在途（骨架屏期间不评价"空不空"）
+     * @param failed 远端请求失败 —— 错误块自己会说话，**不许**再叠一条"没有券"
+     *   （那是把"没连上"说成"查过了确实没有"，同一个病根的另一种说法）
+     * @param remoteCouponCount 远端返回的券条数
+     */
+    fun of(loading: Boolean, failed: Boolean, remoteCouponCount: Int): Blocks = Blocks(
+        shimmer = loading,
+        remoteEmpty = !loading && !failed && remoteCouponCount == 0,
+        localGroup = true
+    )
+
+    /**
+     * 三块各自要不要渲染。
+     *
+     * [localGroup] 恒真是刻意的：它不是一个"条件"，而是这条判据的**结论**
+     * （本机组读的是页面树/剪贴板/关键词，与网络无关，没有任何一种远端状态该把它藏掉）。
+     * 写成字段而不是删掉，是为了让"哪天有人加 return 把它藏了"变成一次测试失败而不是一次静默。
+     */
+    data class Blocks(val shimmer: Boolean, val remoteEmpty: Boolean, val localGroup: Boolean)
+}

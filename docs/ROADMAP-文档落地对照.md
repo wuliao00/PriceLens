@@ -717,6 +717,8 @@ F1 0.9630**，与 JVM 侧用同一批代码算出的预期**逐位一致**（pag
 **没做的那一半要说清**：真实京东商详页的端到端走查没跑（此时设备侧搜索输入没打进去），
 所以"服务在真页面上发布 → UI 出券"这一跳只有 JVM 层的真机 dump 用例
 （`真机首页树里角标券被挑出来`）与注入取证两段证据，中间那一跳是推断的。
+**→ 2026-10-05 §9.17 补上了这半**：真实商详页那一跳已被日志证实（服务在真页面上发布了树），
+但由此撞出"策略让两端碰不到面"的结构问题（#72），以及一个真 bug（#71，已修）。
 
 **四、分数与账。** 全量 golden 仍是 **0.9831**（词表加形状词没有引起回退，`discount/threshold`
 两栏 slot 错误 0）；单测 916 条全绿（新增 `PageCaptureTest` 判据矩阵 + 真机树 + 合并语义）。
@@ -791,7 +793,7 @@ adb shell am broadcast -a com.pricelens.dev.LLM_PROBE -n com.pricelens.dev/com.p
 **四、设备复位与还欠的。** 走查完 `am force-stop com.pricelens.dev`：单槽在进程内，杀掉就清空，
 合成的页面树和文本不会留到下次打开。`enabled_accessibility_services` 前后一致
 （`li.songe.gkd/com.google.android.accessibility.selecttospeak.SelectToSpeakService`），**这批没改过任何设备设置**。
-仍欠：真·京东商详页端到端（要为本机包开无障碍再还原）、~~#68 的「低至」判据~~（**已完成，见 §9.16**）、#69、#70、#26 桌面端重出包。
+仍欠：~~真·京东商详页端到端~~（**10-05 午后跑了，见 §9.17**）、~~#68 的「低至」判据~~（**已完成，见 §9.16**）、#69、#70、#26 桌面端重出包。
 
 ### 9.16 第十三批（2026-10-05 午后）——到手价里的「低至」：一条藏了两周的缺口，和一份从不报告价格的量具
 
@@ -852,4 +854,74 @@ adb shell am broadcast -a com.pricelens.dev.LLM_PROBE -n com.pricelens.dev/com.p
 
 还要说一句边界：**价格槽在本版没有任何展示位**（UI 不读 `Extraction.price`，浮窗的价格走的是另一条
 `PriceNodeMatcher` 路）。所以这批买到的是"错例导出与模型复核不再缺这一格"，不是屏上的数字变了。
+
+### 9.17 第十四批（2026-10-05 午后）——真·京东商详页端到端第一次跑通服务那一半，代价是撞出一个"静默没有"
+
+**先说设备侧动了什么（这批唯一一次）。** 为了跑真实端到端，把
+`com.pricelens.dev/com.pricelens.accessibility.PriceMonitorService` **追加**进
+`enabled_accessibility_services`（原值只有一条 gkd，动手前存进 `E:/dev/pl-builds/a11y-baseline.txt`）。
+收尾已按原值写回，`dumpsys accessibility` 里 PriceLens 已不出现、Bound/Enabled 都只剩 gkd，
+`accessibility_enabled` 保持原值 1，最后 `am force-stop com.pricelens.dev` 清掉进程内状态。
+中途装新包会让服务解绑（老规矩），靠 `accessibility_enabled` 翻一次 0→1 重绑。
+
+**一、服务那一半：不再是推断的了。** 京东首页信息流点进商详（`com.jd.lib.productdetailmini.PdMiniImmerseActivity`），
+我们的服务打出：
+
+```
+13:21:35.809 I/PriceLens: A11Y 命中来源=规则命中 规则 jd@v4/product_detail
+    price=¥2598(basis=PAGE) title=开箱即骑喜德盛XDS公路车JXR300禧玛诺16速碟刹全内走竞速
+```
+
+`LogT` 那一行之后紧接着就是 `PageCapture.publish(...)`（同一个函数的最后一条语句），
+所以**真实页面的树进了单槽**这一段是观测到的，不是推的。
+顺带说一句：这一屏本身就是判据样本的出处 —— 京东首页上真长着「17元外卖餐补」「直降低至5折」「国家补贴立省15%」，
+#67 与 #68 的真值表就是从这种节点上来的。
+（中途京东弹过一次**风控页** `JDRiskHandleActivity`：按红线不碰滑块，连按 BACK 退回首页换信息流入口。）
+
+**二、UI 那一半：撞出一个真 bug（#71，已修）。** 切回 App 的「找券」段，屏幕上只剩一张
+"请先搜索商品"的大空卡，**本机识别组整段不见了**，怎么划都划不出来
+（`shots/61-local-group-missing.png`；`uiautomator dump` 里本机组零节点）。根因在 `ProductCouponSection` 的 `when`：
+
+```kotlin
+coupons.isEmpty() && localRows.isEmpty() -> { EmptyState(...); return }   // ← 本机组在它后面，永远到不了
+```
+
+外加错误分支里同一句 `if (coupons.isEmpty() && localRows.isEmpty()) return`。
+讽刺的是被藏掉的那段代码上面就写着规矩："**标题与空态不许一起藏起来**（真机 2026-10-04 整段消失）"——
+上次修的是本机组自己那一层，这次是**远端那一侧**把它挡住了。反面一起修：
+本机抽出券、远端为空时旧代码不显示远端空态，用户看不出远端那条路查过没有
+（11:47 那次注入取证之所以"看起来正常"，正是因为本机有券、走了另一条分支）。
+
+修法沿用这个包一直的规矩：**判据搬进纯函数**，`CouponSectionShape.of(loading, failed, remoteCouponCount)`
+→ `Blocks(shimmer, remoteEmpty, localGroup)`，`localGroup` 恒真由单测钉住
+（哪天有人再加一句 `return`，先红的是测试，不是屏幕）；UI 里两处 `return` 拆掉，
+远端空态变成列表里的一个 item。失败态**不**说"没有券" —— 那是把"没连上"说成"查过了确实没有"。
+全仓扫了一遍同形（`EmptyState(` 之后紧跟 `return`）：只有 `BiliVideoCard` 两处，
+那里 return 之后确实没有"必须出现的下一块"，不是同一个病。
+
+**三、RED 是屏上看到的，GREEN 也是屏上复跑的。** 这条和 #68 不一样，说清免得混：
+RED = 原始步骤下 dump 里本机组零节点 + 划不动 + 截图；纯函数那条测试钉的是**新立的不变量**，
+它本身不会先红（测的是刚写的规矩）。GREEN = 装新包后**同一条原始步骤**复跑：
+
+```
+'本机从当前文案识别' [70,1626][511,1683]
+'输入：暂时没有可读的内容（既没抓到页面，也没有文本）' [70,1732][1162,1781]
+'这句文案里没有券形态（满 / 减 / 券后 / 到手 …）。识别读的就是你搜的这句：开箱即骑喜德盛XDS公路车…'
+```
+
+同一屏上远端那块也从"请先搜索商品"变成了"未发现优惠券"（远端这次真查了、确实没有）——
+两块的措辞各自说话，正是 #56 立三档与出处行时要的东西。截图 `shots/71-fix-local-group-back.png`、`61-live-jd-e2e.png`。
+
+**四、还差的那一跳不是接线坏了，是策略把它挡住了（#72）。** 上面那次复跑里出处行是
+`输入：关键词`，**没有 PAGE_TREE** —— 而 10 秒前日志刚证明树进了槽。能把它变 null 的只有
+#61 自己在 `PriceMonitorService` 里加的两句 `PageCapture.clear()`：切回我们 App 时京东那个 Activity
+还会再发一次窗口事件 ⇒ `NotProductPage` / `NoPrice(isStateChanged)` ⇒ 清树。
+也就是说**"离开商详立刻清树"这条策略，让"页面树"这一路输入在真实路径上永远碰不到详情页 UI**，
+而用户恰恰是从那一页点进来的。两个选项（要拍板，别顺手改）：
+① 不立刻清，交给 120s 新鲜度窗口，出处行带上树龄（`Plan.treeAgeMs` 已经有了，UI 还没用）；
+② 保持立刻清，但在清之前把这一路的产出随 `Detected` 事件交给页面状态，UI 显示的是"进 App 那一刻抓到的券"。
+倾向 ②：它不放宽任何时效口径。无论选哪个，验收都得是真机复跑同一条原始步骤，不接受"注入能看到"当证据。
+
+**五、账。** 单测 **931 条全绿**（新增 `远端为空或失败都不许把本机识别组藏掉`），ktlint 同轮绿，
+`assembleDebug` 出包并装机复跑；全量 golden 分数不受这批影响（没动判据）。
 
