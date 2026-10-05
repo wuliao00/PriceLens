@@ -22,11 +22,17 @@
       树和关键词两条路都在，但用户贴分享文本时树是空的、在商详页时关键词只是标题。
       不写出处，"这次没找到券"就分不清是页面确实没券还是压根没读到东西。
     -->
-    <string name="coupon_local_source_page">输入：当前这一页的节点文案（浮窗抓到的）</string>
-    <string name="coupon_local_source_both">输入：这一页的节点文案 + 关键词文本（面额门槛相同的券只算一张）</string>
-    <string name="coupon_local_source_keyword">输入：关键词 / 你贴进来的分享文本</string>
-    <string name="coupon_local_source_none">输入：暂时没有东西可读（既没抓到页面，关键词也是空的）</string>
+    <!--
+      输入出处（#61 接上页面树、#63 接上剪贴板之后必须说清"这次读的是哪几路"）：
+      三路都在，但用户贴分享文本时树是空的、在商详页时关键词只是标题、
+      无障碍没开时只有剪贴板。不写出处，"这次没找到券"就分不清是页面确实没券还是压根没读到东西。
+    -->
+    <string name="coupon_local_source_inputs">输入：%1$s（同面额同门槛的券只算一张）</string>
+    <string name="coupon_local_source_none">输入：暂时没有可读的内容（既没抓到页面，也没有文本）</string>
+    <!-- 三路输入的名字：出处行与空态回显共用，措辞只有一份 -->
     <string name="coupon_local_input_page">这一页的节点文案</string>
+    <string name="coupon_local_input_clipboard">刚复制的文本</string>
+    <string name="coupon_local_input_keyword">关键词</string>
     <!--
       空态必须存在：搜「雷神ZERO」这类没有券形态的词时，整段消失会让用户无法区分
       "功能没做 / 被我关了 / 这次真没识别到"。这里回显**读的是哪段文字**，

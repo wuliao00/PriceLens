@@ -53,49 +53,52 @@ object PageCapture {
 }
 
 /**
- * 本机找券的**输入选择**（纯函数）。
+ * 本机找券的**输入清单**（纯函数）。
  *
- * 树不是随时都有的：无障碍服务没开、不在商详、或用户搜的是自己贴进来的分享文本
- * （那条路 keyword 本身就是富文本，是 B2 本机识别的"本命"，不能因为树上有了东西就丢掉）。
- * 所以这里只回答"这一次能用哪几路输入"，两路都有时两路都跑、结果**做加法**。
+ * 三路输入各有各的存在理由，谁也不覆盖谁：
+ *  - `PAGE_TREE` —— 浮窗刚抓的这一页（#61）；
+ *  - `CLIPBOARD_TEXT` —— 用户复制的分享文本，常含"领券满X减Y"而**没有链接**（#63）；
+ *  - `KEYWORD_TEXT` —— 搜索词/标题；用户手动粘贴时它就是富文本（B2 本机识别的本命）。
+ *
+ * 判据只回答"这一次有哪几路可用"，产出由 `CouponExtractor.mergeAll` **做加法**
+ * （面额与门槛都相同的券只算一张）。旧形状是"二选一"，那意味着任何一路有东西
+ * 就把另一路整段换掉 —— 与 A/B 第一轮教训（替换策略吃掉规则抽对的券）是同一个错误。
  */
 object LocalCouponInputPlanner {
 
-    enum class Kind {
-        /** 只有关键词文本（服务没抓到树，或树已经过期） */
-        KEYWORD_ONLY,
+    enum class Input { PAGE_TREE, CLIPBOARD_TEXT, KEYWORD_TEXT }
 
-        /** 只有页面树（关键词为空） */
-        PAGE_ONLY,
-
-        /** 两路都有 ⇒ 两路都跑再合并 */
-        BOTH,
-
-        /** 两路都没有：不许假装"读过了" */
-        NONE
-    }
-
-    data class Plan(val kind: Kind, val ageMs: Long)
+    data class Plan(val inputs: List<Input>, val treeAgeMs: Long)
 
     /**
-     * 兜底新鲜度上限：两分钟。
+     * 新鲜度上限：两分钟，带时间戳的两路（树、剪贴板）共用。
      *
-     * 依据不是"页面停留一般多久"，而是服务侧的行为：商详页上内容变化事件会不断重发布，
-     * 而"离开商详"是显式清理点 ⇒ 一个还挂在槽里、却超过两分钟没被刷新的树，只可能来自
-     * 服务被杀/异常没走到清理分支的那类情况。这一条是**备胎**，正常路径靠 clear()。
+     * 依据不是"用户一般停留多久"，而是两条链各自的重发布时机：商详页内容变化会不断重发树，
+     * 而回前台会重新读一次剪贴板并刷新时间戳 ⇒ 还挂在槽里却两分钟没刷新的东西，
+     * 只可能来自服务被杀/异常没走到清理分支那类情况。正常路径靠显式清理，这里只是备胎。
      */
     const val MAX_AGE_MS = 120_000L
 
-    fun plan(capture: PageCapture.Capture?, keyword: String, nowElapsedMs: Long, maxAgeMs: Long = MAX_AGE_MS): Plan {
-        val hasKeyword = keyword.isNotBlank()
-        if (capture == null) return Plan(if (hasKeyword) Kind.KEYWORD_ONLY else Kind.NONE, -1L)
-        val age = nowElapsedMs - capture.capturedAtElapsedMs
-        // 负数 = 时钟回拨或两个时钟不可比（elapsedRealtime 单调，出现负值就是接线错了），按过期处理
-        val fresh = age in 0L..maxAgeMs
-        if (!fresh) return Plan(if (hasKeyword) Kind.KEYWORD_ONLY else Kind.NONE, age)
-        return when {
-            hasKeyword -> Kind.BOTH
-            else -> Kind.PAGE_ONLY
-        }.let { Plan(it, age) }
+    fun plan(
+        capture: PageCapture.Capture?,
+        clipboard: ClipboardCapture.Reading?,
+        keyword: String,
+        nowElapsedMs: Long,
+        maxAgeMs: Long = MAX_AGE_MS
+    ): Plan {
+        val inputs = ArrayList<Input>(3)
+        var treeAge = -1L
+        if (capture != null) {
+            treeAge = nowElapsedMs - capture.capturedAtElapsedMs
+            if (isFresh(treeAge, maxAgeMs)) inputs.add(Input.PAGE_TREE)
+        }
+        if (clipboard != null && clipboard.raw.isNotBlank() && isFresh(nowElapsedMs - clipboard.capturedAtElapsedMs, maxAgeMs)) {
+            inputs.add(Input.CLIPBOARD_TEXT)
+        }
+        if (keyword.isNotBlank()) inputs.add(Input.KEYWORD_TEXT)
+        return Plan(inputs, treeAge)
     }
+
+    /** 负龄 = 时钟回拨或两个时钟不可比（elapsedRealtime 单调，出现负值就是接线错了）⇒ 按过期处理 */
+    private fun isFresh(ageMs: Long, maxAgeMs: Long): Boolean = ageMs in 0L..maxAgeMs
 }

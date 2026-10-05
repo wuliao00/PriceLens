@@ -9,6 +9,8 @@ import com.pricelens.coupon.adapters.TextAdapter
 import com.pricelens.coupon.ai.FallbackExtractor
 import com.pricelens.coupon.model.ExtractSource
 import com.pricelens.coupon.model.Extraction
+import com.pricelens.coupon.model.ExtractorKind
+import com.pricelens.coupon.model.PriceSlots
 import com.pricelens.coupon.normalize.Links
 import com.pricelens.coupon.rules.CouponTemplates
 import java.time.LocalDate
@@ -97,6 +99,30 @@ object CouponExtractor {
             stackNote = primary.stackNote ?: secondary.stackNote,
             confidence = maxOf(primary.confidence, secondary.confidence)
         )
+    }
+
+    /**
+     * 任意多路输入的加法合并（#63 起有三路：页面树 / 剪贴板文本 / 关键词）。
+     *
+     * 顺序就是优先级：**排在前面的那一路的券对象原样保留**（含它的证据句），
+     * 后面的路只补"面额或门槛不同"的券。所以调用方给的顺序要有意义 ——
+     * UI 侧按"离用户正在看的这一页由近及远"排：树 → 剪贴板 → 关键词。
+     * 空列表返回一个 confidence 0 的空结果而不是抛错：三路全过期是正常状态，不是异常。
+     */
+    fun mergeAll(extractions: List<Extraction>): Extraction {
+        if (extractions.isEmpty()) {
+            return Extraction(
+                source = ExtractSource.CLIPBOARD,
+                extractor = ExtractorKind.RULE,
+                platform = "unknown",
+                itemRef = null,
+                coupons = emptyList(),
+                price = PriceSlots(null, null, null),
+                stackNote = null,
+                confidence = 0.0
+            )
+        }
+        return extractions.reduce { acc, next -> merge(acc, next) }
     }
 }
 

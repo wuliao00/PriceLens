@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.SystemClock
 import android.util.Log
 import com.pricelens.accessibility.NodeSnapshot
+import com.pricelens.coupon.ClipboardCapture
 import com.pricelens.coupon.CouponExtractor
 import com.pricelens.coupon.CouponPipeline
 import com.pricelens.coupon.PageCapture
@@ -29,6 +30,8 @@ import org.json.JSONObject
  * 3. 页面树注入（`--es page_capture "文案1；文案2"`）：**不碰模型**，只往 `PageCapture` 交一棵合成树
  *    并打出 `fromPage` 的产出 —— 用来在真机上证明 #61 那条接线通（服务发布 → UI 收集 → 门面 → 渲染），
  *    不需要电商 App 联网、也不动无障碍开关。
+ * 4. 剪贴板注入（`--es clipboard_capture "文本"`）：同上，走 #63 的 `ClipboardCapture` 单槽与
+ *    `fromClipboard` 门面，绕开系统剪贴板本身（adb 写它不安全）。
  *
  * 用法：
  *   adb shell am broadcast -a com.pricelens.dev.LLM_PROBE -n com.pricelens.dev/com.pricelens.debug.LlmProbeReceiver \
@@ -42,6 +45,7 @@ class LlmProbeReceiver : BroadcastReceiver() {
         val text = intent.getStringExtra("text") ?: "满199减50"
         val abPath = intent.getStringExtra("ab")
         val pageTexts = intent.getStringExtra("page_capture")
+        val clipboardText = intent.getStringExtra("clipboard_capture")
         val pending = goAsync()
         Thread {
             try {
@@ -49,6 +53,8 @@ class LlmProbeReceiver : BroadcastReceiver() {
                 // 而那条路上一个 token 都不需要推理；顺手加载 400MB 只会让排查变慢。
                 if (pageTexts != null) {
                     publishSyntheticPage(pageTexts)
+                } else if (clipboardText != null) {
+                    publishClipboard(clipboardText)
                 } else {
                     val prompt = context.assets.open("ai/coupon_prompt_v1.txt").bufferedReader().use { it.readText() }
                     val gbnf = context.assets.open("ai/coupon_schema.gbnf").bufferedReader().use { it.readText() }
@@ -92,6 +98,21 @@ class LlmProbeReceiver : BroadcastReceiver() {
         Log.i(
             TAG,
             "PAGE_CAPTURE 注入叶子=${clauses.size} 券数=${extraction.coupons.size} " +
+                "keys=${extraction.coupons.map { slot -> "${slot.discount}|${slot.threshold}" }} " +
+                "conf=${extraction.confidence} 出处=${extraction.coupons.map { slot -> slot.sourceText }}"
+        )
+    }
+
+    /**
+     * 注入一段"剪贴板文本"（#63 的真机取证）：走的是生产同一个单槽与同一条门面，
+     * 只是绕开 `ClipboardManager`（adb 侧没法安全地写系统剪贴板）。
+     */
+    private fun publishClipboard(text: String) {
+        ClipboardCapture.publish(text, SystemClock.elapsedRealtime())
+        val extraction = CouponExtractor.fromClipboard(text)
+        Log.i(
+            TAG,
+            "CLIPBOARD_CAPTURE 字数=${text.length} 券数=${extraction.coupons.size} " +
                 "keys=${extraction.coupons.map { slot -> "${slot.discount}|${slot.threshold}" }} " +
                 "conf=${extraction.confidence} 出处=${extraction.coupons.map { slot -> slot.sourceText }}"
         )
