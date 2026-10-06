@@ -183,9 +183,11 @@ class AccessibilityLabelTest {
         for (name in REAL_PRODUCT_NAMES) {
             assertTrue("真实商品名不许被误杀：$name", PriceNodeMatcher.isDisplayableTitle(name))
         }
-        // 促销行**不**归这道闸管（它只有一个「了」）：治它的是规则/启发式的同尺比分，
-        // 由 RealDumpTitleTest 钉住。这里断言它仍然过闸，是为了别把这道闸误当成万能黑名单。
-        assertTrue(PriceNodeMatcher.isDisplayableTitle("叠加以旧换新下单，可再减1964元"))
+        // 促销行 `叠加以旧换新下单，可再减1964元` 在 §9.26 当时**不归这道闸管**（只有一个「了」），
+        // 靠的是 §9.6 那套"规则标题与启发式标题同尺比分"。同夜从设备库里又抓到一条同族真样本
+        // （`…可再减800元`，那一页比分没兜住），于是加了词表闸 `可再减`（§9.28）——
+        // 现在它由词表直接否决。这条断言留在原地，是为了别把它的功劳记给比分那一道。
+        assertFalse(PriceNodeMatcher.isDisplayableTitle("叠加以旧换新下单，可再减1964元"))
     }
 
     /** 真机商品名（逐字取自 `app/src/test/resources/fixtures` 的六棵树） */
@@ -198,4 +200,38 @@ class AccessibilityLabelTest {
         "雷神 【白条24期免息】猎刃S英特尔酷睿i7锐龙9高性能5060独显Ai学生轻薄16英寸电竞游戏本",
         "自营雷神（ThundeRobot）MIX-G 高性能游戏电竞设计台式电脑mini迷你主机(i9-14900HX RT"
     )
+
+    /**
+     * 两条**从设备库里挖出来的错身份**（真机 2026-10-06 17:43，
+     * `run-as com.pricelens.dev` 读 `pricelens.db` 的 `watch_identity` 表）：
+     *
+     * ```
+     * productId=ovl:i2airm2qyvp4  title=送货上门·预约送货·部分收货      lastPrice=120.0  basis=PAGE
+     * productId=ovl:21hv4or90d19  title=叠加以旧换新下单，可再减800元    lastPrice=3699.0 basis=PAGE
+     * ```
+     *
+     * 第一条是**服务条款行**：11 字、无货币符号、无冒号、不含任何既有黑名单词，
+     * 也不含 §9.26 那条句式判据要的功能词 —— 它两条闸都不碰，于是成了盯价身份，
+     * 还带着 ¥120 挂在努比亚折叠屏那一页上（`search_records` 里能查到拿它搜过一遍）。
+     * 第二条是 §9.6 那个促销形态的**又一个真样本**（同族上一条是 `…可再减1964元`）：
+     * 那一页它被"规则/启发式同尺比分"挡住了，这一页没有——比分只在**真标题也在树里**时才有用，
+     * 所以它需要一道词表闸兜着，不能只靠比分。
+     *
+     * 只收**每条一个**标记词（`送货上门` / `可再减`）而不是把串里每个词都收进来：
+     * 一条真样本配一个词，误杀面最小。
+     */
+    @Test
+    fun `service-terms and stacked-promo lines never become a product title`() {
+        assertFalse(PriceNodeMatcher.isDisplayableTitle("送货上门·预约送货·部分收货"))
+        assertFalse(PriceNodeMatcher.isDisplayableTitle("叠加以旧换新下单，可再减800元"))
+        assertFalse(PriceNodeMatcher.isPlausibleTitle("送货上门·预约送货·部分收货", strict = true))
+        for (name in REAL_PRODUCT_NAMES) {
+            assertTrue("真实商品名不许被误杀：$name", PriceNodeMatcher.isDisplayableTitle(name))
+        }
+        // 徽章写法不受影响（黑名单前先剥【…】，理由见 PriceNodeMatcher.BRACKET_BADGE）
+        assertTrue(PriceNodeMatcher.isDisplayableTitle("【送货上门】全实木沙发三人位 现代简约布艺小户型"))
+        // 已知代价：把服务承诺**裸写**进商品名的整串否决，会退回"这一页读不出标题"。
+        // 真机六棵树里没有这种形态；出现过就来加白名单，别把它当通过。
+        assertFalse(PriceNodeMatcher.isDisplayableTitle("实木沙发三人位 送货上门"))
+    }
 }
