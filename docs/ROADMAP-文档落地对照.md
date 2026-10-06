@@ -1310,4 +1310,13 @@ community      17    1    0   0.9444   1.0000   0.9714
   本轮新增 `AmountRoleTailTest` 4 条、`NetPriceTest` 3 条、`CouponPipelineTest` 加 4 条 —— 11 条 × 两个变体 = +22，与 1890 − 1868 对得上
 - 工作区仍只有那两条一贯不入库的 TEMP（`app/build.gradle.kts` 的 `.dev` 后缀、
   `PriceMonitorService` 的 `A11Y-EVT` 探针），提交时逐文件核对过暂存区
+- **同批在真实 runner 上再验一次**（`workflow_dispatch`，run `37407590765`，`feat/2.8.0.2`）：
+  Android Build & Test / Desktop Build & Test / Security Scan 三个 job 绿，
+  打分步输出与本机**逐位一致**（`page_node 12/0/0`、`clipboard 7/0/0`、`community 17/0/0`、
+  合计 `36 TP / 0 FP / 0 FN`，三档 P=R=F1=1.0000，`final 一致 58 / 比对 58`，`[门禁] 无回退`）；
+  `Update Manifest & Gitee Mirror`、`Deploy GitHub Pages`、`Create Release` 全部 **skipped** ——
+  §9.22 那条"手动触发不会误伤外部状态"从一次观察变成两次
+- `feat/2.8.0.2` 已推 GitHub 与 Gitee（`b9d4923..b30e887`）。**没做**的事也说清：没合 main、没打 tag、
+  没出 2.8.0.2 的 APK、`update.json` 一行未动 —— 那份清单的 `versionCode/sha256/sizeBytes/apkUrls`
+  必须指向真实存在的包，包还不存在就先不改它（理由写在那笔版本号提交里）
 

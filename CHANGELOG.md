@@ -229,7 +229,9 @@
 > **P=R=F1=1.0000**（此前合计 P 0.9474 / R 1.0000 / F1 0.9730，FP 2 个）；
 > `[价格槽对照]` **final 53→58 / 58、list 57→58 / 58**；drop 仍 57/58（`降幅8%` 的单位口径未动，见下）。
 > 全量 **1890 条**（debug + release 两变体各一份）与 ktlint 同轮绿，
-> `tools/eval_coupons.py` 相对 `tools/golden/baseline.json` 无回退（容差 0.01）。
+> `tools/eval_coupons.py` 相对 `tools/golden/baseline.json` 无回退（容差 0.01）；
+> 同批在**真实 runner** 上重跑一次（run `37407590765`，`feat/2.8.0.2`），打分输出与本机逐位一致，
+> 三个会写外部状态的 job 仍全部 skipped。
 > golden、baseline、判据容差**一行未改** —— 涨的是识别，不是尺子。
 - **新增"价词在数字右边"的尾判**（`Roles.tailOf`）：左邻尺子只看数字**之前**，所以
   `¥92.9，到手价`、`¥11499，国补领后价划线价¥12999`、`人民币1579.90 入会到手价`、
