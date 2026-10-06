@@ -1320,3 +1320,48 @@ community      17    1    0   0.9444   1.0000   0.9714
   没出 2.8.0.2 的 APK、`update.json` 一行未动 —— 那份清单的 `versionCode/sha256/sizeBytes/apkUrls`
   必须指向真实存在的包，包还不存在就先不改它（理由写在那笔版本号提交里）
 
+### 9.24 第二十一批（2026-10-06 午）——用户过了京东验证，#73 拿到史上第一条真检测，然后我又猜错了一次成因
+
+**一、先说拿到的东西：检测在真机上确实成立。**
+用户过一次验证之后，从京东手机分类点进完整商详
+（`com.jd.lib.productdetail.ProductDetailActivity`，商品「5G尊享 荣耀手机 天玑9500…」），
+浮窗窗口出现了：`Window #0 Window{com.pricelens.dev:96f1612 u0 com.pricelens.dev}`，
+frame (281,284)-(1048,500)。这是 §9.21/§9.22 那两轮"连等 12 轮浮窗零次"之后的**第一条正证据**，
+用的正是不依赖日志的那个判据。再点胶囊，展开面板里「券后价 ¥1,380 / 完整商品名 /
+来源 什么值得买 · 数据抓取时间未知 · 非实时 / 仅识别到标题 · 不显示历史价多平台比价 /
+**就是这个商品 · 开始记录本机价**」全部正常渲染（`E:/dev/pl-builds/shots/j-after-pill.png`）。
+
+**二、#73 仍差最后一跳，而且差的不是判据。**
+正例要的是"点 CTA 带身份进 App → 详情页找券段 → 「页面」芯片出现"。今天没走完，卡在**导航**：
+京东首页推荐流的卡片现在**一律落迷你详情页**
+（`com.jd.lib.productdetailmini.PdMiniImmerseActivity`），而迷你页上浮窗不出现；
+顶部「手机」页签在这台机上被裁成 1px 宽点不到，频道位点到了扫码页，购物车那一下没落到商详。
+这一段不再往下猜，写成下一轮能直接跑的实验（见四）。
+
+**三、这一批我给出、并被自己的测试当场推翻的假设（留着，别下次又照它改）。**
+看到"迷你页不弹"，我的判断是：出厂规则的页门 `activityRegex = ".*ProductDetail.*"` 大小写敏感，
+跨不过 `productdetailmini.PdMiniImmerseActivity`，所以那一页被当成非商详。
+按这个假设写了测试（拿真机迷你页树 `jd_detail_mini_pdminiimmerse_20261006.xml` 喂
+`DetectionPipeline`，带 Activity 名与不带 Activity 名两条入口都试）——**两条都命中**：
+价格 `¥334`、商品名 `LAN兰时光立体紧致修护油蜜面膜…` 全对。
+⇒ 判据认这一页；迷你页也把内容给了无障碍树（111 节点，含底栏「立即购买 / 加入购物车 / 进店 / 详情」）。
+剩下唯一方向：**判据拿到的是"价还没渲染出来"的那一帧** —— 迷你页的价格是异步填的，
+填完之后若没有再来一次 `TYPE_WINDOW_CONTENT_CHANGED`，管线就再没被叫起来过。
+这条留在 `RealDumpMiniDetailTest` 的注释里；那个测试因此是**回归钉**（迷你页在判据层面必须命中），
+不是修复证明。
+
+**四、下一轮怎么查（一条探针，不靠猜）。**
+在 `PriceMonitorService` 那条 TEMP 探针里，除现有 `root=` 外再打两个数：快照节点数、
+树里是否存在带 `¥` 的文本。迷你页跑一轮就能分开两种解释：
+ - 事件来了、节点数很小、无 `¥` ⇒ **确实是"没等到落定帧"**：修法是给已确认是商详的页面
+   补一次延迟重读（只在首帧读不到价时补一次，不是加轮询）；
+ - 事件来了、节点数上百、有 `¥`、仍然不弹 ⇒ 真机快照上另有拒绝原因，按打印值继续收窄。
+
+**五、设备改动与复位（本轮）。** 为了取到迷你页那棵树，临时把
+`window_animation_scale` / `transition_animation_scale` / `animator_duration_scale` 置 0
+（那一页永不 idle，`uiautomator dump` 直接返回空），**取完已 `settings delete` 回默认**；
+`enabled_accessibility_services` → `null`、`accessibility_enabled` → `0`、`.dev` 包
+`SYSTEM_ALERT_WINDOW` → `ignore` 均按 `a11y-baseline-v2156a.txt` 复位并核对。
+没有代点任何验证码；京东侧只做了浏览，未下单、未改购物车内容。
+
+

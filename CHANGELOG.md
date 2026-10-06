@@ -268,6 +268,24 @@
   `detail2/NewDetailActivity` 给无障碍只有 67 节点 / 7 条文本 / 价格 0 条）。
   **#73 仍不算完成**，欠的缩小成一条：账号能正常逛的那天跑 `step79.py`
 
+### 真机：第一条正证据，加一条被自己测试推翻的假设（同批，详见 §9.24）
+- **检测在真机上确实成立**：用户过一次京东验证后，从手机分类进完整商详
+  （`com.jd.lib.productdetail.ProductDetailActivity`），浮窗窗口出现
+  （`Window #0 Window{com.pricelens.dev:96f1612}`，frame 281,284-1048,500），
+  展开面板把价格、商品名、来源与「就是这个商品 · 开始记录本机价」都正常渲染出来。
+  这是 §9.21 那两轮"连等 12 轮浮窗零次"之后第一条**不依赖日志**的正证据
+- **入口变了**：京东首页推荐流的卡片现在一律落**迷你详情页**
+  （`productdetailmini.PdMiniImmerseActivity`），而迷你页上浮窗不出现 —— #73 的正例因此今天没走完
+  （差的只是"点 CTA 进 App → 详情页找券段 → 看芯片"这一跳，被导航卡住）
+- **我给出的解释被自己的测试当场推翻**：原以为是规则页门 `.*ProductDetail.*` 大小写敏感跨不过
+  `productdetailmini`。新增 `RealDumpMiniDetailTest`（夹具 = 真机迷你页树
+  `jd_detail_mini_pdminiimmerse_20261006.xml`）跑下来，带 Activity 名与不带 Activity 名**两条入口都命中**，
+  价格 `¥334` 与商品名都对 ⇒ 判据认这一页，页面也把内容给了无障碍树（111 节点）。
+  剩下唯一方向是**判据只见到价格还没填上的那一帧**（迷你页价格异步渲染，之后可能没有再来的
+  `TYPE_WINDOW_CONTENT_CHANGED`）；下一轮用探针打"节点数 + 是否存在带 ¥ 的文本"来分开两种解释。
+  这个测试留作**回归钉**（迷你页在判据层面必须命中），错诊断写在注释里免得下次照它改正则
+
+
 ### 修复（UI 与浮窗四处，读码 + 评审抓出来，每条都指得到行；详见 §9.23 四）
 - **`OverlayManager.stop()` 走完死路，导致"这个进程再也不会出浮窗"**：它先把 `serviceScope` 置 null，
   **再**调 `onLeftProductPage()`；球形态走那条 1.5 秒宽限分支时要 `serviceScope?.launch` ⇒ 拿到 null、
