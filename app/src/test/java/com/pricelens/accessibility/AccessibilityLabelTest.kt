@@ -161,4 +161,41 @@ class AccessibilityLabelTest {
         assertFalse(PriceNodeMatcher.isDisplayableTitle("1个视频，4张图片"))
         assertTrue(PriceNodeMatcher.isDisplayableTitle("泸州老窖 窖龄30年，52度 500mL 6瓶 礼盒装"))
     }
+
+    /**
+     * 用户评价正文被当成商品名（真机 2026-10-06 15:14，取证 `E:/dev/pl-builds/shots/w-case1.png`）：
+     * 详情页顶部那行是「十分满意的一次购物 刚开始在网上买电子产品 还有些忐忑不安 收到…」，
+     * 紧接着这句被拿去全网搜了一遍 —— §9.24 那轮我把"商品对不上"记成点错卡，真正的成因在这里：
+     * 标题挑错，价格与券是从同一页读对的，商品却是搜索回来的另一件。
+     *
+     * 判据取**句式**而不是词表：商品名是名词堆叠，评价是带功能词的句子。阈值定在"≥2 个不同功能词"，
+     * 因为单个「的」在真实商品名里完全可能出现（`透气舒适的跑鞋`），散文式的多个不会。
+     *
+     * 七条 positive control 是从六棵真机树里逐字取回的商品名，含**纯中文、无空格、带逗号**三种形态：
+     * 只断言"评价被拒"而不管住误杀，等于把脏数据换成读不出标题（那是比错标题更糟的结局，
+     * 见 [PriceNodeMatcher.BRACKET_BADGE] 上记着的那次教训）。
+     */
+    @Test
+    fun `review prose is rejected while real product names survive`() {
+        val review = "十分满意的一次购物 刚开始在网上买电子产品 还有些忐忑不安 收到"
+        assertFalse(PriceNodeMatcher.isPlausibleTitle(review, strict = true))
+        assertFalse(PriceNodeMatcher.isDisplayableTitle(review))
+        for (name in REAL_PRODUCT_NAMES) {
+            assertTrue("真实商品名不许被误杀：$name", PriceNodeMatcher.isDisplayableTitle(name))
+        }
+        // 促销行**不**归这道闸管（它只有一个「了」）：治它的是规则/启发式的同尺比分，
+        // 由 RealDumpTitleTest 钉住。这里断言它仍然过闸，是为了别把这道闸误当成万能黑名单。
+        assertTrue(PriceNodeMatcher.isDisplayableTitle("叠加以旧换新下单，可再减1964元"))
+    }
+
+    /** 真机商品名（逐字取自 `app/src/test/resources/fixtures` 的六棵树） */
+    private val REAL_PRODUCT_NAMES = listOf(
+        "贵州茅台 飞天茅台 53%vol 酱香型白酒 500ml 2026年",
+        "五粮液 第八代 52度 浓香型白酒 500ml",
+        "泸州老窖 国窖1573 52度 500ml",
+        "泸州老窖 窖龄30年，52度 500mL 6瓶 礼盒装",
+        "LAN兰时光立体紧致修护油蜜面膜敏感肌专用深层水感润养4盒装中秋送女友礼物面膜护肤礼盒",
+        "雷神 【白条24期免息】猎刃S英特尔酷睿i7锐龙9高性能5060独显Ai学生轻薄16英寸电竞游戏本",
+        "自营雷神（ThundeRobot）MIX-G 高性能游戏电竞设计台式电脑mini迷你主机(i9-14900HX RT"
+    )
 }

@@ -140,6 +140,25 @@ object PriceNodeMatcher {
     private val DATEISH = Regex("^[\\d\\s.,%\\-/:年月日]+$")
 
     /**
+     * 散文功能词。为什么不用词表判"评价"（真机 2026-10-06 15:14，取证 `shots/w-case1.png`）：
+     * 浮窗把「十分满意的一次购物 刚开始在网上买电子产品 还有些忐忑不安 收到…」当成了商品名，
+     * 紧接着拿它全网搜了一遍 —— 而评价正文的用词是**开放**的（"满意""忐忑"钉不住下一条），
+     * 句式却是稳定的：商品名是名词堆叠，评价是一句话。
+     *
+     * 阈值取"≥2 个**不同**功能词"而不是 1 个：单个「的」在真实商品名里完全可能出现
+     * （`透气舒适的跑鞋`），散文式的多个不会。七条真机商品名（纯中文/无空格/带逗号三种形态）
+     * 在这条阈值下全部保住，钉子打在 [AccessibilityLabelTest]。
+     *
+     * 这道闸**不**管促销行：`叠加以旧换新下单，可再减1964元` 只有一个「了」，
+     * 治它的是规则与启发式的同尺比分（[titleScore]）。别把它当万能黑名单。
+     */
+    private val PROSE_FUNCTION_WORDS = listOf("的", "了", "很", "还", "也", "都", "就", "在", "我", "些")
+
+    /** 像一句话，不像一个商品名 */
+    fun looksLikeProse(text: String): Boolean =
+        PROSE_FUNCTION_WORDS.count { text.contains(it) } >= 2
+
+    /**
      * 【…】徽章段。剥它而不是让它否决整串的理由（真机 2026-10-03 10:42）：
      * 京东把「【白条24期免息】」这类徽章**写进商品名本身**
      * （`雷神 【白条24期免息】猎刃S英特尔酷睿i7…游戏本`），而 `免息` 在标题黑名单里 ——
@@ -178,6 +197,7 @@ object PriceNodeMatcher {
      *  - **两级都拒绝导航/工具位**（"购物车20"、"首页"、"消息3"）：一/二级只看 ID 语义，
      *    而淘宝把这些节点的 contentDescription 也做成了语义化 id，长度门槛 6 字挡不住（真机脏数据见 AccessibilityLabel）。
      *  - **两级都拒绝竖排逐字文案与读屏说明句**（真机取证见 AccessibilityLabel 第二批注释）。
+     *  - **两级都拒绝"一句话"而不是"一个商品名"**（真机取证见 [PROSE_FUNCTION_WORDS]）。
      */
     fun isPlausibleTitle(text: String, strict: Boolean): Boolean {
         val minLen = if (strict) 9 else 6
@@ -191,6 +211,7 @@ object PriceNodeMatcher {
         val withoutBadges = BRACKET_BADGE.replace(text, "")
         if (withoutBadges.isBlank()) return false
         if (TITLE_BLACKLIST_WORDS.any { withoutBadges.contains(it) }) return false
+        if (looksLikeProse(withoutBadges)) return false
         if (strict && looksLikeSpecLine(text)) return false
         return true
     }
