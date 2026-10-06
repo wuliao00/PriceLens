@@ -18,6 +18,18 @@ package com.pricelens.accessibility
  * 首页不弹窗靠的是"商详分区标记/立购动作"这一关 —— 这类差异只有真机能暴露。
  */
 
+/**
+ * 合成夹具的默认位置。
+ *
+ * 为什么默认值不能再是 null：`extractTitle` 三级启发式从 2026-10-06 起把
+ * `bounds == null` 当作**有含义的信号**（未布局/已被回收的节点，不许当商品名候选，
+ * 真机取证见 [ServiceViewTitleTest]）。手造的树若不写位置，就等于给每个节点都标了
+ * "未布局"，于是一整批老用例集体读不出标题 —— 那不是判据对，是夹具不真实。
+ * 真机上布局好的节点一定有边界框，所以默认给一个非空矩形；
+ * **刻意**要测"没有位置"的用例自己显式传 `bounds = null`。
+ */
+internal val LAID_OUT = NodeBounds(0, 0, 1080, 2408)
+
 /** 文本叶子节点（TextView 形态） */
 internal fun leaf(
     text: String? = null,
@@ -25,7 +37,7 @@ internal fun leaf(
     res: String? = null,
     clickable: Boolean = false,
     cls: String = "android.widget.TextView",
-    bounds: NodeBounds? = null
+    bounds: NodeBounds? = LAID_OUT
 ): NodeSnapshot = NodeSnapshot(text, desc, cls, res, clickable, emptyList(), bounds)
 
 /** 屏幕坐标快捷构造（几何判据的用例都走它，免得满屏写四元组） */
@@ -36,7 +48,7 @@ internal fun container(
     res: String? = null,
     clickable: Boolean = false,
     cls: String = "android.view.ViewGroup",
-    bounds: NodeBounds? = null,
+    bounds: NodeBounds? = LAID_OUT,
     vararg kids: NodeSnapshot
 ): NodeSnapshot = NodeSnapshot(null, null, cls, res, clickable, kids.toList(), bounds)
 

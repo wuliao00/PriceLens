@@ -240,6 +240,13 @@ fun extractTitle(root: NodeSnapshot, platform: ShopPlatform): TitleHit? {
     var bestFromCd = false
     var bestScore = 0
     for (n in nodes) {
+        // **没有位置的节点不参与标题判定**（真机 2026-10-06 19:38，服务视角夹具
+        // `svc_mini_honor_20261006.txt` / `svc_detail_honor_20261006.txt`）：
+        // 京东把未布局的节点（信息流里下一张卡、自提点、物流承诺、竖排加载提示）留在树里，
+        // `boundsCompat()` 把空矩形折成 null —— 这些串能过长度、黑名单、冒号、句式四道闸，
+        // 一旦屏上那件的商品名被回收掉，它们就顶上去，然后被拿去全网搜一遍、落成一条盯价身份。
+        // 只挡三级启发式：一/二级有 resource-id 背书，不存在"漂来的文本"。
+        if (n.bounds == null) continue
         for (raw in listOfNotNull(n.text, n.contentDescription)) {
             val text = PriceNodeMatcher.cleanTitle(raw) ?: continue
             if (!PriceNodeMatcher.isPlausibleTitle(text, strict = true)) continue

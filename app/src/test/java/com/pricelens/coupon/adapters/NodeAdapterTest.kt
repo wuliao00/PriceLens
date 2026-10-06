@@ -112,19 +112,30 @@ class NodeAdapterTest {
      */
     @Test
     fun `没有坐标的碎片按树序拼回一句并且不跨越整句断点`() {
+        // `bounds = null` 必须显式写：合成树的默认值从 2026-10-06 起是 `LAID_OUT`
+        // （标题判据把"没有位置"当成了有含义的信号，见 NodeFixtures 与 §9.29 四），
+        // 这条用例要的恰恰是"没有坐标"那一支。
         val noBounds = container(
+            bounds = null,
             kids = arrayOf(
-                leaf(text = "满"),
-                leaf(text = "199"),
-                leaf(text = "减"),
-                leaf(text = "50")
+                leaf(text = "满", bounds = null),
+                leaf(text = "199", bounds = null),
+                leaf(text = "减", bounds = null),
+                leaf(text = "50", bounds = null)
             )
         )
         val clauses = NodeAdapter.clauses(noBounds)
         assertEquals(listOf("满199减50"), clauses.map { it.text })
         assertEquals(listOf(0), clauses[0].nodePath)
         // 反例：同一父节点里的三个整句不能因为"没有坐标"就被拼成一句（也不能被丢掉）
-        val sentences = container(kids = arrayOf(leaf(text = "¥13199"), leaf(text = "国补领后价"), leaf(text = "¥14699")))
+        val sentences = container(
+            bounds = null,
+            kids = arrayOf(
+                leaf(text = "¥13199", bounds = null),
+                leaf(text = "国补领后价", bounds = null),
+                leaf(text = "¥14699", bounds = null)
+            )
+        )
         assertEquals(listOf("¥13199", "国补领后价", "¥14699"), NodeAdapter.clauses(sentences).map { it.text })
     }
 

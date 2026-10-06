@@ -127,7 +127,14 @@ object DetectionPipeline {
      * 不是每个 a11y 事件都会走到这里，可以接受。
      */
     private fun pickTitle(root: NodeSnapshot, platform: ShopPlatform, result: RuleExtractResult): String? {
-        val fromRule = result.title?.takeIf { PriceNodeMatcher.isDisplayableTitle(it) }
+        val titleHit = result.fields["title"]
+        // 与启发式第三级同一条判据：**没有位置的节点不许当商品名**
+        // （真机服务视角夹具取证，见 [com.pricelens.accessibility.extractTitle] 里那段注释）。
+        // 规则兜底选择器 `^[^¥￥]{10,200}$` 网的就是"任何一段像句子的文本"，未布局节点同样会被网住，
+        // 所以这条必须两边都有，只加一边等于给规则路径留了个后门。
+        val fromRule = titleHit?.value?.takeIf {
+            PriceNodeMatcher.isDisplayableTitle(it) && titleHit.node.bounds != null
+        }
         val fromHeuristic = extractTitle(root, platform)?.text?.takeIf { PriceNodeMatcher.isDisplayableTitle(it) }
         if (fromRule == null) return fromHeuristic
         if (fromHeuristic == null) return fromRule
