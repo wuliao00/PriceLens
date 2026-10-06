@@ -52,7 +52,12 @@ data class WordRule(val token: String, val pattern: Regex) {
  *   不收它的话这个节点既不进候选也不成句，"没有"与"被正确拒掉"就分不开了。
  * @param excludedNumberWords 出现即**不采信**该句里的数字：分期/免息/首付/晒单等数字既不是券也不是价。
  *   共享的那五个词**只有一份**：取自 `PriceNodeMatcher.PRICE_TEXT_EXCLUDE_WORDS`（那边已转 internal），
- *   这里只写本包**多出来**的增量（京豆/销量/库存）。以前两处各抄一遍，改一处就让两个入口分叉。
+ *   这里只写本包**多出来**的增量（京豆/库存/淘金币）。以前两处各抄一遍，改一处就让两个入口分叉。
+ * @param counterNumberWords 角标计数词：出现时**只让它紧贴的那个数字作废**，不牵连整句
+ *   （`销量3万+` 的 3 作废，同一句里的 1579.90 照判到手价）。判据来自真机：京东首页卡片的
+ *   content-desc 把标题、价格、销量拼成一句，整句作废会把真价一起吃掉（评测集 jd-home-04）。
+ *   这张表与 [excludedNumberWords] 的分别不是"哪个词更危险"，而是**它在句子里的角色**：
+ *   京豆/淘金币那类整句都在讲抵扣，销量/库存只是卡片末尾一枚角标。
  * @param platformPrefixes 宿主包名前缀 → 平台 token（`jd|taobao|pdd`）。放在词表而不是写死成 Kotlin
  *   常量表的原因是 [com.pricelens.coupon.model.Extraction.platform] 是字符串而非枚举：宿主集合由远端
  *   规则包决定，接一个新宿主（例如有道/唯品会）应该是推一条规则，而不是发一次 APK。
@@ -78,6 +83,7 @@ data class CouponVocabulary(
     val couponHints: List<String>,
     val resourceHints: List<String>,
     val excludedNumberWords: List<String>,
+    val counterNumberWords: List<String>,
     val platformPrefixes: List<Pair<String, String>>,
     val communityTipWords: List<String>,
     val communityAskWords: List<String>,
@@ -153,7 +159,15 @@ data class CouponVocabulary(
                     WordRule.literal("低至"),
                     WordRule.literal("券后"),
                     WordRule.literal("领后"),
-                    WordRule.literal("实付")
+                    WordRule.literal("实付"),
+                    // 「需用券」：社区价格标签把到手价与"这价要券"写在同一个括号里，
+                    // 而面额根本不出现（`0.99元（需用券）`，评测集 cm-youhui-07 / cm-faxian-06）。
+                    // 它登记成 FINAL 而不是产一张券，是 golden 明写的口径："只说需券不给面额 ⇒ 不该产券"。
+                    // 真样本里它只出现在数字**右边**，所以生效的是尾判（`Roles.tailOf`）；
+                    // 左邻这条路它也认，但 `需用券）价100` 那种形状里「）」不在连接字类里，认不走。
+                    // 词形逐字取自夹具（U+9700 U+7528 U+5238）：这里少一个字或多一个字都不会报错，
+                    // 只会让那两条 golden 一直空着 —— 写词表必须对着字节，不能对着记忆。
+                    WordRule.literal("需用券")
                 ),
                 AmountRole.LIST to listOf(
                     WordRule.literal("原价"),
@@ -163,7 +177,12 @@ data class CouponVocabulary(
                     // 「售价」：真机社区帖里 `目前活动售价5998元` 就靠它把 5998 钉成**价格**。
                     // 不登记它的后果，端侧模型那次真机输出已经演示过：模型把 5998 写成了门槛，
                     // 而复核层当时判不出它的角色、只能降置信收下 ⇒ 一张"满5998减499"的不存在券。
-                    WordRule.literal("售价")
+                    WordRule.literal("售价"),
+                    // 「售价为」：`降价前售价为5999.00元`（评测集 cm-faxian-05）。`售价` 本来就在表里，
+                    // 卡住它的是中间那个「为」—— 而连接字类 `[\s¥￥了至到价]` 里没有「为」，
+                    // 也不该加（那个类是不认领远处数字的唯一保证，`为` 太能出现在别的地方）。
+                    // 所以和 `低至` 同一修法：把整条说法登记成**词**，不动字符类。
+                    WordRule.literal("售价为")
                 ),
                 AmountRole.DROP to listOf(
                     WordRule.literal("降"),
@@ -258,7 +277,13 @@ data class CouponVocabulary(
             // `使用淘金币再省0.12元起，根据账号情况可能抵更多`（评测集 cm-youhui-05）——
             // 「省0.12」的左侧词是「省」，不拦就会多出一张 ¥0.12 的券（评测里它是唯一的误抽之一）。
             // 拦得住是因为这句自己成clause（社区按「。」分句），同帖的 `领取满11减4元优惠券` 不受牵连。
-            excludedNumberWords = PriceNodeMatcher.PRICE_TEXT_EXCLUDE_WORDS + listOf("京豆", "销量", "库存", "淘金币"),
+            excludedNumberWords = PriceNodeMatcher.PRICE_TEXT_EXCLUDE_WORDS + listOf("京豆", "库存", "淘金币"),
+            // 「销量」由**整句作废**降到**邻接作废**（2026-10-06，评测集 jd-home-04 逼出来的）：
+            // 京东首页卡片把「标题 + 人民币1579.90 入会到手价 + 销量3万+」拼进**同一条 content-desc**，
+            // 整句作废等于把这句里唯一的真价一起吃掉 —— 而 golden 标的就是 1579.9。
+            // 库存/京豆/淘金币**留在整句**那一档：它们各自有"整句都在讲囤货/抵扣"的真样本
+            // （`最高返659京豆`、`虚拟货币抵扣` 那两条钉子测试），目前没有一个反证要求降级。
+            counterNumberWords = listOf("销量"),
             platformPrefixes = listOf(
                 "com.jingdong" to "jd",
                 "com.taobao" to "taobao",
@@ -267,7 +292,11 @@ data class CouponVocabulary(
                 "com.yangkeduo" to "pdd"
             ),
             // 原 PostAdapter.TIP_WORDS：命中且句里有数字 ⇒ 爆料帖，才进抽取
-            communityTipWords = listOf("到手", "券后", "领", "满减", "立减", "无门槛", "叠", "凑单", "红包", "补贴", "实付", "售价", "活动价"),
+            // 「需用券」是社区价格标签的说法（`0.99元（需用券）`，评测集 cm-youhui-07 / cm-faxian-06）：
+            // 此前这条标签既没有券动词也没有价词，`classifyKind` 判成闲聊 ⇒ **整条不进抽取**，
+            // 于是那句明明写着到手价，到手价槽却一直空着。「需用券」不是券动词，
+            // 它是"这价要用券才拿得到"的爆料形状，进抽取后按形状只产到手价、不产券（面额根本没写）。
+            communityTipWords = listOf("到手", "券后", "领", "满减", "立减", "无门槛", "叠", "凑单", "红包", "补贴", "实付", "售价", "活动价", "需用券"),
             // 原 PostAdapter.ASK_WORDS：没有爆料形态时按问句处理（`？` 规整后是 `?`，两条都留是历史形态）
             communityAskWords = listOf("怎么", "如何", "能不能", "可以吗", "求推荐", "有没有", "求助", "请问", "？", "?"),
             zeroThresholdWords = listOf("无门槛"),

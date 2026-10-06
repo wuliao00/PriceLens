@@ -20,3 +20,6 @@ s*.png
 _del*.tmp
 _release_notes_*.md
 _cleanup.ps1
+
+# 评测打分报告（tools/eval_coupons.py --report 的输出；CI 里作为构建产物上传，不入库）
+/reports/

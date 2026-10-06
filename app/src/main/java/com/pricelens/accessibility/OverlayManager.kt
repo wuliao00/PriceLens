@@ -369,7 +369,15 @@ object OverlayManager {
         insetTop = 0
         insetBottom = 0
         ballSidePx = 0
-        onLeftProductPage()
+        // stop() **不能**走 onLeftProductPage() 的球形态宽限分支：那一条要 `serviceScope?.launch`，
+        // 而 scope 在上面已经被置 null ⇒ launch 拿到 null、hide() 永不执行。
+        // 后果不只是"球留在屏上"：OverlayManager 是进程级单例，`overlayView` 不清空，
+        // 服务被 ROM 重绑之后 show() 撞进 `if (overlayView != null) return`，
+        // **这个进程从此再也不会出浮窗** —— 症状与"检测没命中"完全一样，排查时会一路去查判据。
+        // 服务都拆了，1.5 秒宽限没有意义，直接拆窗。
+        content = null
+        bundle = null
+        hide()
     }
 
     /**

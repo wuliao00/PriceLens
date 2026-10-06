@@ -110,7 +110,20 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
     // "哪几路可用"是判据，写在纯函数 `LocalCouponInputPlanner.plan` 里（JVM 可测边界），
     // 这里只取当下时钟、按判据把每一路跑起来，再 mergeAll **做加法**
     // （同面额同门槛只算一张）—— 任何一路都不许因为别路有东西就被换掉。
-    val plan = LocalCouponInputPlanner.plan(capture, clipboard, keyword, SystemClock.elapsedRealtime(), detectedSignature)
+    // 时钟放在**这一层**，而且就喂给 `plan`：那道 120 秒新鲜度闸读的就是它。
+    // 旧写法把滴答留在子组件 `LocalGroupHeader` 里（本意只是让"12 秒前"别变成谎话），
+    // 于是父组件的 `plan` 一直停在第一次重组那一刻 —— 树早就过期了，「页面」芯片还挂在屏上，
+    // 与 `CouponLocalLogic` 承诺的"超过 MAX_AGE_MS 那一路根本不参与"正好相反。
+    // 只在有树的时候滴：没有树就没有年龄可走，也不必每 5 秒白重组一次。
+    var treeClock by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(capture) {
+        if (capture == null) return@LaunchedEffect
+        while (true) {
+            delay(TREE_AGE_TICK_MS)
+            treeClock = SystemClock.elapsedRealtime()
+        }
+    }
+    val plan = LocalCouponInputPlanner.plan(capture, clipboard, keyword, treeClock, detectedSignature)
     // 一次性诊断（#73 的真机验收卡在这）：一次分辨两种解释 ——
     // "槽里根本没有树"（服务被系统重绑 → onDestroy 清了）与"有树但两串签名对不上"（还有第二处算法）。
     // 留着它有长期价值：这一路不生效时，屏幕上只有一句"暂时没有可读的内容"，什么都看不出来。
@@ -144,10 +157,6 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
         failed = couponsAsync is AsyncValue.Error<*>,
         remoteCouponCount = coupons.size
     )
-    if (blocks.shimmer) {
-        ShimmerList()
-        return
-    }
     if (couponsAsync is AsyncValue.Error<*>) {
         // 失败：友好提示。**不提前退出**——本机组读的是页面树/剪贴板/关键词，和网络无关，
         // 远端挂了它照样有东西可说（旧代码在这里 return，等于用一次网络失败把两条路一起藏掉）
@@ -193,6 +202,16 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
             contentPadding = PaddingValues(Dims.SpacingXL),
             modifier = Modifier.weight(1f)
         ) {
+            // 骨架屏是列表里的**一项**，不是一段提前 `return`：
+            // `CouponSectionShape` 在 loading 时仍然写 `localGroup = true`（`CouponLocalLogicTest` 钉着），
+            // 而这里旧版的 `ShimmerList(); return` 会把与网络无关的本机组整段藏掉 ——
+            // 搜索那几轮里屏幕上什么都不说，用户分不清"这个功能没做"还是"没识别到"（#71 同一类病）。
+            if (blocks.shimmer) {
+                item(key = "remote_shimmer") {
+                    ShimmerList()
+                    Spacer(Modifier.height(Dims.SpacingL))
+                }
+            }
             // 委托属性无法智能转换，先取本地值（同时避免 !!）
             val applicableNet = netPrice
             if (applicableNet != null) {
@@ -241,7 +260,7 @@ fun ProductCouponSection(searchViewModel: SearchViewModel) {
             // 用户无法区分"这功能没做 / 被我关了 / 这次没识别到"——静默没有正是这一批要消灭的形状。
             if (blocks.localGroup) {
                 item(key = "local_header") {
-                    LocalGroupHeader(plan.inputs, capture?.capturedAtElapsedMs)
+                    LocalGroupHeader(plan.inputs, capture?.capturedAtElapsedMs, treeClock)
                 }
                 if (localRows.isEmpty()) {
                     item(key = "local_empty") {
@@ -357,20 +376,12 @@ private fun CouponCard(coupon: GwdangApi.Coupon, onCopy: () -> Unit) {
 
 /** 本机识别组的小标题：明说这组是"从当前文案里识别的"，与上面远端券列表是两回事 */
 @Composable
-private fun LocalGroupHeader(inputs: List<LocalCouponInputPlanner.Input>, treeCapturedAtMs: Long?) {
+private fun LocalGroupHeader(inputs: List<LocalCouponInputPlanner.Input>, treeCapturedAtMs: Long?, nowMs: Long) {
     val context = LocalContext.current
-    // 树龄要**自己走**：#72 之后页面树不再"离开商详就清"，而是活到新鲜度窗口过为止。
+    // 树龄的时钟由调用方给（`treeClock`）：同一层还要用它算 `plan`，两处读两个钟就会自相矛盾 ——
+    // 上一版这里自己起滴答，父组件的 plan 却停在第一次重组那一刻，芯片过期了还挂在屏上。
     // 用户可能就在这一页停着不动，那时写"12 秒前"而实际已经是两分钟前 —— 那是说谎，
     // 而这一行存在的全部理由就是让用户能判断"读的东西是不是我现在看的这页"。
-    var now by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
-    if (treeCapturedAtMs != null && LocalCouponInputPlanner.Input.PAGE_TREE in inputs) {
-        LaunchedEffect(treeCapturedAtMs) {
-            while (true) {
-                delay(TREE_AGE_TICK_MS)
-                now = SystemClock.elapsedRealtime()
-            }
-        }
-    }
     Column {
         Spacer(Modifier.height(Dims.SpacingL))
         Text(stringResource(R.string.coupon_local_header), style = MaterialTheme.typography.titleSmall)
@@ -387,7 +398,7 @@ private fun LocalGroupHeader(inputs: List<LocalCouponInputPlanner.Input>, treeCa
             } else {
                 context.getString(
                     R.string.coupon_local_source_inputs,
-                    inputs.joinToString(" + ") { inputLabel(context, it, treeCapturedAtMs, now) }
+                    inputs.joinToString(" + ") { inputLabel(context, it, treeCapturedAtMs, nowMs) }
                 )
             },
             style = MaterialTheme.typography.bodySmall,

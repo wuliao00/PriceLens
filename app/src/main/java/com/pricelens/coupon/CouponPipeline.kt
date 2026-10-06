@@ -20,7 +20,10 @@ import com.pricelens.coupon.slots.CouponVocabulary
 import com.pricelens.coupon.slots.ScopeWords
 import com.pricelens.coupon.slots.StateWords
 import com.pricelens.coupon.slots.followedByRatioUnit
+import com.pricelens.coupon.slots.isPriceRole
 import com.pricelens.coupon.slots.of
+import com.pricelens.coupon.slots.ratioCappedAmount
+import com.pricelens.coupon.slots.tailOf
 
 /**
  * 三入口共用的抽取管线（**"一个数字进哪个槽"在这里决定**，适配器只负责把句子喂进来）。
@@ -136,6 +139,10 @@ internal object CouponPipeline {
                 // 评测集里前者被抽成过一张 ¥15 的券（误抽），而误抽比漏抽更贵 ——
                 // 它会带着正确的 scope/state 一起出现，看起来像真券。
                 if (followedByRatioUnit(clause.text, found.range.last + 1)) continue
+                // 角标计数词紧贴的那个数字（`销量3万+` 的 3）不是价格也不是券：只有它作废，
+                // 同句其余数字照判 —— 京东首页把标题/价格/销量拼进同一条 content-desc，
+                // 整句作废会连真价一起吃掉（评测集 jd-home-04，2026-10-06）
+                if (CouponHints.numberIsCounterMark(clause.text, start, vocabulary)) continue
                 val value = found.value.replace(",", "").toDoubleOrNull() ?: continue
                 // 角色的优先级不是风格问题：**价格词是比模板形状更强的信号**。
                 // 尺子在数字左侧认出 售价/原价/划线/到手/券后/领后/降/跌 这类词时，那个数字就是价格，
@@ -143,7 +150,18 @@ internal object CouponPipeline {
                 // 2026-10-05 全量评测抓到 `活动售价3499元,参与补贴…` 里的 3499 变成了券（同时 list 槽空掉），
                 // 而这条正是 PLB110 上"模型把 5998 写成门槛"的同一个坑，只不过这次是我自己踩的。
                 val judged = AmountRole.of(clause.text, start, vocabulary)
-                val role = if (judged != null && judged.isPriceRole()) judged else declared[start]?.role ?: judged
+                val judgedRole = if (judged != null && judged.isPriceRole()) judged else declared[start]?.role ?: judged
+                // 左邻尺子与模板**都没认出角色**时，才轮到"价词写在数字右边"那条尾判（tailOf）。
+                // 这个次序就是闸本身：`满1000减100，到手价5499元` 的 100 右边紧贴「到手」，
+                // 尾判单看会给它 FINAL —— 但 100 已被左邻的 `减` 认成 DISCOUNT，回落分支走不到它。
+                // 另一处保险在 tailOf 里：它的取值域只有价格三槽，券面额与门槛不可达，
+                // 所以这条不会改变券级 P/R/F1，只补到手价槽。
+                val role = judgedRole ?: AmountRole.tailOf(clause.text, found.range.last + 1, vocabulary)
+                // **比例封顶不是券**：`补贴15%起减500元` 的 500 是"最高减到"的上限，
+                // 而 `国家补贴15%减500元` 的 500 是活动明写的减免额 —— 分野就是那个「起」。
+                // 两条都在 golden 里（cm-faxian-01/02 要产券，cm-faxian-04 与它的 clipboard 副本不许），
+                // 这条闸就是评测里仅剩的两个 FP（合计 P 0.9474）的去处。判据见 `slots.RATIO_CAP_BEFORE`。
+                if (role == AmountRole.DISCOUNT && ratioCappedAmount(clause.text, start)) continue
                 when (role) {
                     AmountRole.DISCOUNT, AmountRole.THRESHOLD -> discounts.add(AmountValue(value, start, found.range.last + 1, role))
                     AmountRole.FINAL, AmountRole.LIST, AmountRole.DROP -> prices.add(AmountValue(value, start, found.range.last + 1, role))
@@ -253,13 +271,6 @@ internal object CouponPipeline {
      */
     private fun thresholdValue(explicit: Double?, clauseText: String, vocabulary: CouponVocabulary): Double? =
         explicit ?: if (vocabulary.zeroThresholdWords.any { clauseText.contains(it) }) 0.0 else null
-
-    /**
-     * 这个角色是不是**价格**（到手/标价/降幅）。
-     * 它是"模板不许把这个数字改成券"的判据 —— 价格词写在数字左边就是硬证据，
-     * 而模板只看见形状（见 consume 里那段 2026-10-05 的说明）。
-     */
-    private fun AmountRole.isPriceRole(): Boolean = this == AmountRole.FINAL || this == AmountRole.LIST || this == AmountRole.DROP
 
     /** 这张券**自己那一段**原文（上一张券结束处 → 本张券最后一个数字） */
     private fun segmentOf(clause: Clause, from: Int, to: Int): String {

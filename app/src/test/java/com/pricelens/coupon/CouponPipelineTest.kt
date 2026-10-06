@@ -1,5 +1,7 @@
 package com.pricelens.coupon
 
+import com.pricelens.coupon.adapters.PostAdapter
+import com.pricelens.coupon.adapters.PostKind
 import com.pricelens.coupon.model.AmountRole
 import com.pricelens.coupon.model.CouponScope
 import com.pricelens.coupon.model.CouponSlot
@@ -88,10 +90,15 @@ class CouponPipelineTest {
     @Test
     fun `分期与免息句子里的数字一律不采信`() {
         assertTrue(consume("24期免息 满1000减100").slots.isEmpty())
-        // 京豆/销量/库存是本包按真机补的增量，不在 accessibility 那五个词里
+        // 京豆/库存/淘金币是本包按真机补的整句增量，不在 accessibility 那五个词里
         assertTrue(consume("最高返659京豆 满1000减100").slots.isEmpty())
-        assertTrue(CouponVocabulary.DEFAULT.excludedNumberWords.containsAll(listOf("京豆", "销量", "库存", "分期", "免息")))
-        // 正例对照：同一句券文案摘掉排除词就该出一张券（证明不是"永远不出券"）
+        assertTrue(CouponVocabulary.DEFAULT.excludedNumberWords.containsAll(listOf("京豆", "库存", "淘金币", "分期", "免息")))
+        // 「销量」不在整句那一档：京东首页的 content-desc 一条里同时有真价与销量角标，
+        // 整句作废会连价一起吃掉（评测集 jd-home-04）。它走**邻接作废**那张表。
+        assertTrue("「销量」必须已经离开整句作废那张表", "销量" !in CouponVocabulary.DEFAULT.excludedNumberWords)
+        assertTrue(CouponVocabulary.DEFAULT.counterNumberWords.contains("销量"))
+        assertEquals(1579.9, consume("人民币1579.90 入会到手价 销量3万+").price.finalPrice!!, 0.0)
+        // 正例对照：整句作废那一档没被削弱 —— 同一句券文案摘掉排除词才出一张券
         assertEquals(1, consume("满1000减100").slots.size)
         assertEquals(100.0, oneSlot("满1000减100").discount!!, 0.0)
     }
@@ -337,5 +344,90 @@ class CouponPipelineTest {
         assertTrue("3499 是售价，不许进券槽，实际=$values", values.none { it == 3499.0 })
         assertEquals("售价槽不许静默变空", 3499.0, extraction.price.listPrice!!, 0.0)
         assertTrue("17.49 是真券，必须还在，实际=$values", values.contains(17.49))
+    }
+
+    /**
+     * 尾判接进管线之后收下的那五条原文（2026-10-06，评测 `[价格槽对照]` 里
+     * `final … → n/a` 的全部四条 + `list … → n/a` 的一条）。
+     * 这五句的共同形状是**价词写在数字后面**（或中间隔一个「为」），
+     * 左邻尺子结构性看不见，所以到手价槽在评测里一直空着。
+     */
+    @Test
+    fun `价词在后的真机原文落进到手价槽，售价为止的那条落进标价槽`() {
+        assertEquals(92.9, consume("¥92.9，到手价").price.finalPrice!!, 0.0)
+        assertEquals(11499.0, consume("¥11499，国补领后价划线价¥12999").price.finalPrice!!, 0.0)
+        assertEquals(
+            "京东首页把标题/价格/销量拼进同一条 content-desc（评测集 jd-home-04 的原文形状），" +
+                "「销量」只作废它紧贴的 3，不作废整句",
+            1579.9,
+            consume("迪卡侬公路车 人民币1579.90 入会到手价 销量3万+").price.finalPrice!!,
+            0.0
+        )
+        // 反面对照：那枚角标自己的数字（3）不许变成价格
+        assertNull(consume("销量3万+").price.finalPrice)
+        assertNull(consume("销量3万+").price.listPrice)
+        assertEquals(0.99, consume("0.99元（需用券）").price.finalPrice!!, 0.0)
+        assertEquals(5999.0, consume("降价前售价为5999.00元").price.listPrice!!, 0.0)
+        // 这五句全是"只有价格没有券"：券槽一位都不许多出来（误抽比漏抽贵）
+        assertTrue(consume("¥92.9，到手价").slots.isEmpty())
+        assertTrue("「需用券」只说这价要券，不给面额 ⇒ 不许产券", consume("0.99元（需用券）").slots.isEmpty())
+        assertTrue(consume("降价前售价为5999.00元").slots.isEmpty())
+    }
+
+    /**
+     * 管线里那条**次序即闸**：尾判只在左邻尺子与模板都没认出角色时才回落。
+     * `满1000减100，到手价5499元` 是最危险的形状 —— 100 的右边紧贴「到手」，
+     * 尾判单看会给它 FINAL；但 100 已经被左边的「减」认成 DISCOUNT，回落分支走不到它。
+     * 这条如果哪天变红，意思是到手价槽里混进了券面额，而不是"尾判太保守"。
+     */
+    @Test
+    fun `满1000减100后面那句到手价5499里的 100 不许被尾判认领成到手价`() {
+        val outcome = consume("满1000减100，到手价5499元")
+        assertEquals("到手价必须是 5499，不是券面额 100", 5499.0, outcome.price.finalPrice!!, 0.0)
+        assertEquals("期望恰好一张券，实际=${outcome.slots}", 1, outcome.slots.size)
+        assertEquals(100.0, outcome.slots[0].discount!!, 0.0)
+        assertEquals(1000.0, outcome.slots[0].threshold!!, 0.0)
+    }
+
+    /**
+     * 比例封顶不产券（2026-10-06）—— 评测里仅剩的两个 FP 是同一条形状在两个入口各计一次：
+     * `参与补贴15%起减500元` 的 500 被认成券面额。
+     *
+     * golden 自己就把分野写死了，所以正反例必须成对钉：
+     *  - `国家补贴15%减500元`（cm-faxian-01/02）**要产券** —— 那是活动明写的减免额；
+     *  - `补贴15%起减500元`（cm-faxian-04 及其 clipboard 副本）**不许产券** —— 一个「起」字
+     *    把 500 变成比例的封顶。少了任何一边，这条量具就退化成"照样本凑正则"。
+     */
+    @Test
+    fun `比例后面带起的数字是封顶不是券，不带起的照旧产券`() {
+        val capped = consume("京东此款目前活动售价3499元，参与补贴15%起减500元，PLUS专享立减17.49元优惠活动，下单1件，实付低至2981.51元。")
+        val cappedDiscounts = capped.slots.map { it.discount }
+        assertTrue("500 是 15% 比例的封顶，不许进券槽，实际=$cappedDiscounts", cappedDiscounts.none { it == 500.0 })
+        assertTrue("17.49 是真立减，必须还在，实际=$cappedDiscounts", cappedDiscounts.contains(17.49))
+        assertEquals("价格槽一位不许因为这条闸而变空", 3499.0, capped.price.listPrice!!, 0.0)
+        assertEquals(2981.51, capped.price.finalPrice!!, 0.0)
+
+        // 正例对照：同一句去掉「起」，500 就是减免额，必须产券
+        val stated = consume("参与官方限时补贴减499元，国家补贴15%减500元优惠活动")
+        val statedDiscounts = stated.slots.map { it.discount }
+        assertTrue("15%减500 没有「起」，是明写的减免额，实际=$statedDiscounts", statedDiscounts.contains(500.0))
+        assertTrue(statedDiscounts.contains(499.0))
+    }
+
+    /**
+     * 社区那条"只说需用券、不给面额"的价格标签此前**整条不进抽取**
+     * （`classifyKind` 里没有能认出它的爆料词 ⇒ 判成闲聊），到手价槽于是永远空着。
+     * 这里走 `fromPost` 整条链，量的就是"它到底进没进来"，而不只是分句之后的判定。
+     */
+    @Test
+    fun `需用券的标签进到抽取后只产到手价不产券`() {
+        val raw = "0.99元（需用券）"
+        assertEquals("标签文本得先是爆料帖，否则整条不进抽取", PostKind.TIP, PostAdapter.classifyKind(raw))
+        val extraction = CouponExtractor.fromPost(raw, 0L)
+        assertEquals(0.99, extraction.price.finalPrice!!, 0.0)
+        assertTrue(
+            "标签只说这价要用券、没写面额 ⇒ 一张券都不许产，实际=${extraction.coupons.map { it.discount }}",
+            extraction.coupons.isEmpty()
+        )
     }
 }

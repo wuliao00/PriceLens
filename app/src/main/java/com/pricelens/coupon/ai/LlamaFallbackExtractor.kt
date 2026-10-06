@@ -4,6 +4,7 @@ import com.pricelens.coupon.model.AmountRole
 import com.pricelens.coupon.slots.CouponVocabulary
 import com.pricelens.coupon.slots.followedByRatioUnit
 import com.pricelens.coupon.slots.of
+import com.pricelens.coupon.slots.ratioCappedAmount
 
 /**
  * 端侧模型的兜底实现（`FallbackExtractor` 的一个真身）。
@@ -78,6 +79,10 @@ class LlamaFallbackExtractor(
     private fun numberStart(text: String, value: Double): Int? {
         for (found in NUMBER.findAll(text)) {
             if (followedByRatioUnit(text, found.range.last + 1)) continue
+            // 与管线共用**同一把**比例封顶闸：`补贴15%起减500元` 的 500 在原文里确实有，
+            // 但它是"最高减到"的上限不是能领的券 —— 模型说它是券也不采信，
+            // 否则规则那条路明确拒掉的形状，换个入口就漏进结果里了
+            if (ratioCappedAmount(text, found.range.first)) continue
             val parsed = found.value.replace(",", "").toDoubleOrNull() ?: continue
             if (parsed == value) return found.range.first
         }

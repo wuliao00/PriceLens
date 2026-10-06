@@ -16,6 +16,7 @@ import com.pricelens.data.remote.SmzdmApi
 import com.pricelens.data.remote.SourceUnreachableException
 import com.pricelens.data.repository.CurveProvenance
 import com.pricelens.data.repository.PriceRepository
+import com.pricelens.domain.NetPrice
 import com.pricelens.domain.PriceAdvice
 import com.pricelens.domain.ProductCandidate
 import com.pricelens.domain.ProductCandidateResolver
@@ -351,14 +352,7 @@ class SearchViewModel @Inject constructor(
                         jdSku != null || QueryRelevance.isRelevant(keyword, it.title) ||
                             SearchQueryCleaner.titleOverlap(keyword, it.title) >= STALE_OVERLAP_FLOOR
                     }
-                    val net = product?.let { p ->
-                        val best = coupons.maxByOrNull { it.amount }
-                        if (best != null && p.price >= best.threshold) {
-                            p.price - best.amount
-                        } else {
-                            null
-                        }
-                    }
+                    val net = product?.let { NetPrice.of(it.price, coupons) }
                     _netPrice.value = net
                 },
                 launch {
