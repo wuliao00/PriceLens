@@ -16,6 +16,7 @@ import com.pricelens.data.remote.SmzdmApi
 import com.pricelens.data.remote.SourceUnreachableException
 import com.pricelens.data.repository.CurveProvenance
 import com.pricelens.data.repository.PriceRepository
+import com.pricelens.domain.DetectionContext
 import com.pricelens.domain.NetPrice
 import com.pricelens.domain.PriceAdvice
 import com.pricelens.domain.ProductCandidate
@@ -211,13 +212,20 @@ class SearchViewModel @Inject constructor(
     fun search(keywordRaw: String) {
         val keyword = keywordRaw.trim()
         if (keyword.isEmpty()) return
+        // 必须在改 _keyword 之前问：这一句和界面上已经是的那一句是不是同一件商品
+        // （「看详情」传的是候选标题而不是关键词，所以还要问"是不是这一轮已经站住脚的那件"）
+        val matchedTitle = ((resolver.candidate.value as? AsyncValue.Success<*>)?.data as? ProductCandidate)?.title
+        val sameContext = DetectionContext.survivesSearch(_keyword.value, keyword, matchedTitle)
         searchJob?.cancel() // 新搜索取消旧 Job
         _keyword.value = keyword
         _loading.value = true
         // A2 生命周期复位：换商品时清掉"上一个商品的实时价/来源/到手价"。
         // 旧版三者从无复位 → 手动搜 B 后概览仍显示"本机京东账号 · 实时价 ¥A"（A 的价标在 B 上）。
         // #73 把同一个道理用到**页面树**上：搜 B 之后 A 那一页的券也不许再挂在这里。
-        _detectedSignature.value = null
+        // 但"同一句关键词再搜一轮"**不算换商品**：概览页点「看详情」进详情页时就是会再搜一轮
+        // （MainActivity 的详情页入口），无条件清零会把浮窗 CTA 带上来的身份在那一瞬间抹掉，
+        // 「页面」芯片于是结构上永远出不来（2026-10-06 真机走通整条链才发现，见 §9.25）。
+        if (!sameContext) _detectedSignature.value = null
         _livePrice.value = null
         _realtimeSource.value = null
         _netPrice.value = null
