@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # runner 自带 python3 也够用；显式装是为了版本可复现，且不引入任何第三方依赖。
       - name: 设置 Python
