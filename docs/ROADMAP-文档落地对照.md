@@ -1802,3 +1802,54 @@ files/dumpreq` → 下一个无障碍事件把整棵树写进 `files/tree-<ts>.t
 那是另一个问题，不是取树问题。
 
 #9 到此按"证据不支持"结案；出现新样本（视口外漂进来的真标题、或某种单商品迷你页）再开。
+
+
+### 9.31 第二十八批（2026-10-07）——2.8.0.2 发出去了；发版当天撞出一条"暖缓存必然假红"的 CI 缺陷
+
+**一、按记忆里那条固定顺序走的**（`pricelens-release-cut-ordering`）：
+①版本字段提交 → ②合 main 推双远端 → ③切 tag/release 触发 CI 签名构建 →
+④下载产物核 sha256 + **签名指纹** + 包内版本 → ⑤传 Gitee `dist` 孤儿分支 → ⑥回填 `update.json`。
+每一步的取证：
+
+| 步 | 事实 |
+|---|---|
+| ① | `versionCode=23 versionName="2.8.0.2"` 在 HEAD 里；`git status` 只剩两处一贯不入库的 TEMP |
+| ② | `main` 快进 60 个提交到 `952db35`，双远端都推上（`--ff-only`，无合并提交） |
+| ③ | release `v2.8.0.2` 触发 run `37586324988`，Android job 8m53s 绿（含真 runner 上的全量 `test` + 找券门禁） |
+| ④ | 产物 3,304,679 B，`sha256 d90bbdcd…fcb769` **与 GitHub 自己报的 digest 一致**；`aapt2` 读包内 `versionCode='23' versionName='2.8.0.2'`、内置规则 `"version": 4`（与 `rules/manifest.json` 记的 v4 与 sha256 逐字一致） |
+| ⑤ | `dist` 分支**累加**提交（不 `git rm`，旧版直链继续有效），10 个包；双远端都推 |
+| ⑥ | 两条直链先 curl 核对再发清单：Gitee raw 取回 3,304,679 B / `d90bbdcd…` **完全吻合**；然后才提交 `update.json` |
+
+**签名身份是这次最该核的一条**：新包证书 `SHA-256 c759cbb8ca2bda75799d75336d615390ec5737d83cb588703bef09821205b5e0`
+（DN `CN=wuliao00, OU=PriceLens`），与从 `dist` 下载回来的 **2.8.0.1** 逐字相同 ⇒ 老设备可覆盖安装、数据不丢。
+这一步不能靠"应该是同一个 key 吧"，`apksigner verify --print-certs` 两遍即可。
+顺手也验了记忆里的另一条：2.8.0.1 的 `update.json` 记录的 sha256 与实际下载到的**一致**，
+说明这条链子以前没坏。
+
+**二、本机出不了正式包**（下次别再假设能）。`docs/DEVELOPMENT.md` 的发布段写的是
+"本机 `local.properties` 四行指向 `~/.android/PriceLens-release.keystore`"，但这台机器上
+**那把钥匙不存在**——`.android/` 里只有 `debug.keystore`。所以签名只能走 CI 的
+`PRICLENS_STORE_B64` 那一路（四个 secret 都在，2026-10-01 配的，`HAS_RELEASE_KEYS=true`）。
+**绝不能用 debug.keystore 顶**：文档里写着 v2.7.0 起正式包换成了独立密钥，
+debug 签名既带 `android:debuggable`、又与线上包签名不同，装上去就是"用户只能卸载重装"。
+
+**三、发版当天撞出的 CI 缺陷：暖缓存必然假红。**同一棵树，release 事件那次 8m53s **绿**，
+紧接着推 main 那次 59 秒 **红**，报的是"预测文件没生成"。根因：
+
+```
+> Task :app:testDebugUnitTest FROM-CACHE
+BUILD SUCCESSFUL in 40s
+```
+
+Gradle 构建缓存命中时只恢复任务**已声明的输出**，而 `app/build/coupon-predictions.jsonl`
+是 `CouponGoldenPredictionTest` 自己写进 build 目录的副产物、**没有被声明** ⇒
+暖缓存那一轮它压根不存在，于是门禁的"缺文件即红"守卫炸了。
+守卫本身是对的（宁可红，也不要 `if: 文件存在才跑` 那种静默跳过），
+缺的是把两件事分开：**"没测"** 和 **"测过但产物没落盘"**。
+修法（`26bd08d`）：缺文件时先 `./gradlew :app:testDebugUnitTest --tests "*CouponGoldenPredictionTest*" --rerun`
+强制执行那个测试，再判 —— 既不假绿也不假红。
+
+**四、两条与本批有关但没动的**：① GitHub 的 release 直链在这台机器上 `curl` 返回 000
+（与推 GitHub 时偶发的 `Failed to connect` 同源），但资产存在（`gh` API 确认 3,304,679 B）——
+客户端主源是 Gitee，且清单里 Gitee 排第一，所以不影响用户；② tag 只在 GitHub，
+与 `v2.8.0.1` 的既有状态一致（Gitee 上一个 tag 都没有），所以没往 Gitee 补推。
