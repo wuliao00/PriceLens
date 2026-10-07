@@ -75,9 +75,21 @@ jobs:
       # 任一 source 的 F1 相对基线回退 > 0.01 就红。
       # 两个文件缺任何一个都**直接红**，不写 `if: 文件存在才跑` —— skipped 的步骤看起来和绿的一样，
       # 但它其实是"什么都没测"（这一步在 2026-10-05 之前就是这么静默地从来没跑过）。
+      #
+      # ⚠ 但"缺文件"有两种成因，必须分开处理（2026-10-07 发 2.8.0.2 时踩到）：
+      #   上面那步 `./gradlew test` 命中 Gradle **构建缓存**时，`:app:testDebugUnitTest FROM-CACHE`
+      #   只会恢复该任务**已声明的输出**，而 `coupon-predictions.jsonl` 是测试自己写进 build 目录的
+      #   副产物、没被声明 ⇒ 缓存命中的那一轮它根本不存在。表现是：冷缓存的 run 绿、暖缓存的 run 红，
+      #   而代码一模一样（release 事件那次 8m53s 绿、紧接着的 main push 那次 59s 红）。
+      #   所以缺文件时**先把那个测试真跑一遍**再判，而不是直接红，也不是跳过：
+      #   `--rerun` 让该任务无视 up-to-date 与缓存强制执行，门禁重新变成"测过的"。
       - name: 找券真实流水线打分（相对 baseline 回退 > 0.01 即红）
         run: |
           mkdir -p reports
+          if [ ! -f app/build/coupon-predictions.jsonl ]; then
+            echo "::notice::预测文件不在（多半是 test 任务 FROM-CACHE，未声明输出没被恢复），强制执行一次"
+            ./gradlew :app:testDebugUnitTest --tests "*CouponGoldenPredictionTest*" --rerun --no-daemon
+          fi
           test -f app/build/coupon-predictions.jsonl || { echo "::error::预测文件没生成：CouponGoldenPredictionTest 没跑或输出路径漂了"; exit 1; }
           test -f tools/golden/baseline.json || { echo "::error::没有 tools/golden/baseline.json，门禁无基线可比（生成方式见 docs/DEVELOPMENT.md）"; exit 1; }
           python3 tools/eval_coupons.py \
