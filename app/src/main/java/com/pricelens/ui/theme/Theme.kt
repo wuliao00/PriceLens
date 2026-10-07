@@ -80,6 +80,12 @@ object Dims {
     val ThumbRow = 40.dp
 
     /**
+     * 可点目标的**触控下限**。数值不在这写第二份：与 [RowBudget.TOUCH_MIN_DP]（Material 的 48dp）同源，
+     * 之前它只被行高核算用着，组件侧各写各的 size ⇒ 小按钮（banner 的关闭键）会掉到 40dp 以下。
+     */
+    val TouchMin = RowBudget.TOUCH_MIN_DP.dp
+
+    /**
      * 概览走势条高度：详情大曲线在盯价页是 200dp，概览只回答"最近是在涨还是在跌"。
      * 88dp = 视口逻辑高（788.57dp）的 11%，仍高于 Canvas 上下留白（2×12dp）+ 可辨形状所需。
      */

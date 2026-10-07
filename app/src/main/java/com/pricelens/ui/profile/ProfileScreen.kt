@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -61,7 +61,6 @@ import com.pricelens.ui.components.PriceBadge
 import com.pricelens.ui.components.PriceCard
 import com.pricelens.ui.components.SectionHeader
 import com.pricelens.ui.layout.CompactTileRow
-import com.pricelens.ui.overview.SearchViewModel
 import com.pricelens.ui.price.PriceWatchViewModel
 import com.pricelens.ui.theme.BadgeTone
 import com.pricelens.ui.theme.Dims
@@ -72,12 +71,16 @@ import com.pricelens.util.UrlOpener
 /**
  * 个人页（“我的”）：资料头 + 统计 + 搜索历史 + 我的收藏 + 盯价管理 + 设置入口。
  * 阶段4：文案全走 strings.xml、区块标题统一 SectionHeader、空态走 EmptyText。
+ *
+ * [onSearchKeyword] 由 MainActivity 提供，而不是本页自己调 `searchViewModel.research`：
+ * 搜索框在顶栏、结果在概览页，**这一页搜完是看不见结果的**。真机复核（2026-10-07）点
+ * 历史词/收藏行后页面纹丝不动，只有键盘收起——用户没有理由相信自己已经搜了。
+ * 所以"发起搜索"这个动作必须连带把概览页带过去，这个决定留在知道 tab 在哪的一层。
  */
 @Composable
-fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
+fun ProfileScreen(onOpenSettings: () -> Unit, onSearchKeyword: (String) -> Unit, onOpenScripts: () -> Unit = {}) {
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val priceWatchViewModel: PriceWatchViewModel = hiltViewModel()
-    val searchViewModel: SearchViewModel = hiltViewModel()
 
     LaunchedEffect(Unit) { profileViewModel.refreshCacheStats() }
 
@@ -98,7 +101,7 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
                 pinnedCount = pinned.size,
                 // "盯价中"只算未暂停的（暂停项仍在列表里可见、可恢复）
                 targetCount = targets.count { it.active },
-                cacheStats = cacheStats
+                cache = cacheStats
             )
         }
         if (history.isNotEmpty()) {
@@ -106,7 +109,7 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
                 SectionHeader(stringResource(R.string.profile_section_history))
             }
             item(key = "history") {
-                HistoryChips(history = history) { searchViewModel.research(it) }
+                HistoryChips(history = history) { onSearchKeyword(it) }
             }
         }
         item(key = "pinned_title") {
@@ -130,7 +133,7 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
                         ""
                     }
                 ) {
-                    searchViewModel.research(product.title.take(30))
+                    onSearchKeyword(product.title.take(30))
                 }
             }
         }
@@ -162,21 +165,25 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
-                Text(
-                    stringResource(R.string.profile_scripts_title),
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    stringResource(R.string.profile_scripts_desc),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
+                // F8（2026-10-07 真机截图复核）：标题和说明原来各占 weight(1f) 平分一行，
+                // 结果是两个都被省略号截断——「自定义脚本（S…」「ADB 权限执行，预…」，
+                // 一屏里没有任何一句话是完整的。改成图标 + 上下两行（主名 / 次要说明）：
+                // 这是列表入口的通行排法，两行都读得完，行高仍守在 Dims.RowCompact 内。
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.profile_scripts_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        stringResource(R.string.profile_scripts_desc),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             Spacer(Modifier.height(Dims.SpacingXS))
             CompactTileRow(onClick = onOpenSettings) {
@@ -185,21 +192,21 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onOpenScripts: () -> Unit = {}) {
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
-                Text(
-                    stringResource(R.string.profile_settings_title),
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    stringResource(R.string.profile_settings_desc),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.profile_settings_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        stringResource(R.string.profile_settings_desc),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
         item(key = "footer") {
@@ -255,20 +262,35 @@ private fun ProfileHeader() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StatsRow(pinnedCount: Int, targetCount: Int, cacheStats: String) {
+private fun StatsRow(pinnedCount: Int, targetCount: Int, cache: CacheStats) {
     Spacer(Modifier.height(Dims.SpacingS))
-    // 三张卡片 → 一行三段：数字要看的只是"多少"，不需要每张卡各占 60dp
-    CompactTileRow {
-        StatCell(stringResource(R.string.profile_stat_favorites), pinnedCount.toString())
-        StatCell(stringResource(R.string.profile_stat_watching), targetCount.toString())
-        StatCell(stringResource(R.string.profile_stat_cache), cacheStats, grow = true)
+    // 四格统计用 FlowRow 而不是固定高度的单行 tile（真机 2026-10-07 截图复核改的）：
+    // 改前是「收藏 / 盯价中 / 缓存」三格挤在一行 60dp 里，而第三格的值本身又是一句
+    // 「内存 0 KB · 图片 3 MB」⇒ 标签套标签 + 单行放不下，屏上读到的是「图片 …」。
+    // 现在四格各读各的，放不下就**换行**——系统字体调大时也不会再吃掉最后一个字。
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    ) {
+        FlowRow(
+            modifier = Modifier.padding(horizontal = Dims.SpacingS, vertical = Dims.SpacingS),
+            horizontalArrangement = Arrangement.spacedBy(Dims.SpacingL),
+            verticalArrangement = Arrangement.spacedBy(Dims.SpacingXS)
+        ) {
+            StatCell(stringResource(R.string.profile_stat_favorites), pinnedCount.toString())
+            StatCell(stringResource(R.string.profile_stat_watching), targetCount.toString())
+            StatCell(stringResource(R.string.profile_stat_cache), cache.memoryText)
+            StatCell(stringResource(R.string.profile_stat_images), cache.imageText)
+        }
     }
 }
 
-/** 一格统计：标签（labelSmall，次要色）+ 值（等宽数字，主色）；[grow] 的那格吸收剩余宽度并省略号 */
+/** 一格统计：标签（labelSmall，次要色）+ 值（等宽数字，主色）。值里不许再出现标签词 */
 @Composable
-private fun RowScope.StatCell(label: String, value: String, grow: Boolean = false) {
+private fun StatCell(label: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             label,
@@ -280,9 +302,7 @@ private fun RowScope.StatCell(label: String, value: String, grow: Boolean = fals
             value,
             style = PriceType.PriceRowCompact,
             color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = if (grow) Modifier.weight(1f, fill = false) else Modifier
+            maxLines = 1
         )
     }
 }

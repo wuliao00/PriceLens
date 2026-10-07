@@ -2036,3 +2036,43 @@ The content may contain violation information      （45 字节）
 产物 sha256/签名身份/包内 versionCode/包内规则版本四项逐一核 → `dist` 孤儿分支 →
 直链回读字节比对 → `update.json` 生效 → **装回真机跑通**（§9.34）→ 线上规则通道自洽（本批）。
 
+
+### 9.36 第三十三批（2026-10-08 凌晨）——把"排布人性化"当成可读性问题来查，十二条里有两条只有真机能告诉我
+
+**一、做法不是"照着设计感改样式"。** 把已经发出去的 2.8.0.2 装回真机（vivo V2156A / 1080×2408 / Android 11），
+四个 tab + 首启 + 搜索态逐屏 `screencap`，然后只问两句话：**这句话在截图上还读不读得出来**、
+**这个控件在截图上还认不认得出是个控件**。十二处缺陷（F1–F12，逐条见 CHANGELOG `[Unreleased]`）全部是这么来的，
+每条都有改前/改后两张图（`E:/dev/pl-builds/shots/ui-0*.png` 改前、`v2-*`/`v3-*` 改后）。
+
+**二、两条只有"驱动它"才能发现，静态读代码读不出来。**
+
+- **F11**：搜索框在顶栏、四个 tab 都有，结果只在概览页。在「我的」页敲关键词回车，`search()` 确实跑了
+  （DB 里查得到这一条历史），页面纹丝不动 ⇒ 对用户就是"按了没反应"。代码每一行都"对"，
+  合起来是一条断的因果。修法不是在 `ProfileScreen` 里补一句 `tab = ...`（它不知道 tab 在哪一层），
+  而是把"发起搜索"整件事交回知道 tab 的那一层：`ProfileScreen(onSearchKeyword = { tab = Tab.OVERVIEW; research(it) })`，
+  并删掉它自己那份 `hiltViewModel<SearchViewModel>()`。
+- **F12**：数据源状态徽标行是 `Row + horizontalScroll`，六枚只露出 2.5 枚。而这个组件自己的注释写着
+  "一屏看清每个源的真实结局"——**注释里的目标与实现的排法互相矛盾**，截图是唯一的裁判。
+  改 `FlowRow` 换行；"哪几个源被拦了"不该要用户主动 swipe 才看得见。
+
+**三、我自己复制了一遍刚修掉的毛病，是截图把它抓出来的。** F3 第一版把「去 GitHub 发帖」和它的限制条件
+塞进同一行（说明 `weight(1f)` + 按钮在右），以为"同在一行就是一组"。真机上说明被按钮挤成**四行窄栏**——
+这正是同一批里 F1 刚修掉的那个形状（banner 的动作挤占正文宽度）。改法退回到"说明占满整行、按钮紧贴其下、
+共享左边缘"。教训：**"分组"靠相邻与共享边界，不靠把两个东西塞进同一个 Row**；凡改横向排布，改完必须回图上看。
+
+**四、一处字重反了。** 社区页那句脚注用 `labelSmall`，本主题 `labelSmall = 12sp SemiBold`、
+`bodySmall = 12sp Normal`：同尺寸、脚注更粗 ⇒ 次要的一句比主句更响。换 `bodySmall`。
+（记这条是因为它说明"令牌名字"不等于"视觉层级"——`label*` 系列在这个主题里是**加粗**的。）
+
+**五、取证事故：`adb install` 报 Success，包却没装到当前用户。** vivo 的安装器界面把 `.dev` 包
+落到了 **User 10（访客）**，User 0 里 `pm path com.pricelens.dev` 为空、`am start` 报 `Error type 3`。
+`pm list packages` 不带 `-u` 也看不见它（与 §9.34 那次同一个假阴性）。可用解法：
+`pm install-existing --user 0 com.pricelens.dev`（包体已在设备上，只是没登记到当前用户），
+之后 `adb install -r -t` + 勾「已了解风险」+ 点「继续安装」才直接落到 User 0。
+**又一次"退出码/Success 字样不是证据"**——判安装成功只认 `pm list packages --user 0` 与 `dumpsys package … lastUpdateTime`。
+
+**六、门禁与自查。** ktlint 这轮抓到我两处：`Surface` 该排在 `SwipeToDismissBox` **之前**
+（ASCII 序 `u` < `w`，直觉的"按字母"会排错），以及 `ProfileScreen` 三个参数拆成多行触发
+`standard:function-signature`（本仓库阈值要求单行，`max_line_length = 140` 容得下）。
+`assembleDebug test ktlintCheck` 全绿：**962 条 × 两个变体，0 failures / 0 errors**（含本批新增的
+`CacheStatsTest` 4 条），券评测硬门禁对 `baseline.json` 容差 0.01 未退化。

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -133,15 +135,25 @@ fun OverviewScreen(searchViewModel: SearchViewModel, onGoBilibili: () -> Unit = 
             )
             item(key = "empty_title") {
                 Spacer(Modifier.height(Dims.SpacingL))
-                Text(
-                    when (emptyCause) {
-                        EmptyStateCause.NOT_SEARCHED -> stringResource(R.string.search_start_hint)
-                        EmptyStateCause.UNREACHABLE ->
+                // 短标题 + 副文案两行（见 strings_search.xml 的说明）：
+                // 原来一整句说明塞进 titleLarge，读不出重点；现在标题只回答"怎么了"，
+                // 怎么做的动作退到副文案，用次要色与正文字号。
+                val (emptyTitle, emptyBody) = when (emptyCause) {
+                    EmptyStateCause.NOT_SEARCHED ->
+                        stringResource(R.string.search_empty_title_not_searched) to
+                            stringResource(R.string.search_start_hint)
+                    EmptyStateCause.UNREACHABLE ->
+                        stringResource(R.string.search_empty_title_unreachable) to
                             stringResource(R.string.search_unreachable_result, keyword)
-                        EmptyStateCause.NO_MATCH ->
+                    EmptyStateCause.NO_MATCH ->
+                        stringResource(R.string.search_empty_title_no_match) to
                             stringResource(R.string.search_no_relevant_result, keyword)
-                    },
-                    style = MaterialTheme.typography.titleLarge,
+                }
+                Text(emptyTitle, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.height(Dims.SpacingXS))
+                Text(
+                    emptyBody,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -273,6 +285,10 @@ private fun CollapsibleGuide(icon: ImageVector, title: String, desc: String, act
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
+                // 触控下限：这行原本只有 8+8 的内边距 + 一行 14sp 标题 ≈ 40dp，
+                // 三张引导卡是首屏唯一的手动入口，按 Material 的 48dp 收口（同一批改动里
+                // banner 的关闭键、盯价检查按钮都按这个下限对齐，见 Dims.TouchMin）。
+                .heightIn(min = Dims.TouchMin)
                 .padding(vertical = Dims.SpacingS)
         ) {
             Icon(
@@ -299,13 +315,31 @@ private fun CollapsibleGuide(icon: ImageVector, title: String, desc: String, act
             exit = fadeOut(tween<Float>(MotionDurations.Fast, easing = PriceLensEasing)) +
                 shrinkVertically(tween<IntSize>(MotionDurations.Fast, easing = PriceLensEasing), shrinkTowards = Alignment.Top)
         ) {
-            EmptyState(
-                icon = icon,
-                title = title,
-                desc = desc,
-                actionLabel = actionLabel,
-                onAction = onAction
-            )
+            // F9（2026-10-07 真机截图复核）：展开区原来直接复用 EmptyState，而 EmptyState
+            // 会把图标和标题再画一遍——点开「推荐：无障碍自动比价」，下面第一行就是刚点的那句
+            // 标题的复制品，看着像两个东西、其实是一个。展开内容只留「说明 + 动作」，
+            // 并按标题文字的左边缘缩进：视觉上是从这一行长出来的，不是下面又来一张卡。
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = Dims.IconInline + Dims.SpacingS,
+                        top = Dims.SpacingXS,
+                        bottom = Dims.SpacingS
+                    )
+            ) {
+                Text(
+                    desc,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (actionLabel != null && onAction != null) {
+                    TextButton(
+                        onClick = onAction,
+                        modifier = Modifier.heightIn(min = Dims.TouchMin)
+                    ) { Text(actionLabel) }
+                }
+            }
         }
     }
 }

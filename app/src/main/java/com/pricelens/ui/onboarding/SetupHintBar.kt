@@ -1,10 +1,14 @@
 package com.pricelens.ui.onboarding
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Warning
@@ -44,36 +48,49 @@ fun SetupHintBar(missing: List<MissingEssential>, onReopenOnboarding: () -> Unit
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
-        Row(
-            modifier = Modifier.padding(Dims.SpacingM),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Filled.Warning,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(Dims.SpacingXXL)
-            )
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.setup_hint_title),
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Text(
-                    stringResource(R.string.setup_hint_body, label),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            TextButton(onClick = onReopenOnboarding) {
-                Text(stringResource(R.string.setup_hint_action))
-            }
-            IconButton(onClick = onDismiss) {
+        Column(Modifier.padding(Dims.SpacingM)) {
+            // 两行式 banner（真机 2026-10-07 截图复核改的）：
+            // 原来是一个 Row 里 [图标][文字列][按钮][关闭]，按钮 + 关闭图标吃掉近一半宽度，
+            // 于是那句本来两行就放得下的说明被挤成**五行窄栏**，而同一屏下半部大片空白。
+            // 说明文字是这条 banner 的主角，必须拿到整行宽度；动作退到第二行右对齐。
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.setup_hint_dismiss),
-                    modifier = Modifier.size(Dims.SpacingL)
+                    Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(Dims.SpacingXL)
                 )
+                Spacer(Modifier.width(Dims.SpacingS))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.setup_hint_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        stringResource(R.string.setup_hint_body, label),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = Dims.SpacingXS),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 关闭键与主按钮同高，避免"一个能点一个像装饰"；两者都按 48dp 触控下限留位
+                TextButton(onClick = onReopenOnboarding, modifier = Modifier.heightIn(min = Dims.TouchMin)) {
+                    Text(stringResource(R.string.setup_hint_action))
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(Dims.TouchMin)) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.setup_hint_dismiss),
+                        modifier = Modifier.size(Dims.SpacingL)
+                    )
+                }
             }
         }
     }

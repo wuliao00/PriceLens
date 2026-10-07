@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +28,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +42,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -689,7 +696,10 @@ private fun WatchStatusCard(
         }
         Spacer(Modifier.height(Dims.SpacingS))
         // 0 个盯价目标时"立即检查一次"是无意义操作（文档 UX）：置灰并说清为什么
-        if (activeTargetCount == 0) {
+        val canCheck = activeTargetCount > 0
+        if (!canCheck) {
+            DisabledCheckButton(stringResource(R.string.watch_check_unavailable))
+            Spacer(Modifier.height(Dims.SpacingXS))
             Text(
                 stringResource(R.string.watch_check_needs_target),
                 style = MaterialTheme.typography.bodySmall,
@@ -709,14 +719,54 @@ private fun WatchStatusCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            Spacer(Modifier.height(Dims.SpacingS))
+            OutlinedButton(
+                onClick = onCheckNow,
+                enabled = !checking,
+                modifier = Modifier.heightIn(min = Dims.TouchMin)
+            ) {
+                Text(stringResource(if (checking) R.string.watch_check_running else R.string.watch_check_now))
+            }
         }
-        Spacer(Modifier.height(Dims.SpacingS))
-        TextButton(
-            onClick = onCheckNow,
-            enabled = !checking && activeTargetCount > 0
-        ) {
-            Text(stringResource(if (checking) R.string.watch_check_running else R.string.watch_check_now))
-        }
+    }
+}
+
+/**
+ * 「立即检查一次」的禁用态：画成按钮的样子，但不响应点击。
+ *
+ * 为什么不直接交给 `OutlinedButton(enabled = false)`：M3 的禁用态会把边框色再乘一次
+ * 0.38 alpha，标签也压成淡灰，放在这张 `surfaceVariant` 底色的卡片里，真机截图上
+ * 它和上面那行说明文字长得一模一样（2026-10-07 复核）——用户分不清"这是个按不动的按钮"
+ * 还是"这就是一句话"，而那句话并不是他能做的动作。
+ * 这里自己画边框：形状、描边、满不透明的次要字色三个通道都在，一眼读得出
+ * "控件在这儿，现在不可用"。高度与可用态用同一个 [Dims.TouchMin]，避免首次添加目标时
+ * 这块区域上下跳一截。
+ */
+@Composable
+private fun DisabledCheckButton(label: String) {
+    val shape = MaterialTheme.shapes.small
+    Row(
+        modifier = Modifier
+            .heightIn(min = Dims.TouchMin)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+            // 读屏不能只看画出来的形状：可用态是 OutlinedButton，TalkBack 会报"按钮"；
+            // 这里若只是一段 Text，盲人用户听到的是"一句话"，恰好丢掉了我刚用视觉补上的
+            // 那层"这是个现在按不了的控件"。role + disabled 两个语义位把它补回来。
+            .semantics {
+                role = Role.Button
+                // compose-ui 1.7.6 里 `disabled` 是**函数**（javap：static void
+                // SemanticsPropertyReceiver.disabled()），不是 Boolean 属性——写成 `disabled = true`
+                // 编译报 "Function invocation 'disabled()' expected"
+                disabled()
+            }
+            .padding(horizontal = Dims.SpacingXL),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

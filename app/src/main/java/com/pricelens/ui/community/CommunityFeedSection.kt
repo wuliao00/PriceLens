@@ -1,11 +1,11 @@
 package com.pricelens.ui.community
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
@@ -158,18 +158,27 @@ private fun CommunityPostCard(post: CommunityPost) {
 @Composable
 private fun NewDiscussionRow() {
     val context = LocalContext.current
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        TextButton(onClick = { UrlOpener.open(context, CommunityFeed.NEW_DISCUSSION_URL) }) {
+    // F3（2026-10-07 真机截图复核，改了两轮才对的排法）：
+    // ① 最初版是「按钮右对齐一行 + 说明另起一行贴左」——说明读起来像在讲下面那块内容，
+    //    而不是在讲这个按钮，动作和它的限制条件分了家。
+    // ② 中间版把两者塞进同一行（说明 weight(1f) + 按钮在右）：真机上说明被按钮挤成
+    //    **四行窄栏**，正是本轮在 SetupHintBar 里刚修掉的那个毛病，不能留在这儿。
+    // ③ 现在这版：说明占满整行、按钮紧跟其下并与它同左边缘。相邻 + 共享左边界 = 一组，
+    //    文字也不必让位给按钮。
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            stringResource(R.string.community_feed_post_hint),
+            // 这句是脚注（限制条件），字重必须低于上面的「社区还没有帖子」：本主题的
+            // labelSmall 是 12sp **SemiBold**，与那句 bodySmall（12sp Normal）同尺寸却更粗，
+            // 真机上"次要的一句"反而比"主句"更响（2026-10-08 截图复核）→ 换成 bodySmall。
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(
+            onClick = { UrlOpener.open(context, CommunityFeed.NEW_DISCUSSION_URL) },
+            modifier = Modifier.heightIn(min = Dims.TouchMin)
+        ) {
             Text(stringResource(R.string.community_feed_post_new))
         }
     }
-    Text(
-        stringResource(R.string.community_feed_post_hint),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
 }

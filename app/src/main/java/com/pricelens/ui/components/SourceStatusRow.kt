@@ -1,12 +1,12 @@
 package com.pricelens.ui.components
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,6 +43,7 @@ import com.pricelens.ui.theme.fg
  * 域名诊断结果随 outcomesVersion（每轮搜索结束递增）刷新，此处订阅它
  * 以便搜索结束后重组时读到最新的 lastOutcomeFor 结果。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SourceStatusRow(viewModel: SearchViewModel, modifier: Modifier = Modifier) {
     val loading by viewModel.loading.collectAsStateWithLifecycle()
@@ -62,11 +63,14 @@ fun SourceStatusRow(viewModel: SearchViewModel, modifier: Modifier = Modifier) {
         return
     }
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(Dims.SpacingS)
+    // F12（2026-10-08 真机截图复核）：这里原来是 `Row + horizontalScroll`，六枚徽标在
+    // 1080px 宽的屏上只放得下 2.5 枚——而本组件的注释写的恰恰是"一屏看清每个源的真实结局"。
+    // 横向滚动把"哪几个源被拦了"藏到屏外，等于把最需要看见的信息做成要主动 swipe 才看得到。
+    // 改成 FlowRow：放不下就换行，六枚全在眼前（与 F5 统计行同一处理）。
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Dims.SpacingS),
+        verticalArrangement = Arrangement.spacedBy(Dims.SpacingXS)
     ) {
         SourceChip(
             stringResource(R.string.src_label_history),

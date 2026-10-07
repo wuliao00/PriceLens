@@ -104,7 +104,7 @@ fun SettingsScreen(
             SettingsBand(stringResource(R.string.layout_settings_group_data)) {
                 DataSection(
                     settings = settings,
-                    cacheStats = cacheStats,
+                    cacheStats = cacheStats.asSentence,
                     onRefresh = { profileViewModel.refreshCacheStats() },
                     onClear = { profileViewModel.clearCache() }
                 )

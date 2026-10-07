@@ -89,6 +89,11 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
         ) {
             CommunityFeedSection()
             Spacer(Modifier.height(Dims.SpacingXL))
+            // F3（2026-10-07 真机截图复核）：这段原来直接续在社区动态下面。社区没帖子时
+            // 上面刚说「社区还没有帖子」，下面又是一张「请先搜索商品」的大卡——两段都读作
+            // "这里没东西"，但讲的是两个完全不同的来源，用户分不清哪句针对哪块。
+            // 补一个区块标题把归属钉下来：下面这块的空态说的是识货/值得买，不是社区动态。
+            SectionHeader(stringResource(R.string.community_section_sources))
             EmptyState(
                 icon = if (emptyCause == EmptyStateCause.UNREACHABLE) Icons.Filled.Warning else Icons.Filled.ChatBubble,
                 title = stringResource(

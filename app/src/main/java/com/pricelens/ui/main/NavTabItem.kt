@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import com.pricelens.ui.theme.MotionDurations
 import com.pricelens.ui.theme.PriceLensEasing
 
@@ -81,6 +83,25 @@ fun RowScope.NavTabItem(
                 }
             }
         },
-        label = { Text(text = label) }
+        // 选中态要能在标签上也读出来（真机 2026-10-07 截图复核）：
+        // 原来这里塞的是裸 `Text(label)`，Material 的 item colors 不会作用到它身上，
+        // 于是四个页签的字一模一样、只靠图标后面那枚淡紫胶囊区分——室外强光下几乎看不出在哪个页。
+        // 字重 + 前景色双通道，胶囊只是第三重提示。
+        // 字号仍取 labelSmall（Material 给 NavigationBarItem 的默认档，本主题=12sp SemiBold）：
+        // 这里只覆盖 fontWeight，不改字号——四个页签的宽度预算是按 12sp 算的。
+        label = {
+            Text(
+                text = label,
+                maxLines = 1,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                ),
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
     )
 }

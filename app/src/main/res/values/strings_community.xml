@@ -10,5 +10,12 @@
     <string name="community_feed_reply">%1$s 回复：%2$s</string>
     <string name="community_feed_footer">发起人 @%1$s · 点击卡片在浏览器打开</string>
     <string name="community_feed_post_new">去 GitHub 发帖</string>
-    <string name="community_feed_post_hint">发帖与查看原文需能访问 GitHub；帖子的只读镜像是国内可直连的（随仓库自动同步）。</string>
+    <!--
+      F3（2026-10-07）：这句从"按钮下面另起一行"改成"和按钮同一行、占剩余宽度"，
+      所以字数要能压在两行内（11sp 中文在 360dp 宽的屏上，去掉按钮约 100dp 后每行 ≈20 字）。
+      原句 44 字，压成 35 字：三件事一个都没少——发帖/看原文的门槛、只读镜像国内可直连、自动同步。
+    -->
+    <string name="community_feed_post_hint">发帖、看原文需能访问 GitHub；这里的只读镜像国内可直连，随仓库自动同步。</string>
+    <!-- 空态页给"识货 / 值得买"这块补的归属标题：避免它读起来像社区动态的续集（见 F3） -->
+    <string name="community_section_sources">识货商品 · 值得买爆料</string>
 </resources>

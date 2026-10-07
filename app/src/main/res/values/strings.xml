@@ -6,7 +6,13 @@
     <string name="overlay_cta">查看历史价 &amp; 优惠券</string>
     <string name="price_alert_channel">降价提醒</string>
     <string name="notification_permission_hint">开启通知权限后才能收到降价提醒</string>
-    <string name="disclaimer_title">免费声明 · 作者：莫</string>
+    <!--
+      F10（2026-10-07 真机首启截图复核）：标题原来带作者——「免费声明 · 作者：莫」，
+      在 AlertDialog 的单行标题里被截成「免费声明 · 作者：莫」的下半截，而正文第一行
+      又是一句「作者：莫」：同一句话在同一个弹窗里出现两遍，其中一遍还读不完整。
+      标题只留"这是什么"，作者归正文（正文本来就有）。
+    -->
+    <string name="disclaimer_title">免费声明</string>
     <string name="disclaimer_body">作者：莫\n\n本软件（PriceLens 比价助手）永久免费开源，不收取任何费用，没有付费版、没有会员、没有内购。\n\n⚠ 任何人以任何形式向您收费（付费下载、付费解锁、 VIP 会员、代装服务等），都是骗子，请勿上当！\n\n您的数据仅保存在手机本地，绝不上传。</string>
     <string name="disclaimer_ok">我知道了，是免费的</string>
     <!-- 倒计时期间同意按钮文案：%1$s=同意文案，%2$d=剩余秒数 -->
@@ -225,6 +231,7 @@
     <string name="profile_stat_favorites">收藏</string>
     <string name="profile_stat_watching">盯价中</string>
     <string name="profile_stat_cache">缓存</string>
+    <string name="profile_stat_images">图片</string>
     <string name="profile_section_history">搜索历史</string>
     <string name="profile_section_pinned">我的收藏（%1$d）</string>
     <string name="profile_section_targets">盯价目标（%1$d）</string>

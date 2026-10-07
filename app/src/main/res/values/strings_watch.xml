@@ -65,6 +65,10 @@
     <string name="watch_status_stalled">本轮没有任何目标查到价格，不会有任何降价提醒。</string>
     <string name="watch_check_now">立即检查一次</string>
     <string name="watch_check_running">检查中…</string>
+    <!-- F4（2026-10-07 真机截图复核）：没有盯价目标时这个动作无意义。原来用 disabled 的
+         TextButton，M3 把标签压到 38% alpha 后落在卡片里跟正文说明长得一样，读不出"这是个
+         按不动的按钮"。改成按钮形状的静态标签，字面直接写状态，不靠透明度说话。 -->
+    <string name="watch_check_unavailable">立即检查一次 · 暂不可用</string>
     <string name="watch_broken_targets_hint">「我的」页里有 %1$d 个无法跟踪的历史目标，建议删除后按有效 SKU 重新添加。</string>
 
     <!-- 连续多轮全部无进展时的可点开说明 -->

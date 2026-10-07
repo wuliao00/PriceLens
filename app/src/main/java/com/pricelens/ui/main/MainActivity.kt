@@ -331,6 +331,10 @@ fun MainScreen(
                 onKeywordChange = searchViewModel::updateKeyword,
                 onSearch = {
                     searchFocused = false
+                    // 搜索框在顶栏、四个 tab 都在；结果只在概览页。真机复核（2026-10-07）：
+                    // 在「我的」页输入关键词回车，搜索确实跑了，但人还停在原页面上——
+                    // 看上去就是"按了没反应"。发起搜索这个动作必须连带把结果页带出来。
+                    tab = Tab.OVERVIEW
                     searchViewModel.search(keyword)
                 },
                 onOpenSettings = { showSettings = true },
@@ -474,6 +478,12 @@ fun MainScreen(
                     Tab.COMMUNITY -> com.pricelens.ui.community.CommunityScreen(searchViewModel)
                     Tab.PROFILE -> com.pricelens.ui.profile.ProfileScreen(
                         onOpenSettings = { showSettings = true },
+                        // 见 ProfileScreen 的注释：搜完要连结果页一起给，否则这一页上
+                        // 点历史词/点收藏行都是"按了没反应"
+                        onSearchKeyword = {
+                            tab = Tab.OVERVIEW
+                            searchViewModel.research(it)
+                        },
                         onOpenScripts = { showScripts = true }
                     )
                 }
