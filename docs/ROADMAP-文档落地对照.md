@@ -2003,3 +2003,36 @@ PriceLens 是 AccessibilityService，从来不碰它。所以那 108 行是**我
 分身空间里那枚 debug 2.7.0 已按用户同意卸载；`.dev`（探针包）仍在；
 无障碍、悬浮窗权限均已按 `a11y-baseline-v2156a.txt` 复位（services=null / a11y=0 / 两个包都 ignore）。
 `uiautomator dump` 在这台机上目前仍是坏的，**重启手机**才恢复。
+
+### 9.35 第三十二批（2026-10-07 夜）——线上分发通道逐项核过，顺带发现 Gitee 拦了 README 的 raw
+
+**一、核的是"用户实际会拉到的那三份"，不是仓库里的那三份。**全部走 Gitee raw 现取：
+
+| 文件 | 结果 |
+|---|---|
+| `update.json` | 2.8.0.2 / 3,304,679 B / `d90bbdcd…`，与已发布产物逐字节一致 |
+| `rules/manifest.json` | 正常返回，声明 `sha256 = 1b0bb8ed…fee49d` |
+| `rules/jd.json` | 正常返回，**实际字节的 sha256 与 manifest 声明逐字相等**，`version: 4` |
+
+最后那条是这条链子上最该核的：记忆里 §9.31 一 记过"远端规则会**盖掉** APK 内置资产"，
+所以线上 `jd.json` 与发布包里的 `assets/rules/jd.json` 必须是同一版——
+实测两边都是 v4、且线上内容与清单声明自洽 ⇒ 用户拿到的是同一套判定数据，
+不存在"清单说 v4、实际发出去 v2"那种断链。
+
+**二、一个意外发现：Gitee 对 `README.md` 的 raw 返回**
+
+```
+The content may contain violation information      （45 字节）
+```
+
+**不是这次改出来的**——同一位置取 `v2.8.0.1` 那一版 README 也是 45 字节的同一句话，
+是 Gitee 侧对该文件的内容审核拦截，且只影响 raw 端点（`update.json` 与 `rules/*` 都正常）。
+影响面：`grep -rn "raw/main/README" app/src/main` 为空 ⇒ **App 不读 README**，
+功能上零影响；人是从仓库页面（Gitee 自己渲染）或 GitHub 侧看 README 的。
+记在这里是为了下次别把它当成"README 没同步"去重推。
+
+**三、发版链的完整闭环（本次全部有产物，不是推断）：**
+代码 → 本机全量门禁（958×2 绿 + 评测 1.0000）→ 合 main 推双远端 → CI 真 runner 重跑门禁并签名 →
+产物 sha256/签名身份/包内 versionCode/包内规则版本四项逐一核 → `dist` 孤儿分支 →
+直链回读字节比对 → `update.json` 生效 → **装回真机跑通**（§9.34）→ 线上规则通道自洽（本批）。
+
