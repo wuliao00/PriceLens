@@ -450,6 +450,18 @@ PRICLENS_KEY_PASSWORD=****
 #       build-apk.ps1 读这四行签名，且不再回写版本号——版本唯一真源是 app/build.gradle.kts。
 #   2b. CI 出包：GitHub Actions 用 secret PRICLENS_STORE_B64（正式密钥库的 base64），
 #       在流水线里 base64 -d 落成文件后签名；本地没有该密钥也不影响构建，release 门控才需要它。
+#       ⚠ 2026-10-07 实测：**维护机上走不通 2a**——`~/.android/` 里只有 debug.keystore，
+#       没有 PriceLens-release.keystore，所以正式包只能走 2b（切 GitHub Release 触发
+#       `release: published` → android-build 签名 → release job 传产物）。
+#       用 debug.keystore 顶是错的：签名不同 ⇒ 老用户覆盖安装直接失败，只能卸载重装。
+#   2c. 出包后必做的一条：核**签名身份**而不是只核哈希。
+#       `apksigner verify --print-certs` 对新旧两版各跑一次，证书 SHA-256 必须相同
+#       （2.7.0/2.8.0/2.8.0.1/2.8.0.2 已逐版核过，同为 c759cbb8… 前缀，DN `CN=wuliao00, OU=PriceLens`；
+#       2.6.5 及更早是 `CN=Android Debug`，与"≤2.6.5 需卸载重装"那句互相印证）。
+#       再核两条：`aapt2 dump badging` 读包内 versionCode/versionName，
+#       `unzip -p app-release.apk assets/rules/jd.json` 读**包内**规则版本——
+#       远端 `rules/jd.json` 会盖住内置资产，两边版本不一致就是"验的不是跑的那份"。
+
 #   ⚠ 签名身份必须长期固定：换 key 后老设备无法覆盖安装，只能先卸载（丢本地数据）。
 #   📜 历史注记：2.6.5 及更早的对外包其实是用 %USERPROFILE%\.android\debug.keystore（公开常识口令）
 #       签的，无法作为可信更新通道；自 v2.7.0 起改用上面的正式 release 密钥。因此 ≤2.6.5（debug 签名）
