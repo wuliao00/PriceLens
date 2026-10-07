@@ -1899,3 +1899,54 @@ Gitee 侧 `GET /repos/wuliao11541/PriceLens/issues?state=all` 返回 `[]`，
 迷你详情页不弹浮窗（§9.27 判为**正确行为**，要改需先解决"一屏多商品"）、
 以及推荐位/广告位文本漂进标题的结构性修法（§9.29 落了"必须有位置"那一半，
 视口过滤与多窗口取树按 §9.31 的测量结果暂不做）。
+
+
+### 9.33 第三十批（2026-10-07）——发布链条本身做了独立复核：签名链是好的，但"发出去的那份"至今没在真机上跑过
+
+**一、为什么要单独一批。**这一整轮所有真机验证跑的都是 **debug `.dev` 包**，
+而发给用户的是 R8 混淆 + 资源收缩的 **release 包**。"测的那份 ≠ 发的那份"是
+本仓库自己反复反对的那种绿（§9.31 四 刚记过一条同族的暖缓存假红）。
+
+**二、签名链：逐版核过，结论是好的。**从 `dist` 分支把每一版拉下来 `apksigner verify --print-certs`：
+
+| 版本 | 字节数 | 签名 DN | 证书 SHA-256 前缀 |
+|---|---|---|---|
+| 2.6.5 | 2,248,896 | `C=US, O=Android, CN=Android Debug` | `f86c8a85` |
+| 2.7.0 | 2,263,441 | `CN=wuliao00, OU=PriceLens` | `c759cbb8` |
+| 2.8.0 | 2,336,587 | `CN=wuliao00, OU=PriceLens` | `c759cbb8` |
+| 2.8.0.1 | 3,236,149 | `CN=wuliao00, OU=PriceLens` | `c759cbb8` |
+| **2.8.0.2** | **3,304,679** | `CN=wuliao00, OU=PriceLens` | **`c759cbb8`** |
+
+⇒ 2.7.0 起四版同一枚钥匙，真实用户可逐级覆盖升级；2.6.5 及更早是 debug 签，
+与 `update.json` 里"停在 ≤2.6.5 需卸载重装一次"那句**互相印证**。
+那句原先是抄文档写的，现在是核过的。
+
+**三、发布包的入口组件没被 R8 吃掉**：`aapt2 dump xmltree` 读 release 包的 manifest，
+`PriceMonitorService`、`MainActivity`、`WatchForegroundService`、`WatchWidgetReceiver`、
+`CheckTileService`、`BootCompletedReceiver` 等**全部按原名保留**（只有 manifest 引用的类必须留名，
+内部类被混淆是设计如此）。内置资产也在：`assets/rules/jd.json`（v4）、`assets/ai/*`。
+⚠ 反例方法记一下：我先前用"往 classes.dex 的二进制里 grep 类名"来判有没有被删，
+两个"命中"两个"没命中"——**那不能当证据**（DEX 里类名不是我以为的那种连续斜杠串，
+而且 R8 本来就该重命名内部类）。要么 `apkanalyzer`，要么看 manifest。
+
+**四、"发出去的那份在真机上跑一次"没做成，卡在一个真实但意外的状态上。**
+测试机（vivo V2156A）的**分身空间（User 10）里装着一枚 `com.pricelens` 2.7.0，
+而它是 `CN=Android Debug` 签的**（20,294,097 B ≈ 文档记的 debug 包大小；正式包只有 2.2 MB）
+—— 早前某轮开发把 debug 包装成了正式包名。于是：
+
+```
+adb install -r ship.apk            → INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match
+adb install --user 0 -r ship.apk   → 同样失败（签名是包级记录，换用户绕不过）
+```
+
+解锁只有一条路：`adb uninstall com.pricelens`（会连带清掉那枚分身空间副本的数据）。
+**这属于破坏用户设备状态，我没做**，等用户点头。
+
+**五、顺带一条量具教训，和我今天犯的另一次同形。**我先前用
+`pm list packages | grep -x 'package:com.pricelens'` 得到"没装正式版"，并据此判断"装它不覆盖你任何东西"。
+**那是假的**：包在 User 10 装着，而 `pm list packages`（不带 `-u`）只列当前用户，
+`pm path com.pricelens` 也返回空。真状态要看 `dumpsys package com.pricelens` 里
+`User 0: installed=false` / `User 10: installed=true` 那两行。
+⇒ 判"这台机上有没有某个包"一律用 `pm list packages -u` + `dumpsys package`，
+别用不带 `-u` 的 `pm list packages` 下结论。这与 §9.28 三（I 级日志给的假零）、
+§9.31 三（暖缓存给的假红）是同族：**量具的默认作用域会安静地给你一个假答案。**
