@@ -1950,3 +1950,56 @@ adb install --user 0 -r ship.apk   → 同样失败（签名是包级记录，�
 ⇒ 判"这台机上有没有某个包"一律用 `pm list packages -u` + `dumpsys package`，
 别用不带 `-u` 的 `pm list packages` 下结论。这与 §9.28 三（I 级日志给的假零）、
 §9.31 三（暖缓存给的假红）是同族：**量具的默认作用域会安静地给你一个假答案。**
+
+
+### 9.34 第三十一批（2026-10-07 夜）——把**发出去的那份**装回真机跑通了
+
+**一、要关的缺口。**§9.33 四 留了一句"没做成"：本轮所有真机验证跑的都是 debug `.dev` 包，
+而用户拿到的是 R8 混淆 + 资源收缩的 release 包。用户点头清掉了分身空间那枚 debug 签名的
+`com.pricelens` 2.7.0（**它的本机数据随之清除**，这是那次卸载的代价，已记在这里），
+装上 `dist` 直链取回的 2.8.0.2（sha256 与清单一致），跑 `step109.py`：
+
+| 判据 | 结果 |
+|---|---|
+| 启动不崩 | `com.pricelens` 进程存活，`MainActivity` 到前台 |
+| 无障碍服务能绑上（混淆会改掉 manifest 类名 ⇒ 这是 R8 最典型的死法） | `dumpsys accessibility` 计数 = 1 |
+| 检测链跑通 | 京东搜索 → `ProductListActivity` → 商详 → **浮窗窗口出现**（帧 280,284,1048,500） |
+| 内容对不对 | 面板标题 `自营拍拍二手【8新·C】Apple 苹果 iPhone 15 128G 黄色 国行 全网通`，与页面真实商品名逐字一致；券后价 ¥1,909 与底栏一致；两个 CTA 正常 |
+| 我们进程的崩溃 | `FATAL` 行数 = **0** |
+
+⇒ **"测的那份 ≠ 发的那份"这条风险本次关闭**：release 与 debug 两份制品在这台机上行为一致。
+
+**二、过程里最重要的发现不是产品，是量具。**第一版工单 `step108.py` 报
+"崩溃 108 行、浮窗 FAIL"，看着像 release 包炸了。逐条看栈才认出来：
+
+```
+java.lang.IllegalStateException: UiAutomationService … already registered!
+    at …IAccessibilityManager$Stub$Proxy.registerUiTestAutomationService
+```
+
+`registerUiTestAutomationService` 是 **`uiautomator` 自己**调的接口——
+PriceLens 是 AccessibilityService，从来不碰它。所以那 108 行是**我的量具在连续
+`uiautomator dump` 时自己撞死**（前一个会话没释放，后一个注册就崩），
+不是被测包。更糟的是它**之后永久坏掉**：dump 稳定返回 0 字节，
+关掉无障碍服务不恢复、杀掉 `com.pricelens:shell` 持有者也不恢复（槽位卡在 system_server，
+只有重启手机能放掉）。于是那一版报的"浮窗 FAIL"是**量具失效导致根本没跑到那一步**。
+
+处理：`step109.py` 改成**完全不依赖 uiautomator** —— 页面身份用 `dumpsys activity`、
+浮窗用 `dumpsys window`、导航用坐标。换路子之后一次跑通，全绿。
+
+**三、这是本轮第三条"量具安静地给一个假答案"，三条同族，值得并排记：**
+
+| 假答案 | 真因 | 正确的量法 |
+|---|---|---|
+| "0 条命中"（§9.28 三） | 命中日志是 `LogT.i`，这台机全局等级只出 E | 用浮窗窗口或 App 私有库，不用日志 |
+| "门禁红"（§9.31 三） | Gradle 暖缓存只恢复**已声明的输出**，副产物没落盘 | 缺产物先强制执行那个测试 |
+| "正式版没装"（§9.33 五） | `pm list packages` 不带 `-u` 只列当前用户 | `pm list packages -u` + `dumpsys package` 看 User 行 |
+| "release 包炸了"（本批） | uiautomator 自己的 UiAutomation 注册冲突 | 按**进程归属**过滤崩溃；能不用 uiautomator 就不用 |
+
+共同形状是同一个：**工具的默认作用域/生命周期会安静地返回一个空值，而空值看起来像结论。**
+以后凡是"读到 0 条 / 空 / 没命中"，先问一句这是被测对象的性质，还是量具的性质。
+
+**四、设备现状（下次接手要知道）。**`com.pricelens` = 正式签名的 **2.8.0.2**（真机验过的那份），
+分身空间里那枚 debug 2.7.0 已按用户同意卸载；`.dev`（探针包）仍在；
+无障碍、悬浮窗权限均已按 `a11y-baseline-v2156a.txt` 复位（services=null / a11y=0 / 两个包都 ignore）。
+`uiautomator dump` 在这台机上目前仍是坏的，**重启手机**才恢复。
