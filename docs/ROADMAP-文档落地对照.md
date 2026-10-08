@@ -2107,3 +2107,44 @@ The content may contain violation information      （45 字节）
 
 顺带一处小的：旧文案把体积写死成「397MB」，真值是 396,705,472 字节 = 396MB。
 现在统一由 `%1$d` 传进去，字符串里不再留数字。
+
+### 9.37 第三十四批（2026-10-08）——2.8.0.3 发出去了，发版链每一步都留了可复跑的产物
+
+按 `docs/DEVELOPMENT.md` 发布流程那六步走，顺序没换（版本字段先入库，CI 才编得出对的包）：
+
+| 步 | 做了什么 | 证据（不是"我记得"） |
+|---|---|---|
+| ① 版本 | `versionCode 23→24`、`versionName 2.8.0.3`，CHANGELOG 归档 | commit `2781613`；两处 TEMP 用 `git apply -R` 挡在索引外，提交后原样装回 |
+| ② 合并 | `feat/2.8.0.2 → main` 纯快进（先 `merge-base --is-ancestor` 确认），推 origin + gitee | `4449ce9..2781613`，两边 `ls-remote` 同 SHA |
+| ③ 出包 | 建 GitHub Release `v2.8.0.3` → `release: published` 触发 CI 签名 | run `37732154464` **绿**（7m51s）；main push run `37732017233` 也绿（6m55s） |
+| ④ 核产物 | 四项逐一核 | 见下 |
+| ⑤ dist | 包累加进 `dist` 孤儿分支（不 `git rm`，旧链继续有效），推两端 | `3299f20..3c6cf81`；curl 回读 302 跟随后 **3,325,847 字节 / sha256 `7165ad3e…` 与 CI 产物逐字节相同** |
+| ⑥ 清单 | 回填 `update.json` + README 下载表，推两端 | `49c3af6`；线上 `raw/main/update.json` 带 `?v=24&t=分钟桶` 取回：`versionCode 24 / 2.8.0.3 / sha 7165ad3e / size 3325847 / notes 8 条` |
+
+**④ 的四项**（"验的那份 = 发的那份"这条链上最容易被跳过的部分）：
+
+1. `sha256sum` 下回来的包 = `7165ad3eac51509189dae92d7d119cd32ff55fb8d5d01d3ec19b798af3586d03`，
+   与 GitHub 自己公布的 asset digest 逐字相同；
+2. **签名身份**（不是只核哈希）：`apksigner verify --print-certs` 出
+   `c759cbb8ca2bda75799d75336d615390ec5737d83cb588703bef09821205b5e0`、DN `CN=wuliao00, OU=PriceLens`
+   —— 与 2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 同一枚，README 那句"四版"相应改成"五版"；
+3. `aapt2 dump badging` 读**包内** `versionCode='24' versionName='2.8.0.3'`（不是读仓库里的 gradle 文件）；
+4. `unzip -p assets/rules/jd.json` 读**包内**规则 `version: 4`，与线上 `rules/manifest.json` 声明同源；
+   另用 `aapt2 dump xmltree` 确认 R8 没吃掉 `PriceMonitorService`（`BIND_ACCESSIBILITY_SERVICE` 还在）。
+
+**最硬的一条证据是覆盖安装本身**：`adb install -r PriceLens-2.8.0.3.apk` 直接装在 2.8.0.2 之上
+（同签名才可能成功），装完 `versionName=2.8.0.3`，且引导条从"还缺 无障碍服务与悬浮窗权限"
+变成只剩"还缺 无障碍服务"——**悬浮窗授权活下来了**，这就是"老用户升级不丢数据"的实测。
+（第一次装失败是 `INSTALL_FAILED_ABORTED: User rejected permissions`：手机在等待确认期间锁屏了，
+vivo 的安装确认页拿不到前台就自动拒。唤醒重试即成功，与包本身无关。）
+
+**本版没有做的事，写清楚免得下次照着改**：
+
+- CI 的 release job 会把 `app-release.apk` 重命名成中文长名，GitHub 洗掉非 ASCII 后变成
+  `PriceLens._vv2.8.0.3_._.apk`（2.8.0.2 就是这样，当时补传了一枚干净命名的）。
+  本次同样补传了 `PriceLens-2.8.0.3.apk`（同一 sha256），**但没有改工作流**：
+  发版进行中动 CI 的风险大于一个文件名的收益。该改的是那一行 `mv` 的目标名。
+- 真机截图复核只跑了浅色 + 深色各一轮，**设置页里两处同类挤压没改**（「Shizuku 一键授权（可选）」
+  标题被右侧按钮挤成两行、断在"可/选）"；「登录自动抓取」按钮把说明文字挤到换行）——
+  形状与 F1 一模一样，留给下一批，别混进这次发版。
+- 蓝奏云 / 夸克仍挂 2.5.1（只有用户能传）；手机仍需重启才恢复 `uiautomator dump`。
