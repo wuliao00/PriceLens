@@ -310,9 +310,18 @@
     <string name="perm_shizuku_desc_not_granted">Shizuku 服务运行中。点击「授权」并在弹窗中允许后，将自动开启无障碍+悬浮窗+通知权限（GKD 式一键体验）。</string>
     <string name="perm_shizuku_desc_ready">无障碍与悬浮窗均已就绪，无需 Shizuku 介入。</string>
     <string name="perm_shizuku_desc_idle">点击即可一键开启无障碍服务并授予悬浮窗权限。</string>
-    <string name="perm_shizuku_install">安装 Shizuku</string>
-    <string name="perm_shizuku_open">打开 Shizuku</string>
-    <string name="perm_shizuku_grant">授权 Shizuku</string>
+    <!--
+      F13（2026-10-08 真机截图复核）：这三枚按钮原来都自带主语——「安装 Shizuku」「打开 Shizuku」
+      「授权 Shizuku」，而它们所在那一行的标题就叫「Shizuku 一键授权（可选）」。
+      同一个词在一行里出现两遍（与 F5「缓存 内存 0 KB」同族），代价是实打实的：按钮宽出 60dp，
+      把标题挤成两行、还断在「可 / 选）」这种半个括号上。
+      动作标签只说动作，主语由行标题给——同排另外三行用的「去开启」就是这个写法。
+      引导页那处复用同三个字符串（AccessibilityStep），它上面已有「用 Shizuku 一键开启」的标题，
+      去掉主语同样读得通。
+    -->
+    <string name="perm_shizuku_install">安装</string>
+    <string name="perm_shizuku_open">打开</string>
+    <string name="perm_shizuku_grant">授权</string>
     <string name="perm_shizuku_done">已完成</string>
     <string name="perm_shizuku_oneclick">一键开启</string>
 

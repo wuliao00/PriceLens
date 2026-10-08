@@ -177,7 +177,12 @@ fun CredentialsSection(settings: com.pricelens.data.repository.SettingsRepositor
             Text(
                 stringResource(R.string.settings_mmb_login_hint),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // F14（2026-10-08 真机截图复核）：这一行原来两个孩子都不带 weight，
+                // SpaceBetween 只分配"剩下的空隙"——文字先按自身宽度铺开，按钮被挤到没地方站，
+                // 于是「登录自动抓取」在屏上断成「登录自动抓 / 取」两行。
+                // 让说明文字吃剩余宽（它本来就该换行），按钮保住单行的固有宽度。
+                modifier = Modifier.weight(1f)
             )
             TextButton(onClick = {
                 context.startActivity(Intent(context, ManmanbuyLoginActivity::class.java))

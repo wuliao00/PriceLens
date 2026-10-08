@@ -7,6 +7,39 @@
 
 ## [Unreleased]
 
+### 优化（界面排布人性化第二批 F13–F14：拿 §9.36 那把尺去量设置页）
+
+- **F13**：「Shizuku 一键授权（可选）」这一行的按钮原来叫「授权 **Shizuku**」——同一个词在一行里
+  出现两遍（与 F5「缓存 内存 0 KB」同族），代价是实打实的：按钮宽出约 60dp，把标题挤成两行、
+  还断在「可 / 选）」这种半个括号上 ⇒ 三枚动作标签去掉主语（安装 / 打开 / 授权），
+  与同排另外三行既有的「去开启」同一写法。引导页复用同三个字符串，其上方已有
+  「用 Shizuku 一键开启（推荐）」的标题，去掉主语仍读得通。真机截图已验到标题回到一行
+- **F14**：慢慢买 Cookie 那一行是 `Row(SpaceBetween) { 说明文字 ; 按钮 }`，两个孩子都不带 weight
+  ⇒ `SpaceBetween` 只分配"剩下的空隙"，按钮被挤到没地方站，「登录自动抓取」断成
+  「登录自动抓 / 取」两行 ⇒ 说明文字吃剩余宽（它本来就该换行），按钮保住单行的固有宽度
+
+### 修复（F16：调试包与正式包互相把对方的无障碍开关读成自己的）
+
+- `isPriceLensAccessibilityEnabled` 原来判的是子串：`enabled.contains("com.pricelens") &&
+  enabled.contains("PriceMonitorService")`。调试包的 applicationId 是 `com.pricelens.dev`，
+  **它同样 contains("com.pricelens")** ⇒ 正式包的无障碍开着，调试包会说"我开着"（反之亦然）。
+  同一台机上并装这两个包是本仓库验证流程的常态，不是假想情形
+- 改成按 `context.packageName` 拼出**本包自己的组件串**再匹配。留了两处刻意的宽松：
+  按 `:` 切逐项匹配、项内用 `contains` 而不是全等——个别 ROM 会在那串后面挂额外字段，
+  全等会把"明明开着"判成没开；假阴比假阳更难被发现（用户照着"没开"去开一遍，界面还是说他没开）。
+  包名部分不会串味：`com.pricelens/…` 不是 `com.pricelens.dev/…` 的子串，反之亦然
+
+### 修复（CI：release 产物名被 GitHub 洗成乱码，每次发版都要手工补传附件）
+
+- release job 把 `app-release.apk` 改名成中文长名，GitHub 剥掉非 ASCII 后变成
+  `PriceLens._vv2.8.0.3_._.apk`（`v` 还叠成了 `vv`）。这个名字是 `update.json` 的 `apkUrls`
+  与 `dist` 分支共同引用的键，2.8.0.2 / 2.8.0.3 两次都靠发版的人**记得**再手工传一枚干净命名的
+  附件——靠人记得的事就是没有保障的事 ⇒ 目标名改回纯 ASCII `PriceLens-<版本>.apk`
+- 顺带把 `github.event.release.tag_name` 从 `run:` 里的直接内插改成走 `env:` 传参：
+  tag 名是事件可控字段，写进命令行就是注入面（本仓库为 `workflow_dispatch` 的 inputs
+  立过同一条规矩，这次是把同一条规矩补到漏掉的那一处）
+- YAML 用 python 解析过（step 的 `env/if/name/run` 齐全），`${TAG#v}` 的取名逻辑本机跑过
+
 ### 修复（CI 门禁的一条真实缺陷：暖缓存必然假红；详见 §9.31 三）
 
 - 同一棵树，release 事件那次 8m53s **绿**、紧接着推 main 那次 59 秒 **红**，报"预测文件没生成"。

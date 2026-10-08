@@ -27,18 +27,40 @@ import com.pricelens.util.ShizukuHelper
  * （系统授权回调、Shizuku 一键开启完成后）。
  */
 
+/** 本 App 的无障碍服务类名（不随 applicationId 变：它由 namespace 决定，调试包也是这个类名） */
+private const val PRICELENS_SERVICE_CLASS = "com.pricelens.accessibility.PriceMonitorService"
+
+/**
+ * 纯判定部分。抽出来是为了能被 JVM 单测钉住——读 `Settings.Secure` 要 Context，测不到，
+ * 而"两个包的开关会不会互相串味"恰恰是这次改动的全部风险所在（见 [isPriceLensAccessibilityEnabled]）。
+ *
+ * @param settingValue `enabled_accessibility_services` 原文，形如 `pkg/class:pkg/class`；没开启时是 null 或字面量 "null"
+ * @param packageName **本包**的 applicationId（正式版 `com.pricelens`，调试包 `com.pricelens.dev`）
+ */
+fun accessibilityComponentEnabled(settingValue: String?, packageName: String): Boolean {
+    if (packageName.isBlank()) return false
+    if (settingValue.isNullOrBlank() || settingValue.equals("null", ignoreCase = true)) return false
+    val component = "$packageName/$PRICELENS_SERVICE_CLASS"
+    // 按 ':' 切逐项匹配、项内用 contains 而不是全等：个别 ROM 会在那串后面挂额外字段，
+    // 全等会把"明明开着"判成没开——假阴比假阳更难被发现，也更糟：用户照着"没开"去开一遍，
+    // 界面还是说他没开。而包名部分不会串味：`com.pricelens/…` 不是 `com.pricelens.dev/…` 的子串，反之亦然。
+    return settingValue.split(':').any { it.contains(component, ignoreCase = true) }
+}
+
 /**
  * 无障碍服务是否已开启（从 PermissionSection 抽出的同一份判定，供引导与提示条复用）。
  * 命名与设置页原 internal 方法区分，避免两个包之间同名互相混淆。
+ *
+ * F16（2026-10-08）：判的是**这个包自己的组件**，不是子串 `"com.pricelens"`。
+ * 旧写法 `enabled.contains("com.pricelens") && enabled.contains("PriceMonitorService")`
+ * 在调试包上会误判：调试包的 applicationId 是 `com.pricelens.dev`，它同样 `contains("com.pricelens")`
+ * ——于是"正式包的无障碍开着"会被调试包读成"我开着"（反之亦然）。
+ * 同一台机上并装这两个包是本仓库验证流程的常态，不是假想情形。
  */
-fun isPriceLensAccessibilityEnabled(context: Context): Boolean {
-    val enabled = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-    ) ?: return false
-    return enabled.contains("com.pricelens") &&
-        enabled.contains("PriceMonitorService", ignoreCase = true)
-}
+fun isPriceLensAccessibilityEnabled(context: Context): Boolean = accessibilityComponentEnabled(
+    Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES),
+    context.packageName
+)
 
 /** 还缺哪些必要权限（首页 SetupHintBar 文案用） */
 enum class MissingEssential {

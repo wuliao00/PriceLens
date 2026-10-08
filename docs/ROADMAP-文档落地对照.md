@@ -2148,3 +2148,41 @@ vivo 的安装确认页拿不到前台就自动拒。唤醒重试即成功，与
   标题被右侧按钮挤成两行、断在"可/选）"；「登录自动抓取」按钮把说明文字挤到换行）——
   形状与 F1 一模一样，留给下一批，别混进这次发版。
 - 蓝奏云 / 夸克仍挂 2.5.1（只有用户能传）；手机仍需重启才恢复 `uiautomator dump`。
+
+### 9.38 第三十五批（2026-10-08 晚）——拿 §9.36 那把尺去量设置页，顺手挖出一个"两个包互相冒充"的判定
+
+发版之后接着走。这一批没有新方法论，就是把同一把尺（"这句话还读不读得出来、这个判定还属不属于这个包"）
+挪到 §9.36 没覆盖的设置页，结果四条里有一条不是排版问题，是**判定串味**。
+
+**F13 / F14 是同一族**（动作标签自带主语 + SpaceBetween 不带 weight）：
+「Shizuku 一键授权（可选）」那行的按钮叫「授权 **Shizuku**」，同一个词一行里两遍，
+挤掉 60dp 之后标题断成「Shizuku 一键授权（可 / 选）」——去掉按钮的主语即可，
+同排另外三行用的「去开启」本来就是这种写法（真机 v7-03 拍到标题回到一行）。
+慢慢买那行是 `Row(SpaceBetween){说明; 按钮}` 两个孩子都不带 weight，
+`SpaceBetween` 只分配"剩下的空隙"，于是按钮被挤成「登录自动抓 / 取」两行——让说明文字吃剩余宽。
+
+**F15（CI）不是外观，是把一件"靠人记得"的事改成有保证**：release job 把 APK 改名成中文长名，
+GitHub 剥非 ASCII 后变成 `PriceLens._vv2.8.0.3_._.apk`（`v` 叠成 `vv`）。
+这个名字是 `update.json.apkUrls` 与 `dist` 分支共同引用的键，2.8.0.2 / 2.8.0.3 两次都靠发版的人
+**记得**再手工补传一枚干净命名的附件。改回纯 ASCII `PriceLens-<版本>.apk`；
+同时把 `github.event.release.tag_name` 从 `run:` 内插改成走 `env:`——tag 是事件可控字段，
+写进命令行就是注入面，这条规矩本仓库为 `workflow_dispatch` 的 inputs 早立过，这次是补上漏的那处。
+
+**F16 是这批里唯一一条"读起来对、跑起来错"**：`isPriceLensAccessibilityEnabled` 判的是
+`enabled.contains("com.pricelens") && enabled.contains("PriceMonitorService")`。
+调试包的 applicationId 是 `com.pricelens.dev`，**它本身就 contains("com.pricelens")** ⇒
+正式包的无障碍开着，调试包会说"我开着"（反之亦然）。而"同一台机上并装这两包"恰恰是本仓库
+所有真机验证的常态，不是假想情形。改成按 `context.packageName` 拼出本包组件串再匹配。
+
+一处刻意的取舍：项内用 `contains` 而不是全等。个别 ROM 会在 `pkg/class` 后面挂字段，
+全等会把"明明开着"判成没开——**假阴比假阳更难被发现**（用户照着"没开"去开一遍，界面还是说他没开），
+所以宁可宽容；而包名那一侧不会串味：`com.pricelens/…` 不是 `com.pricelens.dev/…` 的子串，反之亦然。
+
+判定被抽成纯函数 `accessibilityComponentEnabled(settingValue, packageName)`，配 7 条 JVM 用例
+（双向不串味、冒号多项、项尾挂字段、别家同名服务不算、null/空/字面量"null"、大小写）。
+读 `Settings.Secure` 那层壳留在外面——它要 Context，测不到，本来就不该混进判定里。
+
+**验证**：`test ktlintCheck` 全绿（**973 条 × 两个变体，0 failures / 0 errors**，含新增 7 条），
+券评测对 baseline 容差 0.01 无回退（合计 36/0/0，P/R/F1 1.0000）。
+**没做完的一条要说清**：F14 的截图没验到——手机那会儿在用户手里（18:33 停在系统悬浮窗设置页），
+adb 注入直接被 `INJECT_EVENTS` 拒了，我没有继续点它。F13 已拍到，F16 的真机双向验证同样需要设备空闲。

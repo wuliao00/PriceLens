@@ -363,8 +363,19 @@ jobs:
       
       - name: 重命名 Android APK
         if: env.HAS_RELEASE_KEYS == 'true'
+        env:
+          # 事件字段走 env 传进 shell，不直接内插进 `run:`：tag 名是事件可控字段，
+          # 写死在命令行里就是注入面（本仓库为 workflow_dispatch 的 inputs 立过同一条规矩）。
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          mv release-assets/app-release.apk "release-assets/PriceLens比价助手_v${{ github.event.release.tag_name }}_免费开源_作者莫.apk"
+          # 目标名必须纯 ASCII。上一版这里用的是中文长名
+          # `PriceLens比价助手_vX.Y.Z_免费开源_作者莫.apk`，GitHub 把非 ASCII 全剥掉后
+          # 变成 `PriceLens._vvX.Y.Z_._.apk`（v 还叠成了 vv），只能事后手工补传一枚干净命名的附件。
+          # 这个名字是 `update.json` 的 apkUrls 与 `dist` 分支共同引用的键，
+          # 不能靠"发版的人记得补"——补漏一次就是清单指向一个不存在的附件。
+          NAME="PriceLens-${RELEASE_TAG#v}.apk"
+          mv release-assets/app-release.apk "release-assets/$NAME"
+          echo "release job 产物名：$NAME"
       
       - name: 发布 Release 资源
         uses: softprops/action-gh-release@v1
