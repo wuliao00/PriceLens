@@ -75,13 +75,21 @@
 
 ### 国内加速下载（推荐）
 
-| 平台 | Gitee（国内直链，免登录） | GitHub Release | 蓝奏云 | 夸克网盘 |
-|------|--------|----------|--------|----------|
-| **Android v2.8.0.4** | [PriceLens-2.8.0.4.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.4.apk) | [Release v2.8.0.4](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4) | 待更新（当前 2.5.1） | 待更新（当前 2.5.1） |
-| **Windows v2.1.1** | — | [Release v2.8.0.4](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4) | 待更新（当前 2.1.0） | 待更新（当前 2.1.0） |
+| 平台 | Gitee（国内直链，免登录） | GitHub Release | 蓝奏云 | 夸克网盘 | 123云盘 |
+|------|--------|----------|--------|----------|----------|
+| **Android v2.8.0.4** | [PriceLens-2.8.0.4.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.4.apk) | [Release v2.8.0.4](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4) | [PriceLens-2.8.0.4.apk.zip](https://www.ilanzou.com/s/PZ4d1SXy?code=klmZ)（**解压后**才是 .apk） | [pricelens](https://pan.quark.cn/s/7daae292ba34)（内含裸 .apk，免解压） | [pricelens](https://1828156079.share.123pan.cn/123pan/w5lUjv-Pxk3h?pwd=SRoZ)（提取码 SRoZ） |
+| **Windows v2.1.1** | — | [Release v2.8.0.4](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4) | [同上链接内的 zip](https://www.ilanzou.com/s/PZ4d1SXy?code=klmZ) | [同上链接内的 zip](https://pan.quark.cn/s/7daae292ba34) | [同上链接内的 zip](https://1828156079.share.123pan.cn/123pan/w5lUjv-Pxk3h?pwd=SRoZ) |
 
-  ⚠️ **蓝奏云提取码：4455**（已含在链接参数中，打开即可下载）；夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
-  网盘当前挂的还是旧版。**v2.8.0.4 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源，
+  提取码：蓝奏云 **klmZ**（已含在链接参数里，打开即可下载）；123云盘 **SRoZ**；夸克网盘无需提取码。
+  三个网盘分享的都是同一个 `pricelens` 目录，内含 Android 包与 Windows 包各一份。
+  ⚠️ **蓝奏云与 123云盘 那份外面套了一层 zip**（文件名是 `PriceLens-2.8.0.4.apk.zip`），
+  Android 不能直接安装 zip —— 下载后先解压，得到 `PriceLens-2.8.0.4.apk` 再装。
+  夸克那份是裸 .apk。
+  **哪份最可信**：优先用上面的 Gitee 直链（应用内更新的主源）或夸克那份。
+  夸克目录里的 `PriceLens-2.8.0.4.apk` 已逐文件核过大小为 **3,325,811 字节**，
+  与 CI 签名产物一致；蓝奏云 / 123云盘 那两份是压过一层的，解压后请对照下面这个 sha256 再装。
+
+  **v2.8.0.4 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源，
   已回读校验：Gitee raw 下载回来的文件与 CI 签名产物 sha256 逐字节相同），
   包体 3,325,811 字节，
   `sha256 = efba3cb5f046929362c84dec1892bb36e1c112dc19bba03b7cfa25597c8b32f7`
