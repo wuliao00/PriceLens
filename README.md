@@ -4,7 +4,7 @@
 
 > **双端开源** · **永久免费** · **本地优先** · **MIT License**  
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）  
-> 作者：**莫** | 版本：Android v2.8.0.3 / Desktop v2.1.1
+> 作者：**莫** | 版本：Android v2.8.0.4 / Desktop v2.1.1
 
 [![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -77,20 +77,20 @@
 
 | 平台 | Gitee（国内直链，免登录） | GitHub Release | 蓝奏云 | 夸克网盘 |
 |------|--------|----------|--------|----------|
-| **Android v2.8.0.3** | [PriceLens-2.8.0.3.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.3.apk) | [Release v2.8.0.3](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.3) | 待更新（当前 2.5.1） | 待更新（当前 2.5.1） |
-| **Windows v2.1.1** | — | [Release v2.8.0.3](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.3) | 待更新（当前 2.1.0） | 待更新（当前 2.1.0） |
+| **Android v2.8.0.4** | [PriceLens-2.8.0.4.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.4.apk) | [Release v2.8.0.4](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4) | 待更新（当前 2.5.1） | 待更新（当前 2.5.1） |
+| **Windows v2.1.1** | — | [Release v2.8.0.4](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4) | 待更新（当前 2.1.0） | 待更新（当前 2.1.0） |
 
   ⚠️ **蓝奏云提取码：4455**（已含在链接参数中，打开即可下载）；夸克网盘提取码：**WWnG**。两个网盘均为同一文件分享链接。
-  网盘当前挂的还是旧版。**v2.8.0.3 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源，
+  网盘当前挂的还是旧版。**v2.8.0.4 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源，
   已回读校验：Gitee raw 下载回来的文件与 CI 签名产物 sha256 逐字节相同），
-  包体 3,325,847 字节，
-  `sha256 = 7165ad3eac51509189dae92d7d119cd32ff55fb8d5d01d3ec19b798af3586d03`
+  包体 3,325,811 字节，
+  `sha256 = efba3cb5f046929362c84dec1892bb36e1c112dc19bba03b7cfa25597c8b32f7`
   （这个值与 `update.json` 里的 `sha256` 必须一致；每次重新出包都三处同步：清单、
   `dist` 分支的包、GitHub Release 附件）。
   ⚠️ **v2.7.0 起改用正式 release 密钥签名**（此前 ≤2.6.5 的对外包为 debug 密钥签名）：从 ≤2.6.5 覆盖安装 2.7.0
   会因签名不同失败，需**卸载重装一次**，本机自采的盯价数据会清空，深表歉意。
-  **2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 / 2.8.0.3 五版已逐版核对为同一枚密钥**
-  （证书 `CN=wuliao00, OU=PriceLens`，SHA-256 前缀 `c759cbb8`），所以这五版之间可直接覆盖升级、
+  **2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 / 2.8.0.3 / 2.8.0.4 六版已逐版核对为同一枚密钥**
+  （证书 `CN=wuliao00, OU=PriceLens`，SHA-256 前缀 `c759cbb8`），所以这六版之间可直接覆盖升级、
   数据不丢，应用内"检查更新"也能直接升，不再断链。
 
 
