@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -15,6 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -45,6 +49,9 @@ import com.pricelens.ui.theme.Dims
 fun AiModelSection(modifier: Modifier = Modifier, viewModel: AiModelViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val capability = state.capability
+    // 下载确认：点按钮不直接开下，先让用户看一眼"多少兆、走的什么网"再决定。
+    // 用 rememberSaveable 而不是 remember：弹窗开着时旋屏，确认态不该丢
+    var confirmDownload by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxWidth()) {
         // 标题不在这里画：外层 SettingsBand 已经给了组名（第一版两边都画，真机上一眼看到两个「端侧识别（可选）」）
@@ -65,9 +72,27 @@ fun AiModelSection(modifier: Modifier = Modifier, viewModel: AiModelViewModel = 
                 Text(stringResource(R.string.ai_model_recommend, recommendedMb), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(Dims.SpacingXS))
                 ReasonText(state.advice)
+                // 计费网络的提醒放在按钮**上方**：它是"要不要点"的输入，不是点完之后的回执。
+                // 强调交给下面那个必须回答的确认弹窗（拦得住一次误点），这里只负责平时看得见。
+                if (state.advice.meteredWarning) {
+                    Spacer(Modifier.height(Dims.SpacingXS))
+                    Text(
+                        stringResource(R.string.ai_model_metered_inline, recommendedMb),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Spacer(Modifier.height(Dims.SpacingS))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(enabled = state.progress == null, onClick = viewModel::startDownload) {
+                    OutlinedButton(
+                        enabled = state.progress == null,
+                        onClick = {
+                            // 点这一下先重问一次网络：这一页可能已经开着几分钟了，
+                            // Wi-Fi 掉成移动数据时若还按旧状态弹窗，就是"提醒说了个假的"
+                            viewModel.refresh()
+                            confirmDownload = true
+                        }
+                    ) {
                         Text(stringResource(R.string.ai_model_download))
                     }
                     val progress = state.progress
@@ -112,6 +137,48 @@ fun AiModelSection(modifier: Modifier = Modifier, viewModel: AiModelViewModel = 
             )
         }
     }
+
+    if (confirmDownload) {
+        val recommendedMb = ModelRepository.BYTES / 1_000_000L
+        // 两条正文而不是一条带条件从句的：移动数据那句要把"会计费"说死，
+        // Wi-Fi 那句不该挂一个用不上的警告号
+        val bodyRes = if (state.advice.meteredWarning) {
+            R.string.ai_model_confirm_body_metered
+        } else {
+            R.string.ai_model_confirm_body_wifi
+        }
+        AlertDialog(
+            onDismissRequest = { confirmDownload = false },
+            title = { Text(stringResource(R.string.ai_model_confirm_title)) },
+            text = {
+                Column {
+                    Text(
+                        stringResource(bodyRes, recommendedMb),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(Dims.SpacingS))
+                    Text(
+                        stringResource(R.string.ai_model_confirm_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDownload = false
+                        viewModel.startDownload()
+                    }
+                ) { Text(stringResource(R.string.ai_model_confirm_ok)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDownload = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
 }
 
 /** 换行/截断都交给 Compose，三处复用同一个"小字理由"的样式 */
@@ -134,7 +201,6 @@ private fun deviceSummary(capability: DeviceCapability): String = stringResource
 private fun reasonLine(advice: ModelAdvice): String = when (advice.reasonKey) {
     ModelAdvisor.REASON_BATTERY -> stringResource(R.string.ai_model_reason_battery, OnDeviceAiPolicy.MinBatteryPercent)
     ModelAdvisor.REASON_FREE_RAM -> stringResource(R.string.ai_model_reason_ram)
-    ModelAdvisor.REASON_METERED -> stringResource(R.string.ai_model_reason_metered)
     ModelAdvisor.REASON_ABI -> stringResource(R.string.ai_model_reason_abi)
     ModelAdvisor.REASON_NOT_INSTALLED -> {
         val recommendedMb = ModelRepository.BYTES / 1_000_000L

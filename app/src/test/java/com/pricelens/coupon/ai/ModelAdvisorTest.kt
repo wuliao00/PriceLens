@@ -1,6 +1,8 @@
 package com.pricelens.coupon.ai
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -61,15 +63,57 @@ class ModelAdvisorTest {
         assertEquals(ModelAdvisor.REASON_FREE_RAM, ram.reasonKey)
     }
 
+    /*
+     * 计费网络这一组（2026-10-08 改契约）：
+     *
+     * 改前这里是 `WAIT + REASON_METERED` —— 移动数据下**连下载按钮都不给**。那条 metered 判据
+     * 在 `OnDeviceAiPolicy` 里的语义是"App 自己别偷偷用流量下 397MB"（策略层那条测试一字未改，
+     * 依旧 queue），但本层回答的是"该给用户看什么"，于是把一个"要提醒"的事做成了"不许"：
+     * 用户站在设置页里，看着一句"等条件满足再来"，什么也点不了。
+     *
+     * 现在的契约：入口照给、按钮照点，代价是必须把流量说清楚（`meteredWarning` 交给界面出确认弹窗）。
+     * 决定权回到用户手里，而不是被一条为自动行为写的阈值替用户决定。
+     */
     @Test
-    fun `计费网络只挡下载不挡已经装好的模型`() {
+    fun `移动数据下仍给下载入口，但要带流量提醒`() {
         val notDownloaded = ModelAdvisor.advice(capable(metered = true), false, false, 0L)
-        assertEquals(ModelAdvice.State.WAIT, notDownloaded.state)
-        assertEquals(ModelAdvisor.REASON_METERED, notDownloaded.reasonKey)
+        assertEquals(ModelAdvice.State.SUGGEST_INSTALL, notDownloaded.state)
+        assertEquals(ModelAdvisor.REASON_NOT_INSTALLED, notDownloaded.reasonKey)
+        assertTrue("移动数据 + 还没下载 ⇒ 必须提醒流量", notDownloaded.meteredWarning)
+    }
 
-        // 正例对照：同样的计费网络，模型已经装好了 ⇒ 照样能用（推理不产生流量）
+    @Test
+    fun `已同意但没下完时移动数据下也是给下载入口并提醒`() {
+        val advice = ModelAdvisor.advice(capable(metered = true), false, true, 0L)
+        assertEquals(ModelAdvice.State.NEEDS_DOWNLOAD, advice.state)
+        assertTrue(advice.meteredWarning)
+    }
+
+    @Test
+    fun `Wi-Fi 下不提醒流量`() {
+        val advice = ModelAdvisor.advice(capable(metered = false), false, false, 0L)
+        assertEquals(ModelAdvice.State.SUGGEST_INSTALL, advice.state)
+        assertFalse("非计费网络却提醒流量 = 狼来了，用户很快就不信这句提醒", advice.meteredWarning)
+    }
+
+    @Test
+    fun `模型已在本地时移动数据不构成任何提醒（推理不产生流量）`() {
         val downloaded = ModelAdvisor.advice(capable(metered = true), true, true, 700L)
         assertEquals(ModelAdvice.State.READY, downloaded.state)
+        assertFalse(downloaded.meteredWarning)
+    }
+
+    @Test
+    fun `流量提醒不许把电量和内存这两道闸一起放过`() {
+        // metered 只放开"下载入口"这一件事；电量/空闲内存不达标仍然 WAIT——
+        // 否则这条改动会把真正跑不动的机器也放行（下载完跑不起来比不下更糟）
+        val battery = ModelAdvisor.advice(capable(metered = true, battery = 15), false, false, 0L)
+        assertEquals(ModelAdvice.State.WAIT, battery.state)
+        assertEquals(ModelAdvisor.REASON_BATTERY, battery.reasonKey)
+
+        val ram = ModelAdvisor.advice(capable(metered = true, freeRamMb = 1024), false, false, 0L)
+        assertEquals(ModelAdvice.State.WAIT, ram.state)
+        assertEquals(ModelAdvisor.REASON_FREE_RAM, ram.reasonKey)
     }
 
     @Test

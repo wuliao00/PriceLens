@@ -21,7 +21,18 @@
     <string name="ai_model_download_failed">下载失败或校验不过（文件已删除，可重试）</string>
     <string name="ai_model_reason_battery">电量低于 %1$d%%，充上电再下载（下载与推理都吃电）</string>
     <string name="ai_model_reason_ram">可用内存低于 2 GB，先清一下后台</string>
-    <string name="ai_model_reason_metered">当前是移动数据，397MB 建议连 Wi-Fi 再下</string>
+    <!--
+      计费网络（2026-10-08 改）：原来这里只有一句"建议连 Wi-Fi 再下"，而界面在移动数据下
+      根本不给下载按钮（判据见 ModelAdvisor 的 meteredWarning）。现在是"能下 + 说清代价"，
+      所以文案分两处：inline 是平时看得见的一行，confirm_* 是点下去必须回答的那一句。
+      体积一律用 %1$d 传进来，不再把"397"写死在字符串里——真值是 396,705,472 字节。
+    -->
+    <string name="ai_model_metered_inline">当前是移动数据：这 %1$d MB 会走流量。</string>
+    <string name="ai_model_confirm_title">下载端侧模型？</string>
+    <string name="ai_model_confirm_body_wifi">模型约 %1$d MB，当前是 Wi-Fi。</string>
+    <string name="ai_model_confirm_body_metered">模型约 %1$d MB，当前是移动数据 —— 下载会消耗 %1$d MB 流量，是否继续？建议连 Wi-Fi 再下。</string>
+    <string name="ai_model_confirm_note">下载完会校验 sha256，可随时删除；不装也不影响规则识别与比价。</string>
+    <string name="ai_model_confirm_ok">下载</string>
     <string name="ai_model_reason_abi">本安装包不含本机架构的推理引擎</string>
     <string name="ai_model_reason_not_installed">模型还没下载（约 %1$d MB，可断点续传）</string>
     <string name="ai_model_reason_device_ram">机型总内存低于 %1$d GB，端侧推理跑不动</string>

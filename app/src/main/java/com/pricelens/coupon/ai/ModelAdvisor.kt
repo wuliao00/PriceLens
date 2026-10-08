@@ -27,14 +27,24 @@ data class DeviceCapability(
  * 而首次进入时"用户还没表态"与"用户明确关掉了"要区分开 —— 否则推荐卡永远不出现。
  * 所以这里用 `userEnabled = true` 去问策略（把"机型行不行"问出来），用户开关单独判。
  */
-data class ModelAdvice(val state: State, val reasonKey: String) {
+data class ModelAdvice(
+    val state: State,
+    val reasonKey: String,
+    /**
+     * "这一页该提醒用户：下载走的是计费网络"。2026-10-08 加，与下面 metered 那条判据的改动配对。
+     *
+     * 只在**还没下载**时才可能为 true：模型已在本地时推理不产生流量（[OnDeviceAiPolicy] 的
+     * `onMeteredNetwork` 注释就是这条口径），那时候提醒是噪音。
+     */
+    val meteredWarning: Boolean = false
+) {
 
     /**
      * - [READY] 已装且已开：什么都不用提示
      * - [OFF] 已装但用户关着：只在设置里露出开关，不弹推荐
      * - [SUGGEST_INSTALL] 机型能跑、还没装：**首次进入要推荐的那个状态**
      * - [NEEDS_DOWNLOAD] 用户已同意但还没装好（下到一半/被删了）：直接给下载入口，不再问一遍
-     * - [WAIT] 条件暂时不满足（电量/空闲内存/计费网络）——等条件变了可以重试，别对用户说"不行"
+     * - [WAIT] 条件暂时不满足（电量/空闲内存）——等条件变了可以重试，别对用户说"不行"
      * - [UNSUPPORTED] 结论不随等待改变（机型内存不够、装不下、或本包没有 arm64 引擎）
      */
     enum class State { READY, OFF, SUGGEST_INSTALL, NEEDS_DOWNLOAD, WAIT, UNSUPPORTED }
@@ -50,7 +60,14 @@ object ModelAdvisor {
     const val REASON_NOT_INSTALLED = "not-installed"
     const val REASON_BATTERY = "battery"
     const val REASON_FREE_RAM = "ram"
+
+    /**
+     * "排队是被计费网络挡的"这个标记。它**不会**出现在 [ModelAdvice.reasonKey] 里
+     * （那条判据在本层会被降级成"给入口 + 提醒"，见 [advice]），只用来分辨
+     * `QueueUntilIdle` 到底是被哪一条挡的——不另起一套判据顺序，避免两处各写一遍阈值。
+     */
     const val REASON_METERED = "metered"
+
     const val REASON_ABI = "abi"
 
     fun advice(capability: DeviceCapability, modelDownloaded: Boolean, userEnabled: Boolean, cacheBudgetMb: Long): ModelAdvice {
@@ -62,27 +79,43 @@ object ModelAdvisor {
         val hypothetical = OnDeviceAiPolicy.eligible(
             freeRamMb = capability.freeRamMb,
             batteryPercent = capability.batteryPercent,
+            // 真值照喂。这里不预先替策略把 metered 抹成 false：策略层那条判据的唯一生产调用方
+            // 就是本函数，抹掉等于让它那条判据再也没被执行过（2026-10-08 的第一版改法就是这么错的）。
+            // "用户点一下就能承担这条代价"这件事，表达在下面 QueueUntilIdle 的分支里。
             onMeteredNetwork = capability.onMeteredNetwork,
             modelDownloaded = modelDownloaded,
             userEnabled = true,
             deviceRamMb = capability.deviceRamMb,
             cacheBudgetMb = effectiveBudget
         )
-        return when (hypothetical) {
+        val (state, reason) = when (hypothetical) {
             AiDecision.Run -> when {
-                !modelDownloaded && userEnabled -> ModelAdvice(ModelAdvice.State.NEEDS_DOWNLOAD, REASON_NOT_INSTALLED)
-                !modelDownloaded -> ModelAdvice(ModelAdvice.State.SUGGEST_INSTALL, REASON_NOT_INSTALLED)
-                userEnabled -> ModelAdvice(ModelAdvice.State.READY, REASON_READY)
-                else -> ModelAdvice(ModelAdvice.State.OFF, REASON_OFF)
+                !modelDownloaded && userEnabled -> ModelAdvice.State.NEEDS_DOWNLOAD to REASON_NOT_INSTALLED
+                !modelDownloaded -> ModelAdvice.State.SUGGEST_INSTALL to REASON_NOT_INSTALLED
+                userEnabled -> ModelAdvice.State.READY to REASON_READY
+                else -> ModelAdvice.State.OFF to REASON_OFF
             }
-            AiDecision.QueueUntilIdle -> ModelAdvice(ModelAdvice.State.WAIT, waitReason(capability, modelDownloaded))
-            is AiDecision.Refused -> ModelAdvice(ModelAdvice.State.UNSUPPORTED, hypothetical.reason)
+            AiDecision.QueueUntilIdle -> {
+                val why = waitReason(capability, modelDownloaded)
+                if (why == REASON_METERED) {
+                    // 三条排队原因里，只有计费网络是"用户点一下、代价他自己认"就能继续的那种：
+                    // 策略那条判据的语义是"App 别偷偷用流量下 397MB"，不是"用户不许下"。
+                    // 电量/空闲内存不一样——那两条是"下完也跑不动"，用户点确认也变不出内存，
+                    // 所以它们仍然走 WAIT，不许被这次降级一起放过去。
+                    // （为什么这里不必再判一遍电量内存：策略的判据顺序是 电量→内存→计费，
+                    // 能走到 metered 就说明前两条已经过了；顺序由 OnDeviceAiPolicyTest 钉着。）
+                    (if (userEnabled) ModelAdvice.State.NEEDS_DOWNLOAD else ModelAdvice.State.SUGGEST_INSTALL) to REASON_NOT_INSTALLED
+                } else {
+                    ModelAdvice.State.WAIT to why
+                }
+            }
+            is AiDecision.Refused -> ModelAdvice.State.UNSUPPORTED to hypothetical.reason
         }
+        return ModelAdvice(state, reason, meteredWarning = capability.onMeteredNetwork && !modelDownloaded)
     }
 
     /** 排队的原因（按策略的判据顺序取第一个不满足的；顺序与 [OnDeviceAiPolicy.eligible] 保持一致） */
     private fun waitReason(capability: DeviceCapability, modelDownloaded: Boolean): String = when {
-        !capability.abiSupported -> REASON_ABI
         capability.batteryPercent < OnDeviceAiPolicy.MinBatteryPercent -> REASON_BATTERY
         capability.freeRamMb < OnDeviceAiPolicy.MinFreeRamMb -> REASON_FREE_RAM
         !modelDownloaded && capability.onMeteredNetwork -> REASON_METERED

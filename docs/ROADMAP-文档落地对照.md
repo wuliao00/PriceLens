@@ -2071,8 +2071,39 @@ The content may contain violation information      （45 字节）
 之后 `adb install -r -t` + 勾「已了解风险」+ 点「继续安装」才直接落到 User 0。
 **又一次"退出码/Success 字样不是证据"**——判安装成功只认 `pm list packages --user 0` 与 `dumpsys package … lastUpdateTime`。
 
-**六、门禁与自查。** ktlint 这轮抓到我两处：`Surface` 该排在 `SwipeToDismissBox` **之前**
-（ASCII 序 `u` < `w`，直觉的"按字母"会排错），以及 `ProfileScreen` 三个参数拆成多行触发
-`standard:function-signature`（本仓库阈值要求单行，`max_line_length = 140` 容得下）。
-`assembleDebug test ktlintCheck` 全绿：**962 条 × 两个变体，0 failures / 0 errors**（含本批新增的
-`CacheStatsTest` 4 条），券评测硬门禁对 `baseline.json` 容差 0.01 未退化。
+**六、门禁与自查。** ktlint 这轮抓到我三处：`Surface` 该排在 `SwipeToDismissBox` **之前**
+（ASCII 序 `u` < `w`，直觉的"按字母"会排错）、`ProfileScreen` 三个参数拆成多行触发
+`standard:function-signature`（本仓库阈值要求单行，`max_line_length = 140` 容得下）、
+以及 `AiModelSection` 里一个跨行的 `if/else` 表达式触发 `standard:multiline-if-else`
+（改成先 `val bodyRes = if (...) {...} else {...}` 再传，读着也更顺）。
+`assembleDebug test ktlintCheck` 全绿：**966 条 × 两个变体，0 failures / 0 errors**——
+其中 §9.36 批次自带 `CacheStatsTest` 4 条、追加那条端侧改动带 `ModelAdvisorTest` 11 条
+（`OnDeviceAiPolicyTest` 11 条一字未改仍绿，这是"策略层没被改动"的证据而不是巧合），
+券评测硬门禁对 `baseline.json` 容差 0.01 无回退。
+
+**七、发版前用户追加的一条（端侧模型下载）：一条为"自动行为"写的判据，被界面层当成了对用户的禁令。**
+
+改前的形状：设置页里点不进下载——`ModelAdvisor` 在计费网络下把状态判成 `WAIT`，界面只剩一句
+"现在不适合下载，等条件满足再来"，**按钮根本不画**。根因不在判据本身：
+`OnDeviceAiPolicy.eligible` 那条 `!modelDownloaded && onMeteredNetwork → QueueUntilIdle`
+写的是"**App 不许自己偷偷用用户的流量下 397MB**"，它服务的是没有用户在场的自动路径；
+界面层把它原样搬过来，语义就变成了"**用户**不许下"。这两件事差的是一个授权主体。
+
+改后的形状：入口照给、按钮照点，点下去先弹一次确认——写明体积与"当前是移动数据，下载会消耗
+396 MB 流量，是否继续"，确认才下；平时那一行流量提醒挂在按钮上方。点按钮前先 `refresh()`
+重问一次网络：这一页可能开着几分钟，Wi-Fi 掉成移动数据还按旧状态弹窗，就是"提醒说了个假的"。
+
+**策略层一字未改**（`OnDeviceAiPolicyTest` 那两条 metered 用例原样绿），降级只发生在
+"该给用户看什么"那一层——那层自己的注释就是这么分工的。而且**只降级计费网络这一条**：
+电量/空闲内存不达标仍然 `WAIT`，那两条是"下完也跑不动"，用户点确认也变不出内存。
+新增 5 条 `ModelAdvisorTest` 钉住这套契约，其中一条专门是"电量 15% + 移动数据同时不达标时
+不许一起放过"——这条反例是判据顺序的守门人：能走到 metered 就说明电量内存已经过了，
+所以降级处不必再判一遍阈值（顺序本身由策略层测试钉着，两处不各写一份）。
+
+一次自我纠正：第一版改的是往 `eligible(...)` 里恒传 `onMeteredNetwork = false`。看着等价，
+实际后果是**那条判据在生产里再也没被执行过**——策略层唯一的生产调用方就是这个 `advice`，
+抹掉入参等于悄悄删了判据。改成真值照喂、把"允许被用户推翻"显式写在 `QueueUntilIdle` 分支里，
+策略本身不撒谎，读代码的人也看得出是谁做的决定。
+
+顺带一处小的：旧文案把体积写死成「397MB」，真值是 396,705,472 字节 = 396MB。
+现在统一由 `%1$d` 传进去，字符串里不再留数字。
