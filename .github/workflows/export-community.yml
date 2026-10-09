@@ -20,7 +20,7 @@ jobs:
       GITEE_USER: ${{ secrets.GITEE_MIRROR_USERNAME }}
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # 浅克隆推 Gitee 会被拒（shallow update not allowed）
           fetch-depth: 0
