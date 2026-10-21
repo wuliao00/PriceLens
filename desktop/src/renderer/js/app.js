@@ -765,7 +765,7 @@ function buildMobileSyncSection(info) {
     const last = info.lastImport;
     section.appendChild(el('div', {
       class: 'fs-caption text-tertiary sync-note',
-      text: `上次收到 ${last.imported} 个目标 · 新增 ${last.added} / 更新 ${last.updated} / 跳过 ${last.skipped}`
+      text: `上次收到 ${last.received ?? last.imported} 个目标（可用 ${last.imported}） · 新增 ${last.added} / 更新 ${last.updated} / 跳过 ${last.skipped}`
         + `${last.error ? ` · ${last.error}` : ''}`,
     }));
   }

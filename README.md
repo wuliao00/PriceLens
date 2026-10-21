@@ -6,7 +6,7 @@
 >
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）+ Chrome/Edge 浏览器扩展
 >
-> 作者：**莫** | 版本：Android v2.8.0.4 / Desktop v2.6.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
+> 作者：**莫** | 版本：Android v2.8.0.4（2.8.0.5 待发）/ Desktop v2.6.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
 
 [![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -85,7 +85,7 @@
 | 平台 | Gitee（国内直链，免登录） | GitHub Release | 蓝奏云 | 夸克网盘 | 123云盘 |
 |------|--------|----------|--------|----------|----------|
 | **Android v2.8.0.4** | [PriceLens-2.8.0.4.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.4.apk) | [Release v2.8.0.4](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4) | [PriceLens-2.8.0.4.apk.zip](https://www.ilanzou.com/s/PZ4d1SXy?code=klmZ)（**解压后**才是 .apk） | [pricelens](https://pan.quark.cn/s/7daae292ba34)（内含裸 .apk，免解压） | [pricelens](https://1828156079.share.123pan.cn/123pan/w5lUjv-Pxk3h?pwd=SRoZ)（提取码 SRoZ） |
-| **Windows v2.6.0** + **扩展 v1.0.0** | [Gitee 发行版（扩展 + 源码）](https://gitee.com/wuliao11541/PriceLens/releases) | [GitHub Release v2.6.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)（安装器/便携 zip/扩展） | 旧版 v2.1.1（以 GitHub 新包为准） | 旧版 v2.1.1（以 GitHub 新包为准） | 旧版 v2.1.1（以 GitHub 新包为准） |
+| **Windows v2.6.0** + **扩展 v1.0.0** | [Gitee 分卷签名包（.001/.002）](https://gitee.com/wuliao11541/PriceLens/blob/dist/README-desktop-2.6.0.md) | [GitHub Release v2.6.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)（安装器/便携 zip/扩展） | 旧版 v2.1.1（以 GitHub 新包为准） | 旧版 v2.1.1（以 GitHub 新包为准） | 旧版 v2.1.1（以 GitHub 新包为准） |
 
   提取码：蓝奏云 **klmZ**（已含在链接参数里，打开即可下载）；123云盘 **SRoZ**；夸克网盘无需提取码。
   三个网盘分享的都是同一个 `pricelens` 目录，内含 Android 包与 Windows 包各一份。
@@ -169,7 +169,11 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 **下载**：见上方 [国内加速下载](#国内加速下载推荐) 表格，或 [Releases](https://github.com/wuliao00/PriceLens/releases) 中的 NSIS 安装器 / ZIP 便携版
 
 > v2.6.0 桌面端与 v1.0.0 扩展已发布：[GitHub Release](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)。
-> Gitee 发行版（releases 页面里的 `v2.6.0-desktop`）含扩展与源码；桌面安装包超过 Gitee 100MB 附件上限，请从 GitHub 下载。
+> Gitee 的桌面包已按 100MB 附件上限切成两卷并重压缩（自签名便携版）：
+> [分卷包说明与校验](https://gitee.com/wuliao11541/PriceLens/blob/dist/README-desktop-2.6.0.md)；
+> 两卷都下载后用 7-Zip 解 `.001`。
+> **手机联动需要 Android 2.8.0.5+**：2.8.0.4 及更早版本按默认安全策略禁止明文 HTTP，
+> 真机上点「测试连接」会报“连不上”（不是网络问题）。取证见 `docs/verification-mobile-sync-2026-10-21.md`。
 > 网盘仍是旧版 v2.1.1，不要拿旧包比对 2.6.0 的 sha256。
 
 **源码构建**：

@@ -275,16 +275,27 @@ class MobileSyncServer {
         await fs.writeFile(tmp, text, 'utf8');
         await fs.rename(tmp, file);
         const merged = this.mergeWatches(imported.watches);
+        // skipped 必须把"平台不支持"（转换阶段丢的）和"超出 20 个上限"（合并阶段丢的）加在一起。
+        // 旧写法先写 imported.skipped 再 ...merged，被 merge 的 0 覆盖 —— 真机上拼多多目标明明被丢，
+        // 界面/日志却显示"跳过 0"，违背"不支持平台如实 skipped"。
         this.lastImport = {
           at: Date.now(),
           name,
+          received: imported.received,
           imported: imported.watches.length,
-          skipped: imported.skipped,
+          skippedUnsupported: imported.skipped,
+          skippedInvalid: merged.skipped,
+          skipped: imported.skipped + merged.skipped,
           favorites: imported.favorites,
-          ...merged,
+          added: merged.added,
+          updated: merged.updated,
         };
         this.lastError = null;
-        this.logger.info?.(`[mobile-sync] 已接收 ${name}：${imported.watches.length} 个目标，新增 ${merged.added} / 更新 ${merged.updated} / 跳过 ${merged.skipped}`);
+        this.logger.info?.(
+          `[mobile-sync] 已接收 ${name}：收到 ${imported.received} 个目标（可用 ${imported.watches.length}），`
+          + `新增 ${merged.added} / 更新 ${merged.updated} / 跳过 ${imported.skipped + merged.skipped}`
+          + `（平台不支持 ${imported.skipped} / 超出上限 ${merged.skipped}）`
+        );
         this.onImport?.(this.lastImport);
         this.respond(res, 201, '');
         return;

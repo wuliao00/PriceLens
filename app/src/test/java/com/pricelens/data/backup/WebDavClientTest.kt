@@ -37,7 +37,10 @@ class WebDavClientTest {
         server.shutdown()
     }
 
-    private fun client() = WebDavClient(server.url("/dav/").toString(), "user", "pass")
+    // 用回环 IP 字面量，不用 server.url()：后者走 InetAddress.getCanonicalHostName()，
+    // 本机 hosts/加速器把 localhost 指到公网域名（本次实测是 steamcdn-a.akamaihd.net），
+    // 会被 PrivateHosts 的明文守卫正确拦下，测试就会假红。测试要测的是 WebDAV 逻辑，不是 DNS。
+    private fun client() = WebDavClient("http://127.0.0.1:${server.port}/dav/", "user", "pass")
 
     @Test
     fun `mkcol accepts 201 and 405 but rejects other codes`() = runBlocking {
@@ -129,7 +132,7 @@ class WebDavClientTest {
 
     @Test
     fun `testConnection reports unreachable when the host is down`() {
-        val dead = WebDavClient(server.url("/dav/").toString(), "user", "pass")
+        val dead = WebDavClient("http://127.0.0.1:${server.port}/dav/", "user", "pass")
         server.shutdown()
         assertEquals(WebDavProbe.Unreachable, runBlocking { dead.testConnection() })
     }

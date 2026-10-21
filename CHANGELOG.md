@@ -7,6 +7,29 @@
 
 ## [Unreleased]
 
+### 修复（真机取证：桌面端「手机联动」在 Android 上被明文策略拦死；2.8.0.5 待发）
+
+- **实测缺陷**：2026-10-21 在 vivo V2156A / Android 11 上，手机设置页点「测试连接」直接报
+  “连不上：地址不通或超时”，而桌面端同一时刻 `PROPFIND http://127.0.0.1:47821/pricelens/` 返回 207。
+  根因是 Manifest 按“所有数据源都是 HTTPS”的假设维持了默认禁止明文流量；桌面手机联动只有
+  HTTP + Basic Auth ⇒ 2.8.0.4 及更早的 App 在真机上**用不了这个功能**。OkHttp 抛的是
+  `CLEARTEXT communication … not permitted`，被 `testConnection()` 的 `IOException` 归类成“连不上”，
+  把平台策略拒绝伪装成网络问题。Node 模拟“按 Android 客户端实现验证”覆盖不到这一层。
+- **修复**：`usesCleartextTraffic="true"`（只为局域网 WebDAV）；新增 `PrivateHosts` 与
+  `WebDavClient` 两道守卫 —— 地址层只放行 localhost/RFC1918/链路本地/ULA/`.local`，公网明文拒绝；
+  OkHttp 网络拦截器对每个实际请求（含 30x 跳转）再查一次。`PrivateHostsTest` 4 条。
+  版本抬到 **2.8.0.5 / 26**。
+- **真机复验（debug `com.pricelens.dev`）**：测试连接“连接成功：WebDAV 可用，认证通过”；
+  立即备份“已备份：pricelens-20261021-150736.json”；恢复“0 个收藏 / 3 个盯价目标”；
+  手机库 db+`-wal`+`-shm` 读数 4 条盯价（含桌面下发的京东/淘宝，拼多多保留本机）。
+  逐条与截图见 `docs/verification-mobile-sync-2026-10-21.md`。
+- **桌面 2.6.0 的 skipped 计数同时修掉**：`androidBackupToWatches` 增加 `received`；
+  `lastImport` 不再被 `...merged` 把“平台不支持”的跳过数覆盖成 0，`skipped` 取
+  “平台不支持 + 超出 20 个上限”之和；日志/设置页文案改为“收到 N 个目标（可用 M）… 跳过 S”。
+  `desktop/_unit_check.js` 增加 `received=4` 断言，78 项全通过。
+- **边界**：本次 UI 取证是 debug 签名包；2.8.0.5 的 release APK 仍需 CI 用 `c759cbb8…` 出包后
+  在真机复验一次。桌面安装包仍是自签名（无 CA 证书），Windows 仍会提示未知发布者。
+
 ### 修复（CI：release 产物名被 GitHub 洗成乱码，每次发版都要手工补传附件）
 
 - release job 把 `app-release.apk` 改名成中文长名，GitHub 剥掉非 ASCII 后变成

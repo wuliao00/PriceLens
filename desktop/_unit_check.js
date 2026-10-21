@@ -682,6 +682,7 @@ check('android backup maps jd/taobao and skips unsupported platforms', () => {
   const mapped = androidBackupToWatches(androidPayload);
   assert.strictEqual(mapped.watches.length, 2);
   assert.strictEqual(mapped.skipped, 2);
+  assert.strictEqual(mapped.received, 4, '收到总数要含被跳过的两行（pdd + 坏行）');
   assert.strictEqual(mapped.favorites, 1);
   assert.strictEqual(mapped.watches[0].url, 'https://item.jd.com/100012043978.html');
   assert.strictEqual(mapped.watches[0].target, 3999);

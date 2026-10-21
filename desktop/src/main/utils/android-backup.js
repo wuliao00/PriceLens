@@ -49,7 +49,7 @@ function androidTargetToUrl(target) {
  * 解析手机备份，转成桌面 watches 配置（还未合并）。
  * @param {object|string} payload
  * @param {number} [now]
- * @returns {{watches:Array<object>, skipped:number, favorites:number}}
+ * @returns {{watches:Array<object>, skipped:number, received:number, favorites:number}}
  */
 function androidBackupToWatches(payload, now = Date.now()) {
   let data = payload;
@@ -88,6 +88,8 @@ function androidBackupToWatches(payload, now = Date.now()) {
   return {
     watches,
     skipped,
+    // 收到的总目标数（含被跳过的）：界面/日志要说"收到几、能用几"，不能只说"能用几"
+    received: targets.length,
     favorites: Array.isArray(data.favorites) ? data.favorites.length : 0,
   };
 }

@@ -110,9 +110,31 @@ class WebDavClient(
 ) {
     private val base: HttpUrl = normalizeBaseUrl(baseUrl)
 
+    /**
+     * 明文只许连本机/局域网：桌面端手机联动是 HTTP + Basic Auth，而 App 的数据源全是 HTTPS。
+     * 地址层先拦一次，网络层再拦一次（后者覆盖 30x 跳转，避免被私网服务器跳到公网明文）。
+     */
+    private val http: OkHttpClient = client.newBuilder()
+        .addNetworkInterceptor { chain ->
+            val url = chain.request().url
+            if (url.scheme == "http" && !PrivateHosts.isPrivate(url.host)) {
+                throw IOException("出于安全考虑，明文 HTTP 只允许连接本机或局域网地址（${url.host}）；公网请用 https://")
+            }
+            chain.proceed(chain.request())
+        }
+        .build()
+
+    init {
+        if (base.scheme == "http" && !PrivateHosts.isPrivate(base.host)) {
+            throw IllegalArgumentException(
+                "出于安全考虑，明文 HTTP 只允许连接本机或局域网地址（${base.host}）；公网请用 https://"
+            )
+        }
+    }
+
     /** MKCOL：201（已创建）与 405（已存在）都算成功；其余码返回 false */
     suspend fun mkcol(path: String): Boolean = withContext(Dispatchers.IO) {
-        client.newCall(builder().url(urlFor(path)).method("MKCOL", null).build()).execute().use {
+        http.newCall(builder().url(urlFor(path)).method("MKCOL", null).build()).execute().use {
             it.code == 201 || it.code == 405
         }
     }
@@ -121,7 +143,7 @@ class WebDavClient(
     suspend fun put(path: String, content: String) {
         withContext(Dispatchers.IO) {
             val body = content.toRequestBody(JSON_MEDIA)
-            client.newCall(builder().url(urlFor(path)).put(body).build()).execute().use {
+            http.newCall(builder().url(urlFor(path)).put(body).build()).execute().use {
                 if (!it.isSuccessful) throw IOException("PUT $path 失败：HTTP ${it.code}")
             }
         }
@@ -129,7 +151,7 @@ class WebDavClient(
 
     /** GET：非 2xx 返回 null（下载失败由调用方如实转述） */
     suspend fun get(path: String): String? = withContext(Dispatchers.IO) {
-        client.newCall(builder().url(urlFor(path)).get().build()).execute().use {
+        http.newCall(builder().url(urlFor(path)).get().build()).execute().use {
             if (it.isSuccessful) it.body?.string() else null
         }
     }
@@ -146,7 +168,7 @@ class WebDavClient(
     /** PROPFIND Depth:1；非 2xx / 网络异常 / 解析失败一律 null，成功返回目录条目（含集合自身） */
     suspend fun list(path: String): List<DavItem>? = withContext(Dispatchers.IO) {
         runCatching {
-            client.newCall(propfindRequest(urlFor(path), "1")).execute().use { resp ->
+            http.newCall(propfindRequest(urlFor(path), "1")).execute().use { resp ->
                 if (resp.isSuccessful) resp.body?.string()?.let { parsePropfind(it) } else null
             }
         }.getOrNull()
@@ -155,7 +177,7 @@ class WebDavClient(
     /** 测活：对 base 打 PROPFIND Depth:0，按结果分档（207/200 = 成功；401/403 = 认证失败） */
     suspend fun testConnection(): WebDavProbe = withContext(Dispatchers.IO) {
         try {
-            client.newCall(propfindRequest(base, "0")).execute().use { resp ->
+            http.newCall(propfindRequest(base, "0")).execute().use { resp ->
                 when {
                     resp.code == 401 || resp.code == 403 -> WebDavProbe.AuthFailed
                     resp.code == 207 || resp.code == 200 -> WebDavProbe.Ok
@@ -182,7 +204,7 @@ class WebDavClient(
 
     private suspend fun deleteUrl(url: HttpUrl): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            client.newCall(builder().url(url).delete().build()).execute().use { it.isSuccessful }
+            http.newCall(builder().url(url).delete().build()).execute().use { it.isSuccessful }
         }.getOrDefault(false)
     }
 
