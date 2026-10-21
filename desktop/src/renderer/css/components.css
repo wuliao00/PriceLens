@@ -152,6 +152,24 @@
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--sp-3);
 }
+.modal .btn { white-space: nowrap; }
+
+/* 手机联动配置行 */
+.sync-field {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-1) 0;
+}
+.sync-label { width: 42px; flex-shrink: 0; font-size: var(--fs-caption); color: var(--text-tertiary); }
+.sync-value {
+  flex: 1; min-width: 0;
+  padding: 3px var(--sp-2);
+  border-radius: var(--radius-tag);
+  background: var(--bg-input);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  overflow-wrap: anywhere;
+}
+.sync-note { line-height: 1.6; margin-top: var(--sp-1); }
 
 /* 免责协议：正文可滚动容器 + 底部同意按钮 */
 .disclaimer-scroll {

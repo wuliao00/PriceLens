@@ -1,7 +1,8 @@
-# PriceLens v2.5
+# PriceLens v2.6
 
 > 极简主义全网比价决策工具 —— 30 秒完成「种草 → 盯价 → 找券 → 社区验证」四步购物决策闭环。
-> v2.5 新增：**浏览器扩展（Chrome/Edge）** 与 **`pricelens://` 桌面端联动**。
+> v2.6 新增：**与手机 App 局域网联动**（复用 App 已有 WebDAV 备份，双向同步盯价目标）。
+> v2.5：浏览器扩展（Chrome/Edge）与 `pricelens://` 桌面端联动。
 > v2.4：同款多平台对比、盯价提醒历史、盯价目标备份/恢复。
 > v2.3：多商品盯价（上限 20 个）、历史分位购买建议、剪贴板商品链接识别、数据源健康状态。
 > v2.2：识货同款兜底源、B 站商单/夸大宣传标记（含否定语境豁免）。
@@ -32,6 +33,7 @@
 | 🛍️ 多平台 | 值得买爆料 | 按平台聚合同关键词爆料，取各平台最低价并显示与当前价的差额；不保证同规格 |
 | 🗂️ 备份 | 本机 JSON | 导出/导入盯价目标（不含 Cookie/apikey/运行态），最多 20 个，导入按 URL 合并 |
 | 🧩 浏览器扩展 | Chrome / Edge | 商品页右下角浮层：页面价 + B站评测 + 商单标记；一键 `pricelens://` 唤起桌面端 |
+| 📱 手机联动 | 局域网 WebDAV | 手机 App 已有「备份与恢复」直接指向电脑：手机备份 → 电脑合并盯价；电脑备份 → 手机恢复 |
 | 🎫 找券 | 购物党 | 隐藏优惠券 + 到手价 countUp 滚动，一键复制券码 |
 | 💬 社区 | 什么值得买 + 识货 | 最新爆料、值/不值比例条、热评关键词高亮、近 7 天更低价横幅；**识货同款兜底**（国补/品牌/销量标签） |
 | 📋 剪贴板 | 本机 | 窗口获得焦点时识别剪贴板里的京东/淘宝/B 站商品链接，提示一键去比价；只在本机读取 |
@@ -104,10 +106,26 @@ npm run build        # NSIS 安装器 + 便携 zip，输出到 dist/
 %APPDATA%/pricelens/
 ├── cache/            # JSON 缓存（products/history/bilibili/smzdm/coupons/misc；自建曲线走 history-local）
 │   └── _index.json   # 索引：key → { file, ts, ttl }
-├── settings.json     # 主题 / 多盯价目标 / 凭证（重启自动恢复轮询）
+├── settings.json     # 主题 / 多盯价目标 / 凭证 / 手机联动开关与口令
+├── mobile-sync/       # 手机上传的备份 + 桌面生成的 pricelens-desktop-sync.json
 ├── scripts.json      # 自定义脚本（名称 + 内容）
 └── logs/crawl.log    # 爬虫日志
 ```
+
+## 手机 App 局域网联动（v2.6）
+
+- **原理**：桌面端在局域网启动一个最小 WebDAV 端点，复用 Android App 现有
+  「设置 → 数据与备份 → WebDAV」；不需要改手机 App，也不经过任何云。
+- **双向同步**：
+  - 手机「立即备份」→ desktop 收到 `pricelens-<时间>.json`，把其中京东/淘宝盯价目标合并进桌面
+    （同 URL 以手机备份为准；拼多多/当当/识货/值得买目标如实计入 skipped）。
+  - 桌面生成 `pricelens-desktop-sync.json` → 手机「恢复」选中它，把桌面盯价目标写回手机
+    （新者胜；只输出京东/淘宝目标）。
+- **开启**：设置 → 手机联动 → 开启，得到地址（如 `http://192.168.5.7:47821/`）、用户名
+  `pricelens`、随机口令；在手机 App 的 WebDAV 三项里照填。手机与电脑需在同一 Wi-Fi；
+  USB 调试时可 `adb reverse tcp:47821 tcp:47821`，手机端地址用 `http://127.0.0.1:47821/`。
+- **安全**：默认关闭；只接受局域网/回环来源；Basic Auth；请求体上限 2MB；
+  只实现备份需要的 PROPFIND/MKCOL/PUT/GET/DELETE；没有 TLS（仅限可信局域网）。
 
 ## 浏览器扩展与协议联动（v2.5）
 
@@ -176,7 +194,8 @@ pricelens/
 ├── src/main/            # 主进程：窗口 / IPC / 爬虫 / 缓存
 │   ├── crawlers/        # bilibili(wbi) / smzdm / manmanbuy / gwdang / jd / linkstars / shihuo
 │   ├── cache/           # LRU + TTL 缓存管理；settings.json 含多盯价目标
-│   └── utils/           # http-client / rate-limiter / logger / sanitizer / relevance / ranking / content-risk / price-advice / watch-state / platform-compare / backup
+│   ├── mobile-sync-server.js # 手机联动 WebDAV 端点（v2.6）
+│   └── utils/           # http-client / rate-limiter / logger / sanitizer / relevance / ranking / content-risk / price-advice / watch-state / platform-compare / backup / android-backup / deep-link
 ├── src/renderer/        # 渲染层：零框架原生 HTML/CSS/JS（ES modules）
 │   ├── css/             # tokens / base / layout / components / animations
 │   └── js/              # app / router / components / utils

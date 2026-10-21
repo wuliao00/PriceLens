@@ -89,4 +89,12 @@ contextBridge.exposeInMainWorld('priceLens', {
   /* ── 主题变化推送（跟随系统模式） ── */
   onThemeChanged: (cb) => subscribeOnce('theme:changed', cb),
   onOpenProduct: (cb) => subscribeOnce('app:open-product', cb),
+
+  /* ── 手机 App 局域网联动 ── */
+  sync: {
+    getInfo:        ()        => ipcRenderer.invoke('sync:get-info'),
+    setEnabled:     (enabled) => ipcRenderer.invoke('sync:set-enabled', enabled),
+    regenerateToken:()        => ipcRenderer.invoke('sync:regenerate-token'),
+  },
+  onSyncImported: (cb) => subscribeOnce('sync:imported', cb),
 });

@@ -18,6 +18,45 @@
   立过同一条规矩，这次是把同一条规矩补到漏掉的那一处）
 - YAML 用 python 解析过（step 的 `env/if/name/run` 齐全），`${TAG#v}` 的取名逻辑本机跑过
 
+## [Desktop 2.6.0] - 2026-10-21
+
+### Added（桌面端）
+
+- **手机 App 局域网联动**：桌面端新增最小 WebDAV 端点（PROPFIND/MKCOL/PUT/GET/DELETE +
+  Basic Auth），复用 Android App 已有的「设置 → 数据与备份 → WebDAV」。
+  - 手机「立即备份」→ 桌面接收 `pricelens-<时间>.json`，把京东/淘宝盯价目标合并进桌面；
+    拼多多/当当/识货/值得买目标如实计入 skipped。
+  - 桌面生成 `pricelens-desktop-sync.json` → 手机「恢复」选中即可把桌面目标写回手机
+    （新者胜；只输出京东/淘宝目标）。
+  - 设置页展示地址/用户名/随机口令、启停、重新生成口令、上次导入结果；默认关闭，
+    只接受私网/回环来源，请求体上限 2MB，不经过任何云。USB 可用 `adb reverse`。
+- `utils/android-backup.js`：Android 备份 payload 与桌面 watches 的双向显式字段映射
+  （不含 Cookie/apikey；不支持平台跳过而不是伪造目标）。
+- `mobile-sync-server.js`：端口占用自动顺延、虚拟网卡过滤、Basic Auth、桌面备份文件自动生成。
+
+### Verification
+
+- `cd desktop && npm test`：78 项通过（新增 Android 备份映射/往返/非法 schema/平台跳过）。
+- `npm run lint`：47 个 JS 文件通过语法检查。
+- Node 端 WebDAV 全流程（模拟 Android WebDavClient 的精确方法与头部）：
+  401 未认证 → PROPFIND 207 → MKCOL 201/405 → PUT 201（新增 1 目标）→
+  PROPFIND 列表含上传文件与 `pricelens-desktop-sync.json` → GET 桌面备份 2 个目标 →
+  DELETE 204 → GET 404，`RESULT: PASS`。
+- Electron 合成数据 UI 冒烟：设置页展示手机联动地址/口令/上次导入，按钮与文案正常，无控制台错误。
+- **真机 App 联调未做**：本次执行时没有连接的 Android 设备（`adb devices` 为空），
+  因此只验证到「与 Android 客户端同请求序列」；手机端点按备份/恢复这一环尚未现场取证。
+- **打包后被控服务实测**：启动 `PriceLens-2.6.0`，通过渲染层 IPC 开启手机联动，得到
+  `http://192.168.5.7:47821/`；从 Node 以 Basic Auth 发送 PROPFIND `/`（207）→ MKCOL（405，
+  目录已存在）→ PUT 手机备份（201）→ 桌面 `watch.list` 出现
+  `jd:100012043978 / target=3888` → PROPFIND `/pricelens` 同时列出手机上传文件与
+  `pricelens-desktop-sync.json` → GET 桌面备份 200（1 个目标）→ 关闭服务。
+- `npm run build` 产出 `PriceLens-2.6.0-x64.exe`（114,258,061 字节，
+  sha256 `47e6d06f0420a1f5d7909740ce0fe7fc97d117d0a2568c9736137b065ba70bbf`）与
+  `PriceLens-2.6.0-x64.zip`（157,027,606 字节，
+  sha256 `2237f6b3d1c1dff8cf76c5ab02d37377214b14808dfb31052a957c50c8a1b686`）；
+  asar 内版本 2.6.0，含 `mobile-sync-server.js` / `android-backup.js`；
+  解包后的 `PriceLens.exe` 实启成功（日志版本 2.6.0）。安装包未做代码签名。
+
 ## [Desktop 2.5.0 / Extension 1.0.0] - 2026-10-21
 
 ### Added（桌面端 + 浏览器扩展）

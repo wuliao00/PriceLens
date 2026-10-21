@@ -1,8 +1,8 @@
 {
   "name": "pricelens",
   "productName": "PriceLens",
-  "version": "2.5.0",
-  "description": "PriceLens v2.5 —— 极简主义全网比价决策工具：桌面端 + 浏览器扩展；多商品盯价 / 多平台对比 / 识货兜底 / 商单标记",
+  "version": "2.6.0",
+  "description": "PriceLens v2.6 —— 极简主义全网比价决策工具：桌面端 + 浏览器扩展 + 手机 App 局域网联动；多商品盯价 / 多平台对比 / 识货兜底 / 商单标记",
   "author": "PriceLens Team",
   "license": "MIT",
   "private": true,

@@ -123,9 +123,10 @@ PriceLens/
 │   │   └── installer.nsh
 │   ├── src/
 │   │   ├── main/                  # 主进程
-│   │   │   ├── index.js           # 入口
+│   │   │   ├── index.js           # 入口 + pricelens:// 协议
 │   │   │   ├── preload.js         # 预加载脚本
-│   │   │   ├── ipc-handlers.js    # IPC 处理器
+│   │   │   ├── ipc-handlers.js    # IPC 处理器（含手机联动服务）
+│   │   │   ├── mobile-sync-server.js # 局域网 WebDAV（v2.6）
 │   │   │   ├── crawlers/          # 爬虫实现 (与 Android 同源)
 │   │   │   │   ├── index.js       # 搜索/历史/社区调度（识货兜底在此接入）
 │   │   │   │   ├── jd.js
@@ -150,7 +151,9 @@ PriceLens/
 │   │   │       ├── price-advice.js # 历史分位购买建议（v2.3.0）
 │   │   │       ├── watch-state.js  # 盯价状态机（v2.3.0，到价一次/回升再武装）
 │   │   │       ├── platform-compare.js # 同款多平台聚合（v2.4.0）
-│   │   │       └── backup.js       # 盯价目标备份/恢复（v2.4.0）
+│   │   │       ├── backup.js       # 盯价目标备份/恢复（v2.4.0）
+│   │   │       ├── android-backup.js # Android 备份格式 ↔ 桌面目标（v2.6.0）
+│   │   │       └── deep-link.js    # pricelens:// 深链（v2.5.0）
 │   │   └── renderer/              # 渲染进程
 │   │       ├── index.html
 │   │       ├── package.json

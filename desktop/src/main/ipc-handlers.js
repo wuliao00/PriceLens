@@ -16,6 +16,7 @@
 const { ipcMain, shell, Notification, dialog, app, nativeTheme, BrowserWindow, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const crypto = require('node:crypto');
 const crawlers = require('./crawlers');
 const CacheManager = require('./cache/manager');
 const storage = require('./cache/storage');
@@ -23,6 +24,7 @@ const scripts = require('./scripts/script-manager');
 const { openLoginWindow } = require('./mmb-login');
 const { nextWatchState, failedWatchState } = require('./utils/watch-state');
 const backup = require('./utils/backup');
+const { MobileSyncServer } = require('./mobile-sync-server');
 
 /** 各类数据的缓存 TTL（毫秒） */
 const TTL = {
@@ -592,6 +594,72 @@ function registerIpcHandlers({ getMainWindow, logger, takePendingOpen }) {
   if (getWatches().length > 0) {
     syncWatchTimer();
     logger.info(`检测到 ${getWatches().length} 个盯价目标，已恢复 30 分钟轮询`);
+  }
+
+  /* ══════════ 手机 App 联动（局域网 WebDAV） ══════════ */
+
+  let mobileSyncToken = storage.getSettings().mobileSyncToken;
+  if (!mobileSyncToken) {
+    mobileSyncToken = crypto.randomBytes(9).toString('hex');
+    storage.updateSettings({ mobileSyncToken });
+  }
+
+  const mobileSync = new MobileSyncServer({
+    dir: path.join(app.getPath('userData'), 'mobile-sync'),
+    token: mobileSyncToken,
+    getWatches,
+    mergeWatches: (incoming) => {
+      const merged = backup.mergeBackup(getWatches(), incoming);
+      saveWatches(merged.watches);
+      syncWatchTimer();
+      sendWatchUpdated();
+      return { added: merged.added, updated: merged.updated, skipped: merged.skipped };
+    },
+    onImport: (info) => {
+      logger.info(`手机联动已导入：新增 ${info.added} / 更新 ${info.updated} / 跳过 ${info.skipped}`);
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) win.webContents.send('sync:imported', info);
+    },
+    logger,
+  });
+
+  function mobileSyncInfo() {
+    return { ok: true, ...mobileSync.getInfo() };
+  }
+
+  ipcMain.handle('sync:get-info', () => mobileSyncInfo());
+
+  ipcMain.handle('sync:set-enabled', async (_e, enabled) => {
+    const on = Boolean(enabled);
+    try {
+      if (on) await mobileSync.start();
+      else await mobileSync.stop();
+      storage.updateSettings({ mobileSyncEnabled: on });
+      return mobileSyncInfo();
+    } catch (err) {
+      storage.updateSettings({ mobileSyncEnabled: false });
+      return { ok: false, error: friendlyError(err), ...mobileSync.getInfo() };
+    }
+  });
+
+  ipcMain.handle('sync:regenerate-token', async () => {
+    const wasRunning = mobileSync.running;
+    if (wasRunning) await mobileSync.stop();
+    mobileSyncToken = crypto.randomBytes(9).toString('hex');
+    storage.updateSettings({ mobileSyncToken });
+    mobileSync.token = mobileSyncToken;
+    if (wasRunning) await mobileSync.start();
+    return mobileSyncInfo();
+  });
+
+  // 开机恢复：用户上次显式开启才启动；绑定失败如实回退为关闭
+  if (storage.getSettings().mobileSyncEnabled) {
+    mobileSync.start()
+      .then(() => logger.info('手机联动服务已恢复'))
+      .catch((err) => {
+        logger.warn(`手机联动恢复失败: ${err.message}`);
+        storage.updateSettings({ mobileSyncEnabled: false });
+      });
   }
 
   /* ══════════ 自定义脚本 ══════════ */

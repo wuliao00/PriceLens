@@ -6,7 +6,7 @@
 >
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）+ Chrome/Edge 浏览器扩展
 >
-> 作者：**莫** | 版本：Android v2.8.0.4 / Desktop v2.5.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
+> 作者：**莫** | 版本：Android v2.8.0.4 / Desktop v2.6.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
 
 [![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -40,7 +40,8 @@
 | 优惠券一键复制 | ✅ | ✅ |
 | 历史分位购买建议 | ✅ 购买建议徽章 | ✅ 可入手 / 中等 / 再等等（样本 <8 不判断） |
 | 同款多平台对比 | ✅ 浮窗多平台胶囊 | ✅ 按平台取最低价 + 与当前价差额（不保证同规格） |
-| 盯价目标备份/恢复 | ✅ JSON + WebDAV | ✅ 本机 JSON 导出/导入（不含凭证） |
+| 盯价目标备份/恢复 | ✅ JSON + WebDAV | ✅ 本机 JSON + 手机 App 局域网 WebDAV 双向同步 |
+| 手机 App 局域网联动 | — | ✅ 设置里开启，手机现有备份/恢复指向电脑即可 |
 | 剪贴板商品链接识别 | ✅ 回前台横条 | ✅ 窗口聚焦提示 + 一键去比价 |
 | 盯价后台任务（30min 周期） | ✅ WorkManager | ✅ 多商品（上限 20）+ 暂停/恢复 + 托盘常驻 |
 | 自定义脚本 | ✅ Shizuku ADB | ✅ PowerShell 本机执行 |
@@ -167,8 +168,8 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 
 **下载**：见上方 [国内加速下载](#国内加速下载推荐) 表格，或 [Releases](https://github.com/wuliao00/PriceLens/releases) 中的 NSIS 安装器 / ZIP 便携版
 
-> v2.5.0 的桌面端源码与本地构建已完成，并新增 Chrome/Edge 扩展（v1.0.0）；正式安装包/扩展包
-> 尚未上传 Release；上方网盘/Releases 链接当前仍指向 v2.1.x 基线。
+> v2.6.0 的桌面端源码与本地构建已完成，并包含 Chrome/Edge 扩展（v1.0.0）与手机 App 局域网联动；
+> 正式安装包/扩展包尚未上传 Release；上方网盘/Releases 链接当前仍指向 v2.1.x 基线。
 
 **源码构建**：
 ```bash
@@ -249,6 +250,15 @@ npm run build        # 产出 dist/PriceLens-<version>-x64.exe 与 .zip（免安
   样本少于 8 个点只显示「样本不足」，不拿两三个点冒充历史低位。
 - **剪贴板识别与源健康**：窗口聚焦时识别剪贴板里的京东/淘宝/B 站链接并提示去比价（仅本机读取）；
   概览分别展示历史价/B站/找券/值得买/识货的本轮状态，失败不再混成「暂无数据」。
+
+### 📱 桌面端 ↔ 手机 App 联动（v2.6.0 新增）
+
+- **复用手机已有 WebDAV 备份**：桌面设置里开启「手机联动」后，手机 App → 设置 → 数据与备份 →
+  WebDAV 填电脑地址/用户名/口令。手机「立即备份」把盯价目标发到电脑；手机「恢复」选
+  `pricelens-desktop-sync.json` 把电脑目标写回手机。
+- **范围与边界**：只同步京东/淘宝盯价目标（桌面真能查价的平台）；拼多多/当当/识货/值得买目标
+  如实跳过。默认关闭、仅局域网访问、Basic Auth、请求体上限 2MB，不经过任何云。
+- **USB 也能用**：`adb reverse tcp:47821 tcp:47821`，手机端地址填 `http://127.0.0.1:47821/`。
 
 ### 🧩 浏览器扩展（v1.0.0 新增）
 
@@ -331,7 +341,7 @@ PriceLens/
 │       ├── util/                     # RateLimiter / WbiSigner / PriceFormatter
 │       └── di/                       # Hilt 依赖注入
 │
-├── desktop/                          # Electron 桌面端（v2.5.0：pricelens:// 联动 + 多平台对比 + 多盯价）
+├── desktop/                          # Electron 桌面端（v2.6.0：手机 App 联动 + pricelens:// + 多盯价）
 ├── extension/                        # Chrome/Edge MV3 扩展（v1.0.0：商品页浮层 + B站评测/商单标记）
 │   ├── src/main/
 │   │   ├── crawlers/                 # 同源爬虫：jd/gwdang/bili/smzdm/manmanbuy
@@ -393,7 +403,8 @@ UA 轮换 ×5 池
 2. **电商控件 ID 随版本变化**：`PriceNodeMatcher` 三张 ID 表需实机用 Layout Inspector 校准；启发式兜底已保证不至于完全失效
 3. **页面解析器随目标站改版需同步调整**：桌面端与 Android 端爬虫同源，改版需双端同步
 4. **扩展协议联动需要桌面端 v2.5.0+**：`pricelens://` 在安装器/运行时会注册；未安装桌面端时浏览器会提示没有可处理的应用。扩展只做商品页浮层与 B 站评测，历史价/找券/盯价仍由桌面端本机请求。
-5. **桌面端识货源受站点限制**：桌面端 v2.2.0 已移植识货兜底与商单/夸大标记；但识货 m 站接口 2026-10 实测对匿名请求常返回 `null`，此时桌面端如实降级（不伪造、不回退热榜），不影响值得买/找券/B 站等其它源
+5. **手机联动仅限可信局域网**：WebDAV 端点使用 HTTP + Basic Auth，没有 TLS；默认关闭、只接受私网/回环来源，请勿在公共 Wi-Fi 开启。需要同一 Wi-Fi 或 `adb reverse`，Windows 防火墙可能需放行对应端口。
+6. **桌面端识货源受站点限制**：桌面端 v2.2.0 已移植识货兜底与商单/夸大标记；但识货 m 站接口 2026-10 实测对匿名请求常返回 `null`，此时桌面端如实降级（不伪造、不回退热榜），不影响值得买/找券/B 站等其它源
 
 ---
 

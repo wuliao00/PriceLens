@@ -5,7 +5,7 @@
  *   - 视图路由（概览 / B站 / 盯价 / 找券 / 社区）
  *   - 主题、快捷键、设置弹窗、状态栏、盯价红点
  */
-import { el, icon, clear } from './utils/dom.js';
+import { el, icon, clear, copyText } from './utils/dom.js';
 import { formatPrice, formatBytes, timeAgo } from './utils/format.js';
 import { openExternalSafe } from './utils/sanitize.js';
 import { initSearchBar } from './components/search-bar.js';
@@ -531,10 +531,11 @@ async function openSettings() {
   if (modalEl) return; // 已打开
   const themeRes = await window.priceLens.getTheme();
   const cacheBytes = await window.priceLens.cache.size();
-  const [watchRes, credsRes, appInfo] = await Promise.all([
+  const [watchRes, credsRes, appInfo, syncRes] = await Promise.all([
     window.priceLens.watch.list(),
     window.priceLens.sys.getCreds(),
     window.priceLens.getAppInfo(),
+    window.priceLens.sync.getInfo(),
   ]);
   applyWatches(watchRes?.watches || []);
 
@@ -633,6 +634,9 @@ async function openSettings() {
           },
         }, '导入')))));
 
+  /* 手机 App 联动（局域网 WebDAV，复用手机端已有的备份/恢复入口） */
+  modal.appendChild(buildMobileSyncSection(syncRes));
+
   /* 数据源凭证（均可选，仅存本机） */
   const apiKeyInput = el('input', {
     class: 'field-input', type: 'text',
@@ -691,6 +695,104 @@ async function openSettings() {
   const root = document.getElementById('modal-root');
   root.appendChild(mask);
   modalEl = mask;
+}
+
+/** 手机联动区块：地址/账号/口令 + 开启/停止 + 重新生成口令 */
+function buildMobileSyncSection(info) {
+  const running = Boolean(info && info.running);
+  const section = el('div', { class: 'modal-section' },
+    el('h4', { text: '手机联动（PriceLens App）' }),
+    el('div', { class: 'modal-row' },
+      el('span', {
+        class: 'fs-caption text-secondary',
+        text: running
+          ? '已开启 · 手机 App 可通过局域网备份/恢复盯价目标'
+          : '未开启 · 手机与电脑在同一 Wi-Fi 时可双向同步盯价目标',
+      }),
+      el('button', {
+        class: running ? 'btn btn--danger' : 'btn btn--primary',
+        on: {
+          click: async (e) => {
+            const btn = e.currentTarget;
+            btn.disabled = true;
+            const res = await window.priceLens.sync.setEnabled(!running);
+            if (res && !res.ok && res.error) showToast(res.error);
+            closeSettings();
+            setTimeout(openSettings, 60);
+          },
+        },
+      }, running ? '停止' : '开启')));
+
+  if (running) {
+    const urls = Array.isArray(info.urls) && info.urls.length ? info.urls : [info.url];
+    section.appendChild(syncField('地址', urls[0], true));
+    if (urls.length > 1) {
+      section.appendChild(el('div', {
+        class: 'fs-caption text-tertiary sync-note',
+        text: `其它网卡地址：${urls.slice(1).join('  ')}`,
+      }));
+    }
+    section.appendChild(syncField('用户名', info.user, true));
+    section.appendChild(syncField('口令', info.token, true));
+    section.appendChild(el('div', {
+      class: 'fs-caption text-tertiary sync-note',
+      text: '手机 App → 设置 → 数据与备份 → WebDAV 填以上三项；手机「立即备份」会把盯价目标发到电脑，'
+        + '手机「恢复」选 pricelens-desktop-sync.json 可把电脑目标发到手机。只同步京东/淘宝目标。',
+    }));
+    section.appendChild(el('div', {
+      class: 'fs-caption text-tertiary sync-note',
+      text: `USB 调试时也可先执行 adb reverse tcp:${info.port} tcp:${info.port}，再用 http://127.0.0.1:${info.port}/。`,
+    }));
+    section.appendChild(el('div', { class: 'modal-row', style: { justifyContent: 'flex-end' } },
+      el('button', {
+        class: 'btn btn--text',
+        on: {
+          click: async () => {
+            const res = await window.priceLens.sync.regenerateToken();
+            if (res && res.ok) {
+              showToast('已重新生成口令');
+              closeSettings();
+              setTimeout(openSettings, 60);
+            } else {
+              showToast((res && res.error) || '生成失败');
+            }
+          },
+        },
+      }, '重新生成口令')));
+  }
+
+  if (info && info.lastImport) {
+    const last = info.lastImport;
+    section.appendChild(el('div', {
+      class: 'fs-caption text-tertiary sync-note',
+      text: `上次收到 ${last.imported} 个目标 · 新增 ${last.added} / 更新 ${last.updated} / 跳过 ${last.skipped}`
+        + `${last.error ? ` · ${last.error}` : ''}`,
+    }));
+  }
+  if (info && info.lastError) {
+    section.appendChild(el('div', { class: 'fs-caption sync-note', style: { color: 'var(--danger)' }, text: `最近错误：${info.lastError}` }));
+  }
+  return section;
+}
+
+/** 一行可复制的联动配置 */
+function syncField(label, value, copyable) {
+  const text = String(value || '');
+  const row = el('div', { class: 'sync-field' },
+    el('span', { class: 'sync-label', text: label }),
+    el('code', { class: 'sync-value', text, title: text }));
+  if (copyable) {
+    row.appendChild(el('button', {
+      class: 'btn btn--text',
+      on: {
+        click: async () => {
+          const ok = await copyText(text);
+          showToast(ok ? '已复制' : '复制失败');
+        },
+      },
+    }, '复制'));
+  }
+  return row;
 }
 
 function closeSettings() {
@@ -897,6 +999,10 @@ function boot() {
   window.priceLens.onWatchUpdated((payload) => {
     applyWatches(payload?.watches || []);
     if (router.current() === 'price') router.rerender();
+  });
+  window.priceLens.onSyncImported((info) => {
+    showToast(`手机联动：新增 ${info.added} / 更新 ${info.updated} 个盯价目标`);
+    refreshWatches();
   });
   refreshWatches();
 

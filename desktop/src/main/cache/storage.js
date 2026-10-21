@@ -24,6 +24,8 @@ const DEFAULT_SETTINGS = {
   watch: null,            // v2.2 及以前单条盯价；initStorage 迁移进 watches 后置空
   linkstars_apikey: '',   // 星罗好货开放平台 apikey（历史低价参考）
   mmb_cookie: '',         // 慢慢买登录 Cookie（完整历史曲线）
+  mobileSyncEnabled: false, // 手机 App 局域网联动（WebDAV）开关
+  mobileSyncToken: '',      // 手机联动 Basic Auth 口令（本机随机生成）
 };
 
 

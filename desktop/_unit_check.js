@@ -17,6 +17,8 @@
  *   - utils/watch-state.js 盯价状态机（到价一次、回升 2% 再武装、失败隔离、提醒历史）
  *   - utils/platform-compare.js 多平台聚合（平台归一/最低价/价差/空池）
  *   - utils/backup.js 盯价目标备份（不含凭证/运行态）、校验、按 URL 合并与上限
+ *   - utils/deep-link.js pricelens:// 深链只接受 http(s)
+ *   - utils/android-backup.js Android 备份 ↔ 桌面盯价（平台支持/往返/非法 schema）
  *   - crawlers/gwdang.js 只提取显式券、绝不按价差编造
  *   - crawlers/jd.js 移动页 _itemInfo 解析 + 风控页拒绝
  */
@@ -42,6 +44,9 @@ const { nextWatchState, failedWatchState } = require('./src/main/utils/watch-sta
 const { comparePlatforms, mallOf } = require('./src/main/utils/platform-compare');
 const { buildBackup, parseBackup, mergeBackup } = require('./src/main/utils/backup');
 const { findDeepLink, parseDeepLink } = require('./src/main/utils/deep-link');
+const {
+  androidBackupToWatches, watchesToAndroidBackup, desktopUrlToAndroidTarget, androidTargetToUrl,
+} = require('./src/main/utils/android-backup');
 
 const FIXTURES = path.join(__dirname, '..', 'app', 'src', 'test', 'resources', 'fixtures');
 const fixture = (name) => fs.readFileSync(path.join(FIXTURES, name), 'utf8');
@@ -659,6 +664,57 @@ check('finds the protocol url in windows argv', () => {
   const raw = 'pricelens://product?url=https%3A%2F%2Fitem.jd.com%2F1.html';
   assert.strictEqual(findDeepLink(['PriceLens.exe', raw]), raw);
   assert.strictEqual(findDeepLink(['PriceLens.exe', '--dev']), null);
+});
+
+// ===== 手机 App 联动：Android 备份 ↔ 桌面盯价 =====
+console.log('== 手机备份格式映射（Android targets ↔ 桌面 watches） ==');
+const androidPayload = {
+  app: 'PriceLens', schema: 1, exportedAt: 1790000000000,
+  favorites: [{ id: 'x', title: '收藏' }],
+  targets: [
+    { productId: 'jd:100012043978', title: 'iPhone 15', platform: 'jd', targetPrice: 3999, active: true, createdAt: 1700000000000, updatedAt: 1700000000000 },
+    { productId: 'taobao:656745498498', title: '淘宝测试', platform: 'taobao', targetPrice: 199, active: false, createdAt: 1700000001000, updatedAt: 1700000001000 },
+    { productId: 'pdd:123456', title: '拼多多目标', platform: 'pdd', targetPrice: 99, active: true, createdAt: 1700000002000, updatedAt: 1700000002000 },
+    { productId: 'jd:', title: '坏行', platform: 'jd', targetPrice: 10, active: true },
+  ],
+};
+check('android backup maps jd/taobao and skips unsupported platforms', () => {
+  const mapped = androidBackupToWatches(androidPayload);
+  assert.strictEqual(mapped.watches.length, 2);
+  assert.strictEqual(mapped.skipped, 2);
+  assert.strictEqual(mapped.favorites, 1);
+  assert.strictEqual(mapped.watches[0].url, 'https://item.jd.com/100012043978.html');
+  assert.strictEqual(mapped.watches[0].target, 3999);
+  assert.strictEqual(mapped.watches[1].paused, true, 'active=false 应变成桌面 paused');
+});
+check('desktop watches round-trip to android targets without credentials', () => {
+  const result = watchesToAndroidBackup([
+    { keyword: 'iPhone 15', url: 'https://item.jd.com/100012043978.html', target: 3999, paused: false, since: 1700000000000 },
+    { keyword: '淘宝', url: 'https://item.taobao.com/item.htm?id=656745498498', target: 199, paused: true, since: 1700000001000 },
+    { keyword: '不支持', url: 'https://mobile.yangkeduo.com/goods.html?goods_id=1', target: 99, paused: false, since: 1700000002000 },
+  ], 1790000000000);
+  assert.strictEqual(result.payload.targets.length, 2);
+  assert.strictEqual(result.skipped, 1);
+  assert.strictEqual(result.payload.targets[0].productId, 'jd:100012043978');
+  assert.strictEqual(result.payload.targets[1].platform, 'taobao');
+  assert.strictEqual(result.payload.targets[1].active, false);
+  assert.strictEqual(result.payload.favorites.length, 0);
+  assert.ok(!JSON.stringify(result.payload).toLowerCase().includes('cookie'));
+  assert.ok(!JSON.stringify(result.payload).toLowerCase().includes('apikey'));
+});
+check('invalid app/schema is rejected with a usable error', () => {
+  assert.throws(() => androidBackupToWatches({ app: 'Other', schema: 1, targets: [] }), /不是 PriceLens/);
+  assert.throws(() => androidBackupToWatches({ app: 'PriceLens', schema: 2, targets: [] }), /schema/);
+  assert.throws(() => androidBackupToWatches('not json'), /有效的 JSON/);
+});
+check('url mapping helpers are symmetric for supported platforms', () => {
+  const jd = desktopUrlToAndroidTarget('https://item.m.jd.com/product/100012043978.html');
+  assert.deepStrictEqual(jd, { platform: 'jd', productId: 'jd:100012043978' });
+  assert.strictEqual(androidTargetToUrl(jd), 'https://item.jd.com/100012043978.html');
+  const tb = desktopUrlToAndroidTarget('https://detail.tmall.com/item.htm?id=656745498498');
+  assert.deepStrictEqual(tb, { platform: 'taobao', productId: 'taobao:656745498498' });
+  assert.strictEqual(androidTargetToUrl(tb), 'https://item.taobao.com/item.htm?id=656745498498');
+  assert.strictEqual(androidTargetToUrl({ productId: 'pdd:1' }), null);
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项${process.exitCode ? '（存在失败项）' : '，全部通过'}`);
