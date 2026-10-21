@@ -86,3 +86,18 @@ taobao:654321098765  taobao   66.0  active=1   ← 桌面下发
 - 桌面 2.6.0 便携版仍为自签名（`CN=PriceLens (Self-Signed)`，`B253FA…F501AF`）；Windows 仍会提示
   “未知发布者”，这是没有 CA 代码签名证书的硬限制，不是漏签。
 - 桌面端 WebDAV 无 TLS、Basic Auth，只建议在可信局域网使用；默认关闭、只接受私网/回环。
+- 本机 hosts/Steam 加速器把 `localhost` 的 canonical name 指到 `steamcdn-a.akamaihd.net`，
+  第一次跑 `WebDavClientTest` 时被新的明文守卫正确拦下（8 条测试假红）。测试改用
+  `http://127.0.0.1:${server.port}/dav/` 字面量；这是**测试夹具**修正，不改生产行为。
+
+## 6. Gitee 发布包复核（桌面端）
+
+- Gitee `dist` 分支：`PriceLens-2.6.0-x64-signed-portable-9m.7z.001…013`（13 × 9MiB，绕开
+  Gitee raw >10MB 需登录的限制）+ `pricelens-selfsigned.cer` + `SHA256SUMS-desktop-2.6.0-9m.txt`
+  + `README-desktop-2.6.0.md` + `download-desktop-2.6.0.ps1`。
+- 匿名直链抽检：`.001/.007/.013`、README、PS1、证书均 **HTTP 200**，字节数正确。
+- 在**空目录**里从 Gitee 拉取发布出来的 PS1 并运行：13 卷全部下载、逐卷 sha256 通过、
+  7-Zip 解出 75 个文件（404,816,308 B）；解压后的 `PriceLens.exe` sha256
+  `9ed8513a…e691e`、`resources/app.asar` `8295c209…10f3` 与本地签名包一致；
+  `Get-AuthenticodeSignature` 显示自签证书 Subject 正确（Status=UnknownError，未装根证书）。
+- 发布包的主程序是**自签名**，不是 CA 签名；Windows 仍可能提示未知发布者。README 已写明。
