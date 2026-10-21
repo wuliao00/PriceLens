@@ -5,9 +5,9 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [2.8.0.5] - 2026-10-21
 
-### 修复（真机取证：桌面端「手机联动」在 Android 上被明文策略拦死；2.8.0.5 待发）
+### 修复（真机取证：桌面端「手机联动」在 Android 上被明文策略拦死）
 
 - **实测缺陷**：2026-10-21 在 vivo V2156A / Android 11 上，手机设置页点「测试连接」直接报
   “连不上：地址不通或超时”，而桌面端同一时刻 `PROPFIND http://127.0.0.1:47821/pricelens/` 返回 207。
@@ -29,6 +29,8 @@
   `desktop/_unit_check.js` 增加 `received=4` 断言，78 项全通过。
 - **边界**：本次 UI 取证是 debug 签名包；2.8.0.5 的 release APK 仍需 CI 用 `c759cbb8…` 出包后
   在真机复验一次。桌面安装包仍是自签名（无 CA 证书），Windows 仍会提示未知发布者。
+
+## [Unreleased]
 
 ### 修复（CI：release 产物名被 GitHub 洗成乱码，每次发版都要手工补传附件）
 
