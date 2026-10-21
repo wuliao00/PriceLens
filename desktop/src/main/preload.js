@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('priceLens', {
     mmbLogin:  ()                    => ipcRenderer.invoke('sys:mmb-login'),
     readClipboard: ()                => ipcRenderer.invoke('sys:read-clipboard'),
     exportBackup: ()                 => ipcRenderer.invoke('sys:export-backup'),
+    takePendingOpen: ()              => ipcRenderer.invoke('sys:take-pending-open'),
     importBackup: ()                 => ipcRenderer.invoke('sys:import-backup'),
   },
   cache: {
@@ -87,4 +88,5 @@ contextBridge.exposeInMainWorld('priceLens', {
 
   /* ── 主题变化推送（跟随系统模式） ── */
   onThemeChanged: (cb) => subscribeOnce('theme:changed', cb),
+  onOpenProduct: (cb) => subscribeOnce('app:open-product', cb),
 });

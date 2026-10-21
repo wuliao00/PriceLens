@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PriceLens 比价助手</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="head">
+    <div class="brand">
+      <span class="logo">PL</span>
+      <div>
+        <div class="name">PriceLens</div>
+        <div class="sub">浏览器比价助手 <span id="version"></span></div>
+      </div>
+    </div>
+    <span class="dot" id="bg-dot" title="扩展后台状态"></span>
+  </header>
+
+  <main>
+    <div class="status" id="status">正在检查当前页…</div>
+
+    <section class="product" id="product" hidden>
+      <div class="product-title" id="product-title"></div>
+      <a class="btn btn--primary" id="open-desktop" href="#">在桌面端打开</a>
+      <div class="hint">桌面端会打开同一商品，查看历史价、找券、社区与盯价。</div>
+    </section>
+
+    <div class="empty" id="empty" hidden>
+      <div class="empty-title">打开商品详情页</div>
+      <div class="empty-desc">在京东 / 淘宝 / 天猫商品页，右下角会出现「PL 比价」按钮，展开可看 B 站评测与商单标记。</div>
+    </div>
+
+    <div class="links">
+      <a href="https://github.com/wuliao00/PriceLens" target="_blank" rel="noopener noreferrer">GitHub 仓库</a>
+      <a href="https://github.com/wuliao00/PriceLens/releases" target="_blank" rel="noopener noreferrer">下载桌面端</a>
+    </div>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

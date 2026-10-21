@@ -44,7 +44,7 @@ const LOCAL_CURVE_TTL = 400 * 24 * 3600 * 1000;
  * @param {() => BrowserWindow|null} deps.getMainWindow
  * @param {import('./utils/logger').Logger} deps.logger
  */
-function registerIpcHandlers({ getMainWindow, logger }) {
+function registerIpcHandlers({ getMainWindow, logger, takePendingOpen }) {
   const cache = new CacheManager(path.join(app.getPath('userData'), 'cache'));
   const ready = cache.init().catch((err) => logger.error(`缓存初始化失败: ${err.message}`));
 
@@ -261,6 +261,14 @@ function registerIpcHandlers({ getMainWindow, logger }) {
       return { ok: true, ...merged, watches: getWatches() };
     } catch (err) {
       return { ok: false, error: friendlyError(err) };
+    }
+  });
+
+  ipcMain.handle('sys:take-pending-open', () => {
+    try {
+      return { ok: true, url: takePendingOpen ? takePendingOpen() : null };
+    } catch {
+      return { ok: true, url: null };
     }
   });
 

@@ -4,7 +4,7 @@
 
 > **Dual platform** · **Forever free** · **Local-first** · **MIT License**
 > Android (accessibility-powered) + Windows (Electron) · Author: **Mo**
-> Version: Android v2.8.0.4 / Desktop v2.4.0
+> Version: Android v2.8.0.4 / Desktop v2.5.0 / Extension v1.0.0 / Extension v1.0.0
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Release](https://img.shields.io/github/v/release/wuliao00/PriceLens?label=Latest%20Release)](https://github.com/wuliao00/PriceLens/releases)

@@ -691,6 +691,7 @@ class RateLimiter {
 | v1 | 2.3.0 | 2.0.0 | 初始版本 |
 | v1.1 | 2.5.0 | 2.0.0 | 错误模型对齐 `CrawlerResult` 四态；爬虫接口章节修正为解析器 + ApiClient 管线 + PriceRepository 编排（删除不存在的统一 `Crawler` 接口描述） |
 | v1.2 | 2.5.1 | 2.1.0 | 数据源准确性专项：京东改 m 站 `_itemInfo` 解析、查价不可用时如实置空；识货改 m 站 `type=goods` 接口；找券只认显式券文案；新增 `QueryRelevance` 相关性过滤（两端同规则）与数据源实况表 |
+| v1.7 | 2.8.0.4 | 2.5.0 | 新增 `pricelens://product?url=<encoded http(s)>` 深链：桌面端注册协议、渲染层 `takePendingOpen` / `onOpenProduct` 直接搜索；浏览器扩展 v1.0.0 通过该协议联动。深链只接受 http/https，拒绝 file/javascript，长度上限 2000 |
 | v1.6 | 2.8.0.4 | 2.4.0 | 桌面端 v2.4：`search.comparison` 同款多平台聚合（按平台取最低价/价差，不保证同规格）；盯价目标 `lastAlertAt/lastAlertPrice/alertCount` 提醒历史；`sys:export-backup/import-backup` 只导出目标设置（不含凭证/运行态），按 URL 合并上限 20 |
 | v1.5 | 2.8.0.4 | 2.3.0 | 桌面端多商品盯价：`settings.watches[]`（旧单条 `watch` 自动迁移）、`watch:list/add/update/remove/ack/check-now`、逐项 30 分钟轮询（到价一次、回升 102% 再武装）；`history.advice` 历史分位购买建议（样本 <8 不判断）；`sys:read-clipboard` 剪贴板商品链接识别；社区 `sourceErrors` 与概览源健康状态。多盯价查价复用三源合并通道 |
 | v1.4 | 2.8.0.4 | 2.2.0 | 桌面端补齐识货兜底与 B 站商单/夸大标记：`desktop/src/main/crawlers/shihuo.js`（m 站解析、相关性过滤、5 分钟进程内缓存、搜索/社区双接入）；`utils/content-risk.js`（与 Android v2.4.4 同词库 + 联合投稿，额外增加否定语境豁免：不恰饭/无广告/不是商单/并非天花板不标记）；B 站搜索解析抽成纯函数并校验业务码；社区 `sourceErrors` 区分「源不可达」与「无结果」 |
@@ -710,6 +711,7 @@ class RateLimiter {
 | v1.4 | 2026-10-20 | 桌面端 v2.2.0：识货 m 站兜底源、B 站商单/夸大标记（含否定语境豁免）、B 站业务码解析；补记识货匿名接口返回 `null` 的实况 |
 | v1.5 | 2026-10-20 | 桌面端 v2.3.0：多商品盯价 + 购买建议 + 剪贴板识别 + 数据源健康；旧配置迁移与 `watch:*` 通道 |
 | v1.6 | 2026-10-21 | 桌面端 v2.4.0：多平台对比、提醒历史、目标备份/恢复 |
+| v1.7 | 2026-10-21 | 桌面端 v2.5.0：pricelens:// 协议联动；新增 Chrome/Edge MV3 扩展 v1.0.0 |
 
 ---
 

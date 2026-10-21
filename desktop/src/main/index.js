@@ -19,12 +19,57 @@ const fs = require('node:fs');
 const { registerIpcHandlers } = require('./ipc-handlers');
 const { initStorage } = require('./cache/storage');
 const { createLogger } = require('./utils/logger');
+const { PROTOCOL, findDeepLink, parseDeepLink } = require('./utils/deep-link');
 
 const logger = createLogger(() => path.join(app.getPath('userData'), 'logs'));
 
 let mainWindow = null;
 let tray = null;
 let quitting = false; // 托盘「退出」置位后才真正退出
+let rendererReady = false;
+let pendingOpenUrl = null; // 浏览器扩展通过 pricelens:// 带来的商品链接（等待渲染层取走）
+
+/** 显示/还原主窗口 */
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+/** 接收深链：窗口已加载就直接推给渲染层，否则挂起等 takePendingOpen */
+function deliverOpenUrl(raw) {
+  const url = parseDeepLink(raw);
+  if (!url) {
+    logger.warn(`忽略无效的 pricelens 深链: ${String(raw).slice(0, 120)}`);
+    return;
+  }
+  logger.info(`收到浏览器深链: ${url}`);
+  pendingOpenUrl = url;
+  if (!app.isReady()) return; // 冷启动：等 whenReady 后由渲染层 takePendingOpen
+  showMainWindow();
+  if (mainWindow && !mainWindow.isDestroyed() && rendererReady) {
+    mainWindow.webContents.send('app:open-product', { url });
+    pendingOpenUrl = null;
+  }
+}
+
+// Windows 注册 pricelens://；开发态需要带脚本路径，打包后直接注册
+if (process.platform === 'win32' || process.platform === 'linux') {
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+    }
+  } else {
+    app.setAsDefaultProtocolClient(PROTOCOL);
+  }
+}
+
+// macOS 协议回调
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  deliverOpenUrl(url);
+});
 
 /**
  * 创建主窗口。
@@ -57,6 +102,8 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event) => event.preventDefault());
   win.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  win.webContents.on('did-start-loading', () => { rendererReady = false; });
+  win.webContents.on('did-finish-load', () => { rendererReady = true; });
 
   // 首帧就绪后再显示，配合渲染层 300ms 入场动画
   win.once('ready-to-show', () => win.show());
@@ -155,13 +202,14 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show(); // 可能隐藏在托盘，需重新显示
-      mainWindow.focus();
-    }
+  app.on('second-instance', (_event, argv) => {
+    showMainWindow();
+    const link = findDeepLink(argv);
+    if (link) deliverOpenUrl(link);
   });
+
+  // 首次启动就是协议链接（Windows 把 URL 放在 argv）
+  pendingOpenUrl = parseDeepLink(findDeepLink(process.argv)) || pendingOpenUrl;
 
   app.whenReady().then(async () => {
     // 用户数据目录：%APPDATA%/pricelens（app name = package.json name）
@@ -175,7 +223,15 @@ if (!gotLock) {
 
     nativeTheme.on('updated', broadcastTheme);
 
-    const handles = registerIpcHandlers({ getMainWindow: () => mainWindow, logger });
+    const handles = registerIpcHandlers({
+      getMainWindow: () => mainWindow,
+      logger,
+      takePendingOpen: () => {
+        const url = pendingOpenUrl;
+        pendingOpenUrl = null;
+        return url;
+      },
+    });
 
     mainWindow = createWindow();
     broadcastTheme();

@@ -18,6 +18,46 @@
   立过同一条规矩，这次是把同一条规矩补到漏掉的那一处）
 - YAML 用 python 解析过（step 的 `env/if/name/run` 齐全），`${TAG#v}` 的取名逻辑本机跑过
 
+## [Desktop 2.5.0 / Extension 1.0.0] - 2026-10-21
+
+### Added（桌面端 + 浏览器扩展）
+
+- **浏览器扩展（Chrome/Edge MV3）**：`extension/` 在京东/淘宝/天猫商品详情页右下角注入
+  Shadow DOM 浮层，显示页面标题/价格、B站评测前 6 条、商单/夸大标记；弹窗判断当前页是否受支持。
+  扩展只请求 B 站搜索，不读取/上传页面 Cookie 与浏览记录；历史价/找券/盯价仍由桌面端负责。
+- **B站结果相关性过滤**：扩展从商品标题提取带数字的型号 token（iPhone 15 → 15；
+  WH-1000XM5 → 1000xm5），过滤旧型号、其它机型和配件；无数字型号时退回最长拉丁词。
+  内置与桌面端同词库的商单规则（含否定豁免），并在 service worker 里 10 分钟缓存。
+- **`pricelens://` 协议联动**：扩展「在桌面端打开」→ `pricelens://product?url=<encoded>`；
+  桌面端注册协议、单实例转发、冷启动挂起链接由渲染层 `takePendingOpen` 取走并直接搜索。
+  只接受 http/https，拒绝 `file:`/`javascript:`，长度上限 2000。安装器通过 electron-builder
+  `protocols` 声明协议。
+- 桌面端新增 `utils/deep-link.js`，解析逻辑与启动参数处理可单测；新增 `app:open-product` 事件。
+
+### Verification
+
+- `cd desktop && npm test`：74 项通过（新增 pricelens 深链解析/参数查找）。
+- `npm run lint`：45 个 JS 文件通过语法检查；扩展 JS 全部 `node --check` 通过。
+- **真实 Chrome（Playwright Chromium 151 + 持久化上下文）加载扩展**：
+  - `--load-extension` 成功，service worker 启动；
+  - 模拟京东商品页注入浮层，标题 `Apple iPhone 15 5G手机 512GB 黑色`、价格 `¥4,399`、协议链接正确；
+  - B站搜索返回 4 条相关评测，控制台零错误；风险规则 `商单+天花板` 命中、`不恰饭/无广告/不是商单` 豁免；
+  - 相关性 `iPhone 15` 保留、`iPhone 5c` 剔除、`iPhone 15 手机壳` 剔除；
+  - 扩展弹窗加载正常（v1.0.0）。
+- **桌面协议实机验证**：打包后的 `PriceLens.exe` 以
+  `pricelens://product?url=https%3A%2F%2Fitem.jd.com%2F100012043978.html` 冷启动，
+  CDP 读到状态栏「正在搜索…」、版本 `v2.5.0`，且 `takePendingOpen` 已消费；开发态同样通过。
+  （测试同时抓出并修复了 `takePendingOpen` 误挂顶层导致启动抛错的 bug。）
+- `npm run build` 产出 `PriceLens-2.5.0-x64.exe`（114,251,847 字节，
+  sha256 `3cf773a15ca6b4e11f7094d0833c995e167b20eb5c04220537c664af47585def`）与
+  `PriceLens-2.5.0-x64.zip`（157,019,988 字节，
+  sha256 `1c00abf31956fef2f8bd82b7bdff7c20f97d1c3706d71fa980b21e74c546a3ea`）；
+  asar 内版本 2.5.0，含 `deep-link.js` 与 `app:open-product` / `takePendingOpen`；
+  解包后的 `PriceLens.exe` 实启成功（日志版本 2.5.0）。安装包未做代码签名。
+- 扩展 zip：`PriceLens-Extension-1.0.0.zip`（23,038 字节，
+  sha256 `092a490fe50d3c6492807aa75b254319b2ebbc4b3a5eeae551a2b83b4afcb2ca`），
+  12 个文件；真实 Chrome 加载同一目录通过验收。
+
 ## [Desktop 2.4.0] - 2026-10-21
 
 ### Added（桌面端）

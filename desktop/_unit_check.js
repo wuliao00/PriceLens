@@ -41,6 +41,7 @@ const { normalizeWatches, newWatchId } = require('./src/main/cache/storage');
 const { nextWatchState, failedWatchState } = require('./src/main/utils/watch-state');
 const { comparePlatforms, mallOf } = require('./src/main/utils/platform-compare');
 const { buildBackup, parseBackup, mergeBackup } = require('./src/main/utils/backup');
+const { findDeepLink, parseDeepLink } = require('./src/main/utils/deep-link');
 
 const FIXTURES = path.join(__dirname, '..', 'app', 'src', 'test', 'resources', 'fixtures');
 const fixture = (name) => fs.readFileSync(path.join(FIXTURES, name), 'utf8');
@@ -641,6 +642,23 @@ check('merge updates same URL, adds new targets and caps at 20', () => {
   assert.strictEqual(capped.watches.length, 20);
   assert.strictEqual(capped.added, 0);
   assert.strictEqual(capped.skipped, 2);
+});
+
+// ===== pricelens:// 深链（浏览器扩展 → 桌面端） =====
+console.log('== pricelens 深链解析 ==');
+check('accepts http(s) product urls only', () => {
+  const jd = 'https://item.jd.com/100012043978.html';
+  assert.strictEqual(parseDeepLink(`pricelens://product?url=${encodeURIComponent(jd)}`), jd);
+  assert.strictEqual(parseDeepLink(`pricelens://product?q=${encodeURIComponent(jd)}`), jd);
+  assert.strictEqual(parseDeepLink('pricelens://product?url=javascript%3Aalert(1)'), null);
+  assert.strictEqual(parseDeepLink('pricelens://product?url=file%3A%2F%2F%2FC%3A%2Fsecret'), null);
+  assert.strictEqual(parseDeepLink('https://item.jd.com/1.html'), null);
+  assert.strictEqual(parseDeepLink('pricelens://product?url=' + 'x'.repeat(2100)), null);
+});
+check('finds the protocol url in windows argv', () => {
+  const raw = 'pricelens://product?url=https%3A%2F%2Fitem.jd.com%2F1.html';
+  assert.strictEqual(findDeepLink(['PriceLens.exe', raw]), raw);
+  assert.strictEqual(findDeepLink(['PriceLens.exe', '--dev']), null);
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项${process.exitCode ? '（存在失败项）' : '，全部通过'}`);

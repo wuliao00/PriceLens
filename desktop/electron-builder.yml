@@ -1,6 +1,10 @@
 # electron-builder 配置：NSIS 安装器 + 便携 zip
 appId: com.pricelens.app
 productName: PriceLens
+protocols:
+  - name: PriceLens
+    schemes:
+      - pricelens
 directories:
   output: dist
   buildResources: build

@@ -167,6 +167,13 @@ PriceLens/
 │   │           └── animations.css
 │   └── dist/                      # 构建产物
 │
+├── extension/                     # Chrome/Edge MV3 扩展
+│   ├── manifest.json              # 商品页匹配 + 最小权限
+│   ├── background.js              # B站 WBI / 内容风险 / 10min 缓存
+│   ├── content.js                 # Shadow DOM 商品页浮层
+│   ├── popup.html/css/js          # 扩展弹窗
+│   └── icons/                     # 16/48/128 图标
+│
 ├── build.gradle.kts               # 根构建脚本
 ├── settings.gradle.kts
 ├── gradle.properties
@@ -601,6 +608,18 @@ gh release create vX.Y.Z-desktop dist/PriceLens-X.Y.Z-x64.exe dist/PriceLens-X.Y
 > 如果 `PATH` 里的 `npm` 是不带 `.cmd` 的 Bash 脚本（例如自建的 `~/bin/npm`），PowerShell
 > 拿不到任何输出，构建会以 `No JSON content found in output` 失败。确保 PATH 中能解析到
 > Node.js 官方的 `npm.cmd`（`where npm` 应包含 `npm.cmd`）后再构建。
+
+### 浏览器扩展发布
+
+```bash
+# 1. 本地验收：chrome://extensions → 开发者模式 → 加载已解压的扩展程序 → 选择 extension/
+# 2. 分发 zip（解压后加载或提交商店）
+cd extension
+mkdir -p dist
+zip -r dist/PriceLens-Extension-1.0.0.zip manifest.json background.js md5.js risk.js rules.json content.js popup.html popup.css popup.js icons
+```
+
+> 扩展依赖桌面端 v2.5.0+ 的 `pricelens://` 协议；桌面安装器已通过 electron-builder `protocols` 声明。
 
 ### 同步发布检查清单
 

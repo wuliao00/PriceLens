@@ -919,6 +919,17 @@ function boot() {
     }
   });
 
+  /* 浏览器扩展 → pricelens:// 深链：运行中直接搜索，冷启动从主进程取挂起链接 */
+  window.priceLens.onOpenProduct((payload) => {
+    if (payload && payload.url) {
+      showToast('已从浏览器打开商品');
+      doSearch(payload.url);
+    }
+  });
+  window.priceLens.sys.takePendingOpen().then((res) => {
+    if (res && res.ok && res.url) doSearch(res.url);
+  }).catch(() => {});
+
   /* 剪贴板商品链接：首次启动与窗口重新聚焦时各检查一次（只读本机） */
   window.addEventListener('focus', () => setTimeout(readClipboardForBanner, 300));
   setTimeout(readClipboardForBanner, 1200);

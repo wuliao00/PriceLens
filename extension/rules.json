@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Referer", "operation": "set", "value": "https://www.bilibili.com" },
+        { "header": "Cookie", "operation": "set", "value": "buvid3=7f3c1d2e-9a4b-4c8d-8e2f-plb11000000; b_nut=1790000000" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||api.bilibili.com/",
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  }
+]

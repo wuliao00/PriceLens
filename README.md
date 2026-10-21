@@ -2,9 +2,11 @@
 
 [简体中文](README.md) | [English](README.en.md) | [Русский](README.ru.md)
 
-> **双端开源** · **永久免费** · **本地优先** · **MIT License**  
-> Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）  
-> 作者：**莫** | 版本：Android v2.8.0.4 / Desktop v2.4.0（源码；安装包以 Releases 为准）
+> **三端开源** · **永久免费** · **本地优先** · **MIT License**
+>
+> Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）+ Chrome/Edge 浏览器扩展
+>
+> 作者：**莫** | 版本：Android v2.8.0.4 / Desktop v2.5.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
 
 [![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -43,7 +45,7 @@
 | 盯价后台任务（30min 周期） | ✅ WorkManager | ✅ 多商品（上限 20）+ 暂停/恢复 + 托盘常驻 |
 | 自定义脚本 | ✅ Shizuku ADB | ✅ PowerShell 本机执行 |
 | 数据存储 | 本机 Room + TLRU | 本机 JSON 缓存（LRU + TTL） |
-| 分发方式 | APK（需签名） | NSIS 安装器 + ZIP 便携版 |
+| 分发方式 | APK（需签名） | NSIS 安装器 + ZIP 便携版；扩展为解压加载/商店包 |
 
 ---
 
@@ -165,8 +167,8 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 
 **下载**：见上方 [国内加速下载](#国内加速下载推荐) 表格，或 [Releases](https://github.com/wuliao00/PriceLens/releases) 中的 NSIS 安装器 / ZIP 便携版
 
-> v2.4.0 的桌面端源码与本地构建已完成（多平台对比 + 提醒历史 + 备份/恢复 + 多盯价 + 购买建议 +
-> 剪贴板识别 + 识货兜底 + 商单标记），正式安装包尚未上传 Release；上方网盘/Releases 链接当前仍指向 v2.1.x 基线。
+> v2.5.0 的桌面端源码与本地构建已完成，并新增 Chrome/Edge 扩展（v1.0.0）；正式安装包/扩展包
+> 尚未上传 Release；上方网盘/Releases 链接当前仍指向 v2.1.x 基线。
 
 **源码构建**：
 ```bash
@@ -248,6 +250,16 @@ npm run build        # 产出 dist/PriceLens-<version>-x64.exe 与 .zip（免安
 - **剪贴板识别与源健康**：窗口聚焦时识别剪贴板里的京东/淘宝/B 站链接并提示去比价（仅本机读取）；
   概览分别展示历史价/B站/找券/值得买/识货的本轮状态，失败不再混成「暂无数据」。
 
+### 🧩 浏览器扩展（v1.0.0 新增）
+
+- **商品页浮层**：Chrome/Edge MV3 扩展在京东/淘宝/天猫详情页右下角显示「PL 比价」，
+  展开是页面价、B站评测前 6 条、商单/夸大标记；历史价/找券/盯价仍交给桌面端。
+- **`pricelens://` 联动**：扩展「在桌面端打开」唤起 PriceLens 桌面端（v2.5.0+）并直接搜索同一商品；
+  安装器已声明协议。扩展不读取/上传页面 Cookie 与浏览记录。
+- **安装**：`chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → 选择 `extension/`；
+  也可以把 `extension/` 压成 zip 后按浏览器商店要求提交。
+- **限制**：B站接口可能风控；页面改版会让标题/价格选择器失效；扩展不做历史价和券，避免重复维护反爬。
+
 ### 🛍️ 桌面端多平台对比与备份（v2.4.0 新增）
 
 - **同款多平台对比**：概览按爆料平台聚合（京东/淘宝/拼多多等），每个平台取最低价并显示与当前价差额；
@@ -319,7 +331,8 @@ PriceLens/
 │       ├── util/                     # RateLimiter / WbiSigner / PriceFormatter
 │       └── di/                       # Hilt 依赖注入
 │
-├── desktop/                          # Electron 桌面端（v2.4.0：多平台对比 + 提醒历史 + 备份 + 多盯价 + 识货/商单）
+├── desktop/                          # Electron 桌面端（v2.5.0：pricelens:// 联动 + 多平台对比 + 多盯价）
+├── extension/                        # Chrome/Edge MV3 扩展（v1.0.0：商品页浮层 + B站评测/商单标记）
 │   ├── src/main/
 │   │   ├── crawlers/                 # 同源爬虫：jd/gwdang/bili/smzdm/manmanbuy
 │   │   ├── cache/                    # JSON LRU/TTL 缓存 + settings 存储
@@ -379,7 +392,8 @@ UA 轮换 ×5 池
 1. **首次构建需 Android SDK**：本仓库为完整源码，未预编译；请在 Android Studio 中 Sync 后 Build
 2. **电商控件 ID 随版本变化**：`PriceNodeMatcher` 三张 ID 表需实机用 Layout Inspector 校准；启发式兜底已保证不至于完全失效
 3. **页面解析器随目标站改版需同步调整**：桌面端与 Android 端爬虫同源，改版需双端同步
-4. **桌面端识货源受站点限制**：桌面端 v2.2.0 已移植识货兜底与商单/夸大标记；但识货 m 站接口 2026-10 实测对匿名请求常返回 `null`，此时桌面端如实降级（不伪造、不回退热榜），不影响值得买/找券/B 站等其它源
+4. **扩展协议联动需要桌面端 v2.5.0+**：`pricelens://` 在安装器/运行时会注册；未安装桌面端时浏览器会提示没有可处理的应用。扩展只做商品页浮层与 B 站评测，历史价/找券/盯价仍由桌面端本机请求。
+5. **桌面端识货源受站点限制**：桌面端 v2.2.0 已移植识货兜底与商单/夸大标记；但识货 m 站接口 2026-10 实测对匿名请求常返回 `null`，此时桌面端如实降级（不伪造、不回退热榜），不影响值得买/找券/B 站等其它源
 
 ---
 

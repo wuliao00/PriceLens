@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "PriceLens 比价助手",
+  "version": "1.0.0",
+  "description": "京东/淘宝/天猫商品页快速看 B 站评测与商单/夸大标记，一键在 PriceLens 桌面端查看历史价、找券与盯价。",
+  "minimum_chrome_version": "111",
+  "permissions": ["storage", "activeTab", "declarativeNetRequest"],
+  "host_permissions": ["https://api.bilibili.com/*"],
+  "background": { "service_worker": "background.js" },
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "bili_headers", "enabled": true, "path": "rules.json" }
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://item.jd.com/*",
+        "*://item.m.jd.com/*",
+        "*://detail.tmall.com/*",
+        "*://item.taobao.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PriceLens 比价助手",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
