@@ -1,3 +1,13 @@
 d548d30796170a2d34c52ac94335f1ca039aa017d446dfdc892abf715127ba14 *PriceLens-2.6.0-x64-signed-portable-9m.7z.001
 59f5ecf2c910524de7787cb6df8b3d52e6bf2d944b8e7d77053adbe789aec511 *PriceLens-2.6.0-x64-signed-portable-9m.7z.002
 878d14005cc3b8d7f166b0db86ee314c1509a1579890646ebb30475cec36a2ce *PriceLens-2.6.0-x64-signed-portable-9m.7z.003
+8e46aaa73703b5a6654ef4bd217453d7afad822a04055dbf52e57deddfa6bf95 *PriceLens-2.6.0-x64-signed-portable-9m.7z.004
+d06c34de970f71ff532a77fb9dcc7a21b31599683a1a0d1e67245fbfcc6f5af6 *PriceLens-2.6.0-x64-signed-portable-9m.7z.005
+dd252a3c340c74be4c1785b6270514ede0c159b7ea413f04a61668ee382a7d8b *PriceLens-2.6.0-x64-signed-portable-9m.7z.006
+35f0f24f15f865060cfd965e56815b54e903581a2a2539e8c164efaedfe4903a *PriceLens-2.6.0-x64-signed-portable-9m.7z.007
+7cc295fa3159a26d631a7252e0597bfcd38bb1f9adf320ab78f907a16ca57a60 *PriceLens-2.6.0-x64-signed-portable-9m.7z.008
+ad28d398a06f0d57fb10d32bfcb722d674d8e7d8855ecb8eff66ae2dfcc30dce *PriceLens-2.6.0-x64-signed-portable-9m.7z.009
+cf0b69b35936146fec889f2914999a134a50d183364cac3e08f282d6b69cc8fb *PriceLens-2.6.0-x64-signed-portable-9m.7z.010
+470bdd8cdcd78fcb6a17b4ed8ff223deb0eacb529fcea5155a2a2504e9aec67a *PriceLens-2.6.0-x64-signed-portable-9m.7z.011
+3f690e08b0f2cd7c64815dae9920c4b48e7d7197cb733445697172353768ae69 *PriceLens-2.6.0-x64-signed-portable-9m.7z.012
+c21500737e10f815392534d94a4ec51a3e1a86f3fd2fef07d91c955b94684b00 *PriceLens-2.6.0-x64-signed-portable-9m.7z.013
