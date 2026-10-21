@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('priceLens', {
     getCreds:  ()                    => ipcRenderer.invoke('sys:get-creds'),
     setCreds:  (apikey, cookie)      => ipcRenderer.invoke('sys:set-creds', apikey, cookie),
     mmbLogin:  ()                    => ipcRenderer.invoke('sys:mmb-login'),
+    readClipboard: ()                => ipcRenderer.invoke('sys:read-clipboard'),
+    exportBackup: ()                 => ipcRenderer.invoke('sys:export-backup'),
+    importBackup: ()                 => ipcRenderer.invoke('sys:import-backup'),
   },
   cache: {
     get:   (k)    => ipcRenderer.invoke('cache:get', k),
@@ -59,14 +62,20 @@ contextBridge.exposeInMainWorld('priceLens', {
   getAppInfo:   ()                    => ipcRenderer.invoke('sys:app-info'),
   exportPng:    (dataUrl, name)       => ipcRenderer.invoke('sys:save-image', dataUrl, name),
 
-  /* ── 盯价提醒 ── */
+  /* ── 盯价提醒（多商品） ── */
   watch: {
-    set:       (cfg)  => ipcRenderer.invoke('watch:set', cfg),
-    get:       ()     => ipcRenderer.invoke('watch:get'),
-    clear:     ()     => ipcRenderer.invoke('watch:clear'),
-    checkNow:  ()     => ipcRenderer.invoke('watch:check-now'),
+    list:      ()             => ipcRenderer.invoke('watch:list'),
+    add:       (cfg)          => ipcRenderer.invoke('watch:add', cfg),
+    set:       (cfg)          => ipcRenderer.invoke('watch:set', cfg), // 兼容旧调用
+    update:    (cfg)          => ipcRenderer.invoke('watch:update', cfg),
+    remove:    (id)           => ipcRenderer.invoke('watch:remove', id),
+    ack:       ()             => ipcRenderer.invoke('watch:ack'),
+    get:       ()             => ipcRenderer.invoke('watch:get'),
+    clear:     ()             => ipcRenderer.invoke('watch:clear'),
+    checkNow:  ()             => ipcRenderer.invoke('watch:check-now'),
   },
   onWatchTriggered: (cb) => subscribeOnce('watch:triggered', cb),
+  onWatchUpdated:   (cb) => subscribeOnce('watch:updated', cb),
 
   /* ── 自定义脚本（主进程 PowerShell 执行） ── */
   scripts: {

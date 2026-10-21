@@ -9,6 +9,8 @@
  *
  * 逐源调用真实爬虫（与 IPC 层同一批函数），打印：
  *   - 各源返回条数 / 前几条摘要（含价格）
+ *   - 识货兜底源条数与相关性过滤前后数量
+ *   - B 站视频条数与商单/夸大标记统计
  *   - 失败原因（反爬拦截 / 通道不可用 / 结构变更）
  * 用于发布前的"接口内容是否准确"巡检：搜索关键词不应出现配件/其它品牌/热榜商品。
  */
@@ -18,6 +20,8 @@ const smzdm = require('./src/main/crawlers/smzdm');
 const gwdang = require('./src/main/crawlers/gwdang');
 const jd = require('./src/main/crawlers/jd');
 const manmanbuy = require('./src/main/crawlers/manmanbuy');
+const shihuo = require('./src/main/crawlers/shihuo');
+const bilibili = require('./src/main/crawlers/bilibili');
 const { isRelevant } = require('./src/main/utils/relevance');
 
 const KEYWORD = process.argv[2] || 'iPhone 15';
@@ -50,6 +54,27 @@ async function trySource(name, fn) {
     }
     if (sm.deals.some((d) => !isRelevant(KEYWORD, d.title))) {
       console.log('  ⚠ 存在未过滤的不相关条目（不应出现）');
+    }
+  }
+
+  line('识货 搜索（社区兜底源，已过相关性过滤）');
+  const sh = await trySource('shihuo', () => shihuo.searchProducts(KEYWORD));
+  if (sh) {
+    console.log(`条数: ${sh.items.length} / 原始解析 ${sh.total}`);
+    for (const it of sh.items.slice(0, 5)) {
+      console.log(`  ¥${it.price}  [${it.brand || '-'}] ${it.title.slice(0, 56)}${it.hasSubsidy ? '  [国补]' : ''}`);
+    }
+    if (sh.total > 0 && sh.items.length === 0) console.log('  ⚠ 原始结果全部被判为不相关（需人工抽查是否相关性规则过严）');
+  }
+
+  line('B站 评测（含商单/夸大标记统计）');
+  const bili = await trySource('bilibili', () => bilibili.searchVideos(KEYWORD));
+  if (bili) {
+    const flagged = bili.videos.filter((v) => v.risk?.flagged);
+    console.log(`视频数: ${bili.videos.length} | 标记: ${flagged.length}`);
+    for (const v of bili.videos.slice(0, 5)) {
+      const mark = v.risk?.flagged ? `  [${v.risk.sponsorWord || v.risk.hypeWord}]` : '';
+      console.log(`  ${v.title.slice(0, 50)}${mark}`);
     }
   }
 

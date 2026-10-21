@@ -127,18 +127,30 @@ PriceLens/
 │   │   │   ├── preload.js         # 预加载脚本
 │   │   │   ├── ipc-handlers.js    # IPC 处理器
 │   │   │   ├── crawlers/          # 爬虫实现 (与 Android 同源)
-│   │   │   │   ├── index.js
+│   │   │   │   ├── index.js       # 搜索/历史/社区调度（识货兜底在此接入）
 │   │   │   │   ├── jd.js
-│   │   │   │   ├── bili.js
+│   │   │   │   ├── bilibili.js    # WBI 签名 + 商单/夸大 risk 注入
+│   │   │   │   ├── smzdm.js
+│   │   │   │   ├── manmanbuy.js
+│   │   │   │   ├── gwdang.js
+│   │   │   │   ├── linkstars.js
+│   │   │   │   ├── shihuo.js      # m 站搜索兜底（v2.2.0）
 │   │   │   │   └── ...
-│   │   │   ├── cache/             # SQLite + LRU/TTL
+│   │   │   ├── cache/             # JSON 文件 LRU/TTL（不是 SQLite）
 │   │   │   │   ├── manager.js
-│   │   │   │   └── storage.js
+│   │   │   │   └── storage.js     # settings.json / watches[] 迁移与原子写
 │   │   │   └── utils/
 │   │   │       ├── http-client.js
 │   │   │       ├── rate-limiter.js
 │   │   │       ├── logger.js
-│   │   │       └── sanitizer.js
+│   │   │       ├── sanitizer.js
+│   │   │       ├── relevance.js   # 与 Android QueryRelevance 同规则
+│   │   │       ├── ranking.js     # 跨源候选打分
+│   │   │       ├── content-risk.js # 商单/夸大规则（v2.2.0，含否定豁免）
+│   │   │       ├── price-advice.js # 历史分位购买建议（v2.3.0）
+│   │   │       ├── watch-state.js  # 盯价状态机（v2.3.0，到价一次/回升再武装）
+│   │   │       ├── platform-compare.js # 同款多平台聚合（v2.4.0）
+│   │   │       └── backup.js       # 盯价目标备份/恢复（v2.4.0）
 │   │   └── renderer/              # 渲染进程
 │   │       ├── index.html
 │   │       ├── package.json
@@ -573,15 +585,22 @@ cd desktop
 # 1. 更新版本号
 # package.json: version
 
-# 2. 构建
+# 2. 单测 + 构建
+npm test
 npm run build
 
 # 3. 产物
-# dist/PriceLens-X.Y.Z-win.zip
+# dist/PriceLens-X.Y.Z-x64.exe
+# dist/PriceLens-X.Y.Z-x64.zip
 
-# 4. 上传 GitHub Release
-gh release create vX.Y.Z dist/PriceLens-X.Y.Z-win.zip ...
+# 4. 上传 GitHub Release（桌面端用 -desktop 后缀，避免与 Android 同名 tag 冲突）
+gh release create vX.Y.Z-desktop dist/PriceLens-X.Y.Z-x64.exe dist/PriceLens-X.Y.Z-x64.zip
 ```
+
+> **Windows/Git Bash 构建提示**：electron-builder 会通过 PowerShell 调用 `npm` 读取依赖树。
+> 如果 `PATH` 里的 `npm` 是不带 `.cmd` 的 Bash 脚本（例如自建的 `~/bin/npm`），PowerShell
+> 拿不到任何输出，构建会以 `No JSON content found in output` 失败。确保 PATH 中能解析到
+> Node.js 官方的 `npm.cmd`（`where npm` 应包含 `npm.cmd`）后再构建。
 
 ### 同步发布检查清单
 

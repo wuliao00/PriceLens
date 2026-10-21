@@ -13,7 +13,10 @@ const manmanbuy = require('./manmanbuy');
 const gwdang = require('./gwdang');
 const jd = require('./jd');
 const linkstars = require('./linkstars');
+const shihuo = require('./shihuo');
 const { best: bestCandidate } = require('../utils/ranking');
+const { advise } = require('../utils/price-advice');
+const { comparePlatforms } = require('../utils/platform-compare');
 
 /**
  * 输入类型识别。
@@ -86,7 +89,7 @@ async function searchProducts(q) {
     try {
       deals = (await smzdm.searchDeals(product.title.slice(0, 40))).deals;
     } catch { /* 爆料可选 */ }
-    return { type: parsed.type, product, deals, url: parsed.url, keyword: product.title };
+    return { type: parsed.type, product, deals, url: parsed.url, keyword: product.title, comparison: comparePlatforms(product, deals) };
   }
 
   if (parsed.type === 'taobao') {
@@ -103,7 +106,7 @@ async function searchProducts(q) {
     try {
       deals = (await smzdm.searchDeals(parsed.keyword)).deals;
     } catch { /* 可选 */ }
-    return { type: parsed.type, product, deals, url: parsed.url, keyword: parsed.keyword };
+    return { type: parsed.type, product, deals, url: parsed.url, keyword: parsed.keyword, comparison: comparePlatforms(product, deals) };
   }
 
   if (parsed.type === 'bilibili') {
@@ -116,27 +119,60 @@ async function searchProducts(q) {
       url: `https://www.bilibili.com/video/${parsed.bvid}`,
       mall: '哔哩哔哩',
     };
-    return { type: parsed.type, product, deals: [], url: '', keyword: view.title };
+    return { type: parsed.type, product, deals: [], url: '', keyword: view.title, comparison: comparePlatforms(product, []) };
   }
 
   // 关键词：以什么值得买爆料为商品候选。
   // 2026-09-28：候选从"取第一条带价的"改为跨源打分 argmax（与 Android
   // domain/ProductCandidateResolver.resolvePrimary + CandidateRanking 同规则）；
   // 爆料列表本身维持站点热度顺序不变，只是不再让第一条当商品头。
-  const { deals } = await smzdm.searchDeals(parsed.keyword);
+  let deals = [];
+  let smzdmError = null;
+  try {
+    deals = (await smzdm.searchDeals(parsed.keyword)).deals;
+  } catch (err) {
+    smzdmError = err;
+  }
   const pool = deals.filter((d) => d.price && /^https?:\/\//.test(d.url));
-  const candidate = bestCandidate(parsed.keyword, pool);
+  let candidate = bestCandidate(parsed.keyword, pool);
+  let productSource = candidate ? 'smzdm' : '';
+
+  // 识货兜底（与 Android 一致）：值得买没有可用候选时，用识货结构化搜索结果补商品头。
+  // 识货没有稳定商品详情页，因此只给 product.url（识货搜索页）供「去购买」，
+  // 顶层 url 留空——历史价/盯价需要可追溯的商城链接，不能拿搜索页冒充。
+  if (!candidate) {
+    try {
+      const { items } = await shihuo.searchProducts(parsed.keyword);
+      const shihuoPool = items.map((item) => ({
+        title: item.title,
+        price: item.price,
+        image: item.image,
+        url: item.url,
+        mall: '识货',
+        explicitSubsidy: item.hasSubsidy,
+      }));
+      candidate = bestCandidate(parsed.keyword, shihuoPool);
+      if (candidate) productSource = 'shihuo';
+    } catch (err) {
+      // 两个源都不可用时保留原错误语义；识货单独失败不覆盖值得买已有的爆料
+      if (smzdmError && !candidate) throw smzdmError;
+    }
+  }
+  if (!candidate && smzdmError) throw smzdmError;
+
   const product = productFromCandidate(parsed.keyword, candidate);
 
   return {
     type: parsed.type,
     product,
     deals,
-    url: product.url || '',
+    url: productSource === 'shihuo' ? '' : (product.url || ''),
+    productSource,
     // 2026-09：关键词搜索时返回**用户原始关键词**（而非商品全名），
     // 与 Android 端一致——找券/B站/社区的检索词用原始关键词命中率更高；
     // 链接类输入（jd/taobao/bilibili）没有关键词，退回商品标题。
     keyword: parsed.keyword || product.title || '',
+    comparison: comparePlatforms(product, deals),
   };
 }
 
@@ -194,7 +230,48 @@ async function getHistoryMerged(url, creds = {}) {
     fetchedAt: Date.now(),
   };
   if (creds.writeLocal) await creds.writeLocal(points).catch(() => {});
+  // 购买建议由主进程统一算，渲染层只展示（避免两端各写一份分位口径）
+  merged.advice = advise(merged);
   return merged;
+}
+
+/**
+ * 社区数据：什么值得买爆料/评论/值不值 + 识货商品兜底。
+ * 两个源并行、失败互相隔离；只要还有一个源有结果就不整体报错，
+ * 失败原因放进 sourceErrors 由 UI 如实展示（不把「源挂了」说成「没结果」）。
+ * @param {string} q
+ * @returns {Promise<{deals:Array, comments:Array, ratio:{up:number,down:number},
+ *   shihuo:Array, sourceErrors:Record<string,string>}>}
+ */
+async function getCommunity(q) {
+  const [smzdmResult, shihuoResult] = await Promise.allSettled([
+    smzdm.getCommunity(q),
+    shihuo.searchProducts(q),
+  ]);
+
+  const sourceErrors = {};
+  let deals = [];
+  let comments = [];
+  let ratio = { up: 0, down: 0 };
+  if (smzdmResult.status === 'fulfilled') {
+    deals = smzdmResult.value.deals || [];
+    comments = smzdmResult.value.comments || [];
+    ratio = smzdmResult.value.ratio || ratio;
+  } else {
+    sourceErrors.smzdm = smzdmResult.reason?.message || '什么值得买不可用';
+  }
+
+  let shihuoItems = [];
+  if (shihuoResult.status === 'fulfilled') {
+    shihuoItems = shihuoResult.value.items || [];
+  } else {
+    sourceErrors.shihuo = shihuoResult.reason?.message || '识货不可用';
+  }
+
+  if (sourceErrors.smzdm && sourceErrors.shihuo) {
+    throw new Error(`社区数据源均不可用：什么值得买（${sourceErrors.smzdm}）；识货（${sourceErrors.shihuo}）`);
+  }
+  return { deals, comments, ratio, shihuo: shihuoItems, sourceErrors };
 }
 
 module.exports = {
@@ -205,6 +282,7 @@ module.exports = {
   getHistory: (url) => manmanbuy.getHistory(url),
   getHistoryMerged,
   getCoupons: (url, keyword) => gwdang.getCoupons(url, keyword),
-  getCommunity: (q) => smzdm.getCommunity(q),
-  crawlers: { bilibili, smzdm, manmanbuy, gwdang, jd, linkstars },
+  getCommunity,
+  getShihuo: (q) => shihuo.searchProducts(q),
+  crawlers: { bilibili, smzdm, manmanbuy, gwdang, jd, linkstars, shihuo },
 };

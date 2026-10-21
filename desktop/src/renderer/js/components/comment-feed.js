@@ -20,12 +20,18 @@ const HIGHLIGHT_MAP = {
  * 渲染社区视图。
  * @param {HTMLElement} container
  * @param {{deals: Array|null, comments: Array|null, ratio: {up:number, down:number}|null,
- *   product: object, error?: string, onRetry?: ()=>void, onOpenDeal:(url:string)=>void}} ctx
+ *   shihuo?: Array, sourceErrors?: Record<string,string>, product: object,
+ *   error?: string, onRetry?: ()=>void}} ctx
  */
 export function renderCommunityView(container, ctx) {
-  const { deals, comments, ratio, product, error, onRetry } = ctx;
+  const {
+    deals, comments, ratio, product, error, onRetry,
+    shihuo = [], sourceErrors = {},
+  } = ctx;
+  const shihuoItems = Array.isArray(shihuo) ? shihuo : [];
+  const dealItems = Array.isArray(deals) ? deals : [];
 
-  if (error && (!deals || deals.length === 0)) {
+  if (error && dealItems.length === 0 && shihuoItems.length === 0) {
     /* 降级态：展示具体源与错误类型（反爬拦截/超时/解析失败），并提供重试入口 */
     container.appendChild(el('div', { class: 'card empty-state' },
       icon('chat', 48),
@@ -35,16 +41,42 @@ export function renderCommunityView(container, ctx) {
         el('button', { class: 'btn btn--primary', on: { click: onRetry } }, '重试')) : null));
     return;
   }
-  if (!deals || deals.length === 0) {
+  if (dealItems.length === 0 && shihuoItems.length === 0) {
+    const partial = Object.values(sourceErrors).filter(Boolean);
+    if (partial.length > 0) {
+      container.appendChild(el('div', { class: 'card empty-state' },
+        icon('chat', 48),
+        el('div', { class: 'e-title', text: '社区数据源暂不可用' }),
+        el('div', { class: 'e-desc', text: partial.join('；') }),
+        onRetry ? el('div', { class: 'e-actions' },
+          el('button', { class: 'btn btn--primary', on: { click: onRetry } }, '重试')) : null));
+      return;
+    }
     container.appendChild(el('div', { class: 'card empty-state' },
       icon('chat', 48),
       el('div', { class: 'e-title', text: '暂无社区爆料' }),
-      el('div', { class: 'e-desc', text: '搜索商品后，这里会展示最新爆料、值/不值投票与热评。' })));
+      el('div', { class: 'e-desc', text: '搜索商品后，这里会展示最新爆料、识货同款、值/不值投票与热评。' })));
     return;
   }
 
-  /* 近 7 天更低价横幅 */
-  const lowerDeal = findLowerDeal(deals, product?.price);
+  /* 什么值得买整体不可用但识货有结果：如实提示，不把缺源说成没结果 */
+  if (sourceErrors.smzdm) {
+    container.appendChild(sourceNote(`什么值得买暂不可用：${sourceErrors.smzdm}`));
+  }
+
+  /* 识货同款（兜底源）：结构化搜索价 + 国补标记，点击跳识货搜索页 */
+  if (shihuoItems.length > 0) {
+    const shihuoCard = el('div', { class: 'card' },
+      el('h3', { class: 'card-title', text: '识货同款' }),
+      el('div', { class: 'fs-caption text-tertiary source-subtitle', text: '识货检索结果，已按关键词相关性过滤；价格仅供参考' }));
+    for (const item of shihuoItems.slice(0, 5)) {
+      shihuoCard.appendChild(buildShihuoItem(item));
+    }
+    container.appendChild(shihuoCard);
+  }
+
+  /* 近 7 天更低价横幅（只在有值得买爆料时成立） */
+  const lowerDeal = dealItems.length > 0 ? findLowerDeal(dealItems, product?.price) : null;
   if (lowerDeal) {
     container.appendChild(el('div', {
       class: 'banner',
@@ -57,33 +89,71 @@ export function renderCommunityView(container, ctx) {
   }
 
   /* 爆料 + 值/不值 */
-  const listCard = el('div', { class: 'card' },
-    el('h3', { class: 'card-title', text: '最近爆料' }));
-  for (const deal of deals.slice(0, 5)) {
-    listCard.appendChild(buildDealItem(deal));
-  }
-
-  if (ratio && (ratio.up > 0 || ratio.down > 0)) {
-    const total = ratio.up + ratio.down;
-    const upPct = Math.round((ratio.up / total) * 100);
-    listCard.appendChild(el('div', { class: 'ratio-bar' },
-      el('div', { class: 'r-up', style: { width: `${upPct}%` } }),
-      el('div', { class: 'r-down', style: { width: `${100 - upPct}%` } })));
-    listCard.appendChild(el('div', { class: 'ratio-legend' },
-      el('span', { class: 'up', text: `👍 值 ${ratio.up}` }),
-      el('span', { class: 'down', text: `👎 不值 ${ratio.down}` })));
-  }
-  container.appendChild(listCard);
-
-  /* 热评 Top10 */
-  if (comments && comments.length > 0) {
-    const commentCard = el('div', { class: 'card' },
-      el('h3', { class: 'card-title', text: '热门评论' }));
-    for (const comment of comments.slice(0, 10)) {
-      commentCard.appendChild(buildCommentItem(comment));
+  if (dealItems.length > 0) {
+    const listCard = el('div', { class: 'card' },
+      el('h3', { class: 'card-title', text: '最近爆料' }));
+    for (const deal of dealItems.slice(0, 5)) {
+      listCard.appendChild(buildDealItem(deal));
     }
-    container.appendChild(commentCard);
+
+    if (ratio && (ratio.up > 0 || ratio.down > 0)) {
+      const total = ratio.up + ratio.down;
+      const upPct = Math.round((ratio.up / total) * 100);
+      listCard.appendChild(el('div', { class: 'ratio-bar' },
+        el('div', { class: 'r-up', style: { width: `${upPct}%` } }),
+        el('div', { class: 'r-down', style: { width: `${100 - upPct}%` } })));
+      listCard.appendChild(el('div', { class: 'ratio-legend' },
+        el('span', { class: 'up', text: `👍 值 ${ratio.up}` }),
+        el('span', { class: 'down', text: `👎 不值 ${ratio.down}` })));
+    }
+    container.appendChild(listCard);
+
+    /* 热评 Top10 */
+    if (comments && comments.length > 0) {
+      const commentCard = el('div', { class: 'card' },
+        el('h3', { class: 'card-title', text: '热门评论' }));
+      for (const comment of comments.slice(0, 10)) {
+        commentCard.appendChild(buildCommentItem(comment));
+      }
+      container.appendChild(commentCard);
+    }
   }
+
+  if (sourceErrors.shihuo) {
+    container.appendChild(sourceNote(`识货暂不可用：${sourceErrors.shihuo}`));
+  }
+}
+
+/** 源级降级提示（部分源失败，但仍有可展示数据） */
+function sourceNote(text) {
+  return el('div', { class: 'source-note' },
+    icon('warn', 14),
+    el('span', { text }));
+}
+
+/** 识货商品行：图 + 标题 + 品牌/销量/国补 + 价格，点击跳识货搜索页 */
+function buildShihuoItem(item) {
+  const meta = el('div', { class: 'shihuo-meta' });
+  if (item.brand) meta.appendChild(el('span', { text: item.brand }));
+  if (item.salesInfo) meta.appendChild(el('span', { text: item.salesInfo }));
+  if (item.hasSubsidy) meta.appendChild(el('span', { class: 'tag tag--success', text: '国补' }));
+
+  return el('div', {
+    class: 'shihuo-item',
+    title: '在识货查看同款',
+    on: { click: () => openExternalSafe(item.url) },
+  },
+    el('img', {
+      class: 'shihuo-img',
+      src: item.image || 'assets/placeholder.svg',
+      alt: '',
+      loading: 'lazy',
+      on: { error: (e) => { e.target.src = 'assets/placeholder.svg'; } },
+    }),
+    el('div', { class: 'shihuo-main' },
+      el('div', { class: 'shihuo-title clamp-2', text: item.title }),
+      meta),
+    el('div', { class: 'shihuo-price', text: formatPrice(item.price) }));
 }
 
 /**

@@ -7,65 +7,36 @@
  *   - 全部用 createElementNS 构建（红线 #4：无 innerHTML 外部数据）
  */
 import { svgEl, el, icon, copyText } from '../utils/dom.js';
-import { formatPrice, formatPricePlain } from '../utils/format.js';
+import { formatPrice, formatPricePlain, timeAgo } from '../utils/format.js';
 import { showContextMenu } from './context-menu.js';
 import { showToast } from './toast.js';
 
 /**
- * 渲染价格视图：统计行 + 图表 + 盯价设置行。
+ * 渲染价格视图：购买建议 + 统计 + 图表 + 当前商品盯价控制 + 全部盯价目标。
  * @param {HTMLElement} container
  * @param {{history: {current:number, lowest:number, highest:number,
- *   points:Array<{date:string, price:number}>} | null,
- *   product: object, watch: object|null, error?: string,
- *   onSetWatch: (target:number)=>void, onClearWatch: ()=>void,
+ *   points:Array<{date:string, price:number}>, advice?:object} | null,
+ *   product: object, watch: object|null, watches?: Array<object>, error?: string,
+ *   onSetWatch: (target:number)=>void, onRemoveWatch: (id:string)=>void,
+ *   onToggleWatch: (id:string, paused:boolean)=>void, onCheckNow?: ()=>void,
+ *   onOpenWatch?: (watch:object)=>void,
  *   onRetrySearch?: ()=>void, onRetry?: ()=>void, onOpenProduct?: (()=>void)|null}} ctx
  */
 export function renderPriceView(container, ctx) {
-  const { history, product, watch, error, onSetWatch, onClearWatch,
-    onRetrySearch, onRetry, onOpenProduct } = ctx;
+  const {
+    history, product, watch, watches = [], error, onSetWatch, onRemoveWatch,
+    onToggleWatch, onCheckNow, onOpenWatch, onRetrySearch, onRetry, onOpenProduct,
+  } = ctx;
 
-  if (!history || !history.points || history.points.length < 2) {
+  const hasHistory = Boolean(history && Array.isArray(history.points) && history.points.length >= 2);
+  if (!hasHistory) {
     container.appendChild(renderEmpty({ product, error, onRetrySearch, onRetry, onOpenProduct }));
-    return;
+  } else {
+    container.appendChild(renderHistoryCard({ history, product, watch, onSetWatch, onRemoveWatch, onToggleWatch }));
   }
 
-  const prices = history.points.map((p) => p.price);
-  const avg7d = prices.slice(-7).reduce((s, p) => s + p, 0) / Math.min(7, prices.length);
-
-  container.appendChild(
-    el('div', { class: 'card' },
-      el('h3', { class: 'card-title', text: '历史价格趋势' }),
-      el('div', { class: 'stats-row' },
-        statItem('当前价', formatPrice(history.current)),
-        statItem('历史最低', formatPrice(history.lowest), 'var(--success)'),
-        statItem('历史最高', formatPrice(history.highest), 'var(--danger)'),
-        statItem('7 日均价', formatPrice(Math.round(avg7d)))),
-      el('div', {
-        class: 'chart-wrap selectable',
-        on: {
-          contextmenu: (e) => {
-            e.preventDefault(); // 显式传参（红线 #5）
-            showContextMenu(e.clientX, e.clientY, [
-              {
-                label: '导出 PNG',
-                icon: 'external',
-                action: () => exportChartPng(container, product.title),
-              },
-              {
-                label: `复制当前价格 ${formatPrice(history.current)}`,
-                icon: 'copy',
-                action: async () => {
-                  const ok = await copyText(formatPricePlain(history.current));
-                  showToast(ok ? '已复制' : '复制失败');
-                },
-              },
-            ]);
-          },
-        },
-      }, renderPriceChart(history.points)),
-      renderWatchRow(watch, onSetWatch, onClearWatch),
-    ),
-  );
+  // 盯价列表始终展示：即使当前商品没有曲线，也要能管理已有关注目标
+  container.appendChild(renderWatchList({ watches, onOpenWatch, onToggleWatch, onRemoveWatch, onCheckNow }));
 }
 
 /** 统计项 */
@@ -124,16 +95,73 @@ function renderEmpty({ product, error, onRetrySearch, onRetry, onOpenProduct }) 
     actions);
 }
 
-/** 盯价设置行 */
-function renderWatchRow(watch, onSetWatch, onClearWatch) {
+/** 历史价格卡：购买建议 + 统计 + 曲线 + 当前商品盯价控制 */
+function renderHistoryCard({ history, product, watch, onSetWatch, onRemoveWatch, onToggleWatch }) {
+  const prices = history.points.map((p) => p.price);
+  const avg7d = prices.slice(-7).reduce((s, p) => s + p, 0) / Math.min(7, prices.length);
+
+  const card = el('div', { class: 'card' },
+    el('h3', { class: 'card-title', text: '历史价格趋势' }),
+    renderAdvice(history.advice),
+    el('div', { class: 'stats-row' },
+      statItem('当前价', formatPrice(history.current)),
+      statItem('历史最低', formatPrice(history.lowest), 'var(--success)'),
+      statItem('历史最高', formatPrice(history.highest), 'var(--danger)'),
+      statItem('7 日均价', formatPrice(Math.round(avg7d)))),
+    el('div', {
+      class: 'chart-wrap selectable',
+      on: {
+        contextmenu: (e) => {
+          e.preventDefault(); // 显式传参（红线 #5）
+          showContextMenu(e.clientX, e.clientY, [
+            { label: '导出 PNG', icon: 'external', action: () => exportChartPng(card, product.title) },
+            {
+              label: `复制当前价格 ${formatPrice(history.current)}`,
+              icon: 'copy',
+              action: async () => {
+                const ok = await copyText(formatPricePlain(history.current));
+                showToast(ok ? '已复制' : '复制失败');
+              },
+            },
+          ]);
+        },
+      },
+    }, renderPriceChart(history.points)),
+    renderWatchControls({ watch, onSetWatch, onRemoveWatch, onToggleWatch }),
+  );
+  return card;
+}
+
+/** 历史分位购买建议（主进程算好；样本不足时也如实说） */
+function renderAdvice(advice) {
+  if (!advice) return null;
+  const iconName = advice.level === 'low' ? 'check' : (advice.level === 'high' ? 'warn' : 'chart');
+  return el('div', { class: `advice advice--${advice.level}` },
+    icon(iconName, 18),
+    el('div', { class: 'advice-body' },
+      el('div', { class: 'advice-label', text: advice.label }),
+      el('div', { class: 'advice-detail', text: advice.detail })));
+}
+
+/** 当前商品的盯价设置/管理行 */
+function renderWatchControls({ watch, onSetWatch, onRemoveWatch, onToggleWatch }) {
   const input = el('input', {
     class: 'field-input', type: 'number', min: '0', step: '0.01',
     placeholder: '目标价 ¥',
     value: watch && watch.target ? String(watch.target) : '',
   });
+
+  let statusText = '低于目标价时系统通知，可同时盯多个商品';
+  if (watch) {
+    if (watch.paused) statusText = '该目标已暂停，不会参与轮询';
+    else if (watch.lastError) statusText = `最近检查失败：${watch.lastError}`;
+    else if (watch.notified) statusText = `已到价 · 当前 ¥${watch.current ?? '--'}`;
+    else statusText = '盯价中：低于目标价时系统通知';
+  }
+
   const row = el('div', { class: 'watch-row' },
     icon('bell', 16),
-    el('span', { class: 'fs-caption text-secondary', text: '盯价提醒：低于目标价时系统通知' }),
+    el('span', { class: 'fs-caption text-secondary', text: statusText }),
     input,
     el('button', {
       class: 'btn btn--primary',
@@ -141,12 +169,92 @@ function renderWatchRow(watch, onSetWatch, onClearWatch) {
         click: () => {
           const target = Number(input.value);
           if (target > 0) onSetWatch(target);
+          else showToast('请输入大于 0 的目标价');
         },
       },
-    }, '开启提醒'),
-    watch ? el('button', { class: 'btn', on: { click: onClearWatch } }, '取消提醒') : null,
+    }, watch ? '保存目标' : '加入盯价'),
+    watch ? el('button', {
+      class: 'btn',
+      on: { click: () => onToggleWatch(watch.id, !watch.paused) },
+    }, watch.paused ? '恢复' : '暂停') : null,
+    watch ? el('button', {
+      class: 'btn btn--text btn--danger',
+      on: { click: () => onRemoveWatch(watch.id) },
+    }, '删除') : null,
   );
   return row;
+}
+
+/** 全部盯价目标列表（历史价页始终展示） */
+function renderWatchList({ watches, onOpenWatch, onToggleWatch, onRemoveWatch, onCheckNow }) {
+  const list = Array.isArray(watches) ? watches : [];
+  const head = el('div', { class: 'watch-list-head' },
+    el('h3', { class: 'card-title', text: `盯价目标${list.length ? `（${list.length}）` : ''}` }),
+    el('button', {
+      class: 'btn btn--text',
+      on: { click: () => onCheckNow && onCheckNow() },
+      title: '立即检查所有盯价目标',
+    }, icon('play', 13), '立即检查'),
+  );
+  const card = el('div', { class: 'card watch-list-card', style: { marginTop: '16px' } }, head);
+
+  if (list.length === 0) {
+    card.appendChild(el('div', { class: 'watch-empty' },
+      icon('bell', 20),
+      el('span', { text: '还没有盯价目标。搜索商品后，在上方设置目标价即可加入，最多可同时盯 20 个商品。' })));
+    return card;
+  }
+
+  for (const w of list) {
+    const status = watchStatus(w);
+    const item = el('div', {
+      class: `watch-item${w.alerted ? ' watch-item--alerted' : ''}${w.paused ? ' watch-item--paused' : ''}`,
+    },
+      el('div', { class: 'watch-main' },
+        el('div', { class: 'watch-title clamp-1', text: w.keyword || w.url }),
+        el('div', { class: 'watch-meta' },
+          el('span', { text: `当前 ${w.current ? formatPrice(w.current) : '--'}` }),
+          el('span', { text: `目标 ${formatPrice(w.target)}` }),
+          w.lowest ? el('span', { text: `历史最低 ${formatPrice(w.lowest)}` }) : null,
+          w.lastChecked ? el('span', { text: `检查于 ${timeAgo(w.lastChecked)}` }) : null,
+          w.lastAlertAt ? el('span', { text: `上次提醒 ${timeAgo(w.lastAlertAt)}${w.lastAlertPrice ? ` @ ${formatPrice(w.lastAlertPrice)}` : ''}` }) : null),
+        el('div', { class: `watch-status ${status.cls}`, text: status.text })),
+      el('div', { class: 'watch-actions' },
+        el('button', { class: 'btn btn--text', on: { click: () => onOpenWatch && onOpenWatch(w) } }, '查看'),
+        el('button', {
+          class: 'btn btn--text',
+          on: { click: () => onToggleWatch && onToggleWatch(w.id, !w.paused) },
+        }, w.paused ? '恢复' : '暂停'),
+        el('button', {
+          class: 'btn btn--text btn--danger',
+          on: { click: () => onRemoveWatch && onRemoveWatch(w.id) },
+        }, '删除')));
+
+    // 点击空白处打开该商品；按钮自己 stopPropagation，避免误触
+    item.addEventListener('click', () => onOpenWatch && onOpenWatch(w));
+    for (const btn of item.querySelectorAll('button')) {
+      btn.addEventListener('click', (e) => e.stopPropagation());
+    }
+    card.appendChild(item);
+  }
+  return card;
+}
+
+/** 盯价目标状态文案 */
+function watchStatus(w) {
+  if (w.paused) return { cls: 'watch-status--muted', text: '已暂停' };
+  if (w.lastError) return { cls: 'watch-status--danger', text: `检查失败：${w.lastError}` };
+  if (w.notified) {
+    const count = Number(w.alertCount || 0);
+    return {
+      cls: 'watch-status--success',
+      text: count > 0
+        ? `已到价，累计提醒 ${count} 次；价格回升后重新提醒`
+        : '已到价，等待价格回升后重新提醒',
+    };
+  }
+  if (w.current) return { cls: 'watch-status--waiting', text: '等待降价' };
+  return { cls: 'watch-status--muted', text: '已加入，等待首次检查' };
 }
 
 /* ══════════ 图表本体 ══════════ */

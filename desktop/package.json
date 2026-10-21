@@ -1,8 +1,8 @@
 {
   "name": "pricelens",
   "productName": "PriceLens",
-  "version": "2.1.1",
-  "description": "PriceLens v2.1 —— 极简主义全网比价决策工具：种草 / 盯价（30 分钟后台轮询）/ 找券 / 社区验证 / 自定义脚本",
+  "version": "2.4.0",
+  "description": "PriceLens v2.4 —— 极简主义全网比价决策工具：种草 / 多商品盯价与提醒历史 / 同款多平台对比 / 找券 / 社区验证 / 识货兜底 / 商单标记 / 备份恢复",
   "author": "PriceLens Team",
   "license": "MIT",
   "private": true,
@@ -17,7 +17,8 @@
     "icon": "node build/generate-icon.js",
     "lint": "node build/lint.js",
     "build": "electron-builder --win --x64 --publish never",
-    "postinstall": "node build/generate-icon.js"
+    "postinstall": "node build/generate-icon.js",
+    "test": "node _unit_check.js"
   },
   "dependencies": {
     "cheerio": "^1.0.0"

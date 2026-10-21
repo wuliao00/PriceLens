@@ -276,6 +276,54 @@
 .quick-card .q-title { font-size: var(--fs-body); font-weight: 500; }
 .quick-card .q-desc  { font-size: var(--fs-caption); color: var(--text-tertiary); }
 
+/* 概览：同款多平台对比 */
+.platform-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3);
+}
+.platform-head .card-title { margin-bottom: 0; }
+.platform-note { margin: var(--sp-1) 0 var(--sp-2); }
+.platform-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--bg-hover);
+  cursor: pointer;
+}
+.platform-row--lowest { background: rgba(52,199,89,0.06); margin: 0 calc(-1 * var(--sp-2)); padding-left: var(--sp-2); padding-right: var(--sp-2); border-radius: var(--radius-tag); }
+.platform-main { min-width: 0; }
+.platform-name { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-body); font-weight: 500; }
+.platform-meta { font-size: var(--fs-caption); color: var(--text-tertiary); margin-top: 2px; }
+.platform-price-wrap { text-align: right; flex-shrink: 0; }
+.platform-price { font-size: var(--fs-subtitle); font-weight: var(--fw-title); font-variant-numeric: tabular-nums; }
+.platform-delta { font-size: var(--fs-caption); margin-top: 1px; }
+.platform-delta--low { color: var(--success); }
+.platform-delta--high { color: var(--warning); }
+
+/* 概览：数据源健康状态 */
+.source-status-card { margin-top: var(--sp-4); padding: var(--sp-3) var(--sp-4); }
+.source-status-card .card-title { font-size: var(--fs-caption); color: var(--text-tertiary); margin-bottom: var(--sp-2); }
+.source-status-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.source-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px var(--sp-2);
+  border-radius: 999px;
+  background: var(--bg-input);
+  font-size: var(--fs-caption);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.source-chip:hover { background: var(--bg-hover); }
+.source-name { color: var(--text-primary); font-weight: 500; }
+.source-state { color: var(--text-tertiary); }
+.source-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); flex-shrink: 0; }
+.source-chip--ok .source-dot      { background: var(--success); }
+.source-chip--error .source-dot   { background: var(--danger); }
+.source-chip--loading .source-dot { background: var(--accent); animation: pulseRing 1.6s var(--ease-out) infinite; }
+.source-chip--error .source-state { color: var(--danger); }
+.source-chip--ok .source-state    { color: var(--success); }
+.source-chip--loading .source-state { color: var(--accent); }
+
 /* ══════════ 顶部横幅（更低价提醒） ══════════ */
 .banner {
   display: flex; align-items: center; justify-content: space-between;
@@ -297,7 +345,7 @@
   flex-shrink: 0;
 }
 
-/* ══════════ B 站视频网格 2×3 ══════════ */
+/* ══════════ B 站视频网格 2×N（标记视频沉底） ══════════ */
 .video-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -352,6 +400,32 @@
   font-size: var(--fs-caption);
   color: var(--text-tertiary);
 }
+/* 内容风险提示与标签（与 Android BiliVideoCard 同语义：只标记、沉底，不删除） */
+.risk-hint {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-tag);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+}
+.risk-hint svg { flex-shrink: 0; color: var(--warning); }
+.video-chips {
+  display: flex; flex-wrap: wrap; gap: var(--sp-1);
+  margin-top: var(--sp-2);
+}
+.risk-chip {
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-tag);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-label);
+  cursor: help;
+}
+.risk-chip--sponsor { color: var(--danger); background: rgba(255,59,48,0.12); }
+.risk-chip--hype    { color: var(--warning); background: rgba(255,149,0,0.14); }
+[data-theme="dark"] .risk-chip--sponsor { background: rgba(255,69,58,0.18); }
+[data-theme="dark"] .risk-chip--hype    { background: rgba(255,159,10,0.18); }
 
 /* ══════════ 价格视图 ══════════ */
 .stats-row {
@@ -407,6 +481,64 @@
   flex-wrap: wrap;
 }
 .watch-row .field-input { width: 160px; }
+
+/* 购买建议（历史分位） */
+.advice {
+  display: flex; align-items: flex-start; gap: var(--sp-3);
+  margin: var(--sp-3) 0 var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-btn);
+  background: var(--bg-input);
+}
+.advice svg { flex-shrink: 0; margin-top: 1px; }
+.advice-body { min-width: 0; }
+.advice-label { font-size: var(--fs-body); font-weight: var(--fw-title); }
+.advice-detail { font-size: var(--fs-caption); color: var(--text-secondary); margin-top: 2px; }
+.advice--low  { background: rgba(52,199,89,0.12); }
+.advice--low .advice-label, .advice--low svg { color: var(--success); }
+.advice--high { background: rgba(255,149,0,0.13); }
+.advice--high .advice-label, .advice--high svg { color: var(--warning); }
+.advice--mid .advice-label { color: var(--text-secondary); }
+.advice--unknown .advice-label, .advice--unknown svg { color: var(--text-tertiary); }
+
+/* 多商品盯价列表 */
+.watch-list-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3);
+}
+.watch-list-head .card-title { margin-bottom: 0; }
+.watch-empty {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-3) 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-caption);
+}
+.watch-item {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--bg-hover);
+  cursor: pointer;
+}
+.watch-item--paused { opacity: 0.65; }
+.watch-item--alerted {
+  margin: 0 calc(-1 * var(--sp-2));
+  padding-left: var(--sp-2); padding-right: var(--sp-2);
+  border-radius: var(--radius-tag);
+  background: rgba(52,199,89,0.08);
+}
+.watch-main { flex: 1; min-width: 0; }
+.watch-title { font-size: var(--fs-body); font-weight: 500; margin-bottom: 2px; }
+.watch-meta {
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  font-size: var(--fs-caption); color: var(--text-tertiary);
+}
+.watch-status { font-size: var(--fs-caption); margin-top: 2px; }
+.watch-status--success { color: var(--success); }
+.watch-status--danger  { color: var(--danger); }
+.watch-status--waiting { color: var(--text-secondary); }
+.watch-status--muted   { color: var(--text-tertiary); }
+.watch-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.watch-actions .btn { padding: 4px var(--sp-2); }
 
 /* ══════════ 优惠券 ══════════ */
 .final-price-card {
@@ -470,6 +602,45 @@
   color: var(--danger);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
+}
+
+/* 识货兜底源（社区页） */
+.source-subtitle { margin-bottom: var(--sp-2); }
+.source-note {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-tag);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+}
+.source-note svg { flex-shrink: 0; color: var(--warning); }
+.shihuo-item {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--bg-hover);
+  cursor: pointer;
+}
+.shihuo-img {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-tag);
+  object-fit: cover;
+  background: var(--bg-input);
+  flex-shrink: 0;
+}
+.shihuo-main { flex: 1; min-width: 0; }
+.shihuo-title { font-size: var(--fs-body); margin-bottom: 2px; }
+.shihuo-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-caption); color: var(--text-tertiary);
+}
+.shihuo-price {
+  flex-shrink: 0;
+  font-size: var(--fs-price);
+  font-weight: var(--fw-title);
+  color: var(--danger);
+  font-variant-numeric: tabular-nums;
 }
 
 /* 值/不值比例条（绿/红双色） */

@@ -14,15 +14,66 @@
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { app } = require('electron');
 
 /** 应用默认设置 */
 const DEFAULT_SETTINGS = {
   theme: 'system',        // 'light' | 'dark' | 'system'
-  watch: null,            // { keyword, url, target, notified, current, since }
+  watches: [],            // 多商品盯价：{ id, keyword, url, target, current, lowest, paused, notified, alerted, since, lastChecked, lastError }
+  watch: null,            // v2.2 及以前单条盯价；initStorage 迁移进 watches 后置空
   linkstars_apikey: '',   // 星罗好货开放平台 apikey（历史低价参考）
   mmb_cookie: '',         // 慢慢买登录 Cookie（完整历史曲线）
 };
+
+
+/** 生成盯价目标 ID（无需引入 uuid 依赖） */
+function newWatchId() {
+  return `w_${Date.now().toString(36)}_${crypto.randomBytes(3).toString('hex')}`;
+}
+
+/**
+ * 规整盯价列表：兼容 v2.2 的单条 watch；丢掉无链接/无目标价的脏数据。
+ * @param {any} rawWatches
+ * @param {any} [legacyWatch]
+ * @returns {Array<object>}
+ */
+function normalizeWatches(rawWatches, legacyWatch) {
+  const source = Array.isArray(rawWatches) ? rawWatches.slice() : [];
+  if (source.length === 0 && legacyWatch && typeof legacyWatch === 'object') source.push(legacyWatch);
+
+  const out = [];
+  const seenUrls = new Set();
+  for (const raw of source) {
+    if (!raw || typeof raw !== 'object') continue;
+    const url = String(raw.url || '').trim();
+    const target = Number(raw.target);
+    if (!/^https?:\/\//i.test(url) || !(target > 0)) continue;
+    if (seenUrls.has(url)) continue; // 同一商品只保留一条
+    seenUrls.add(url);
+    const current = Number(raw.current);
+    const lowest = Number(raw.lowest);
+    const lastAlertPrice = Number(raw.lastAlertPrice);
+    out.push({
+      id: String(raw.id || '').trim() || newWatchId(),
+      keyword: String(raw.keyword || '').slice(0, 100),
+      url,
+      target,
+      current: Number.isFinite(current) && current > 0 ? current : null,
+      lowest: Number.isFinite(lowest) && lowest > 0 ? lowest : null,
+      paused: Boolean(raw.paused),
+      notified: Boolean(raw.notified),
+      alerted: Boolean(raw.alerted),
+      since: Number(raw.since) || Date.now(),
+      lastChecked: Number(raw.lastChecked) || 0,
+      lastError: raw.lastError ? String(raw.lastError).slice(0, 200) : null,
+      lastAlertAt: Number(raw.lastAlertAt) || 0,
+      lastAlertPrice: Number.isFinite(lastAlertPrice) && lastAlertPrice > 0 ? lastAlertPrice : null,
+      alertCount: Math.max(0, Math.round(Number(raw.alertCount) || 0)),
+    });
+  }
+  return out;
+}
 
 let settings = { ...DEFAULT_SETTINGS };
 
@@ -34,12 +85,22 @@ async function initStorage() {
   const userDataDir = app.getPath('userData'); // %APPDATA%/pricelens
   await fs.mkdir(path.join(userDataDir, 'cache'), { recursive: true });
   await fs.mkdir(path.join(userDataDir, 'logs'), { recursive: true });
+  let migrated = false;
   try {
     const raw = await fs.readFile(path.join(userDataDir, 'settings.json'), 'utf-8');
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') settings = { ...DEFAULT_SETTINGS, ...parsed };
+    if (parsed && typeof parsed === 'object') {
+      settings = { ...DEFAULT_SETTINGS, ...parsed };
+      migrated = Boolean(parsed.watch);
+    }
   } catch {
     settings = { ...DEFAULT_SETTINGS }; // 不存在或损坏 → 默认值
+  }
+  // v2.2 单条 watch → v2.3 watches[]；迁移后把旧字段置空并落盘
+  settings.watches = normalizeWatches(settings.watches, settings.watch);
+  settings.watch = null;
+  if (migrated) {
+    await writeJson(path.join(userDataDir, 'settings.json'), settings).catch(() => {});
   }
 }
 
@@ -128,6 +189,8 @@ async function removeDir(dir) {
 module.exports = {
   DEFAULT_SETTINGS,
   initStorage,
+  normalizeWatches,
+  newWatchId,
   getSettings,
   updateSettings,
   ensureDir,

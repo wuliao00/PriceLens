@@ -27,10 +27,11 @@ const state = {
   url: '',
   product: null,
   deals: [],
+  comparison: null,
   data: { history: null, videos: null, coupons: null, community: null },
   errors: {},
   loading: {},
-  watch: null,
+  watches: [],
 };
 
 let router = null;
@@ -52,10 +53,14 @@ const views = {
       : renderPriceView(c, {
           history: state.data.history,
           product: state.product || {},
-          watch: state.watch,
+          watch: findWatch(state.url),
+          watches: state.watches,
           error: state.errors.history,
-          onSetWatch: setWatch,
-          onClearWatch: clearWatch,
+          onSetWatch: saveWatch,
+          onRemoveWatch: removeWatch,
+          onToggleWatch: toggleWatch,
+          onCheckNow: checkAllWatches,
+          onOpenWatch: openWatch,
           onRetrySearch: focusSearch,
           onRetry: () => retryModule('history'),
           onOpenProduct: state.url ? () => openExternalSafe(state.url) : null,
@@ -80,6 +85,8 @@ const views = {
           deals: state.data.community?.deals ?? state.deals,
           comments: state.data.community?.comments ?? null,
           ratio: state.data.community?.ratio ?? null,
+          shihuo: state.data.community?.shihuo ?? [],
+          sourceErrors: state.data.community?.sourceErrors ?? {},
           product: state.product || {},
           error: state.errors.community,
           onRetry: () => retryModule('community'),
@@ -121,6 +128,8 @@ function renderOverview(container) {
   grid.appendChild(quickCard('ticket', '找券', couponsSummary(), 'coupons'));
   grid.appendChild(quickCard('chat', '社区', communitySummary(), 'community'));
   container.appendChild(grid);
+  renderSourceStatus(container);
+  renderPlatformComparison(container, state.comparison);
 
   /* 爆料预览 Top3 */
   const deals = state.data.community?.deals ?? state.deals;
@@ -165,8 +174,128 @@ function couponsSummary() {
 function communitySummary() {
   if (state.loading.community) return '加载中…';
   const deals = state.data.community?.deals ?? state.deals;
-  if (!deals || deals.length === 0) return state.errors.community ? '暂不可用' : '暂无爆料';
-  return `${deals.length} 条爆料`;
+  const shihuo = state.data.community?.shihuo ?? [];
+  if ((!deals || deals.length === 0) && shihuo.length === 0) {
+    return state.errors.community ? '暂不可用' : '暂无爆料';
+  }
+  const parts = [];
+  if (deals?.length) parts.push(`${deals.length} 条爆料`);
+  if (shihuo.length) parts.push(`${shihuo.length} 件识货`);
+  return parts.join(' · ');
+}
+
+/** 同款多平台对比（按爆料平台取最低价；不保证同规格，文案必须说清） */
+function renderPlatformComparison(container, comparison) {
+  const platforms = comparison?.platforms || [];
+  if (platforms.length === 0) return;
+
+  const card = el('div', { class: 'card platform-card', style: { marginTop: '16px' } },
+    el('div', { class: 'platform-head' },
+      el('h3', { class: 'card-title', text: '同款多平台' }),
+      el('span', {
+        class: 'fs-caption text-tertiary',
+        text: `${comparison.platformCount} 个平台 · ${comparison.offerCount} 条爆料`,
+      })),
+    el('div', {
+      class: 'fs-caption text-tertiary platform-note',
+      text: comparison.current
+        ? `按同关键词爆料聚合，取各平台最低价；不保证同规格。当前价 ${formatPrice(comparison.current)}。`
+        : '按同关键词爆料聚合，取各平台最低价；当前价未知，价差仅供参考。',
+    }));
+
+  for (const [index, p] of platforms.entries()) {
+    const deltaText = p.delta == null
+      ? ''
+      : (p.delta < 0 ? `比当前低 ${formatPrice(Math.abs(p.delta))}`
+        : (p.delta > 0 ? `比当前高 ${formatPrice(p.delta)}` : '与当前持平'));
+    card.appendChild(el('div', {
+      class: `platform-row${index === 0 ? ' platform-row--lowest' : ''}`,
+      title: p.title || p.mall,
+      on: { click: () => openExternalSafe(p.url) },
+    },
+      el('div', { class: 'platform-main' },
+        el('div', { class: 'platform-name' },
+          el('span', { text: p.mall }),
+          index === 0 ? el('span', { class: 'tag tag--success', text: '本轮最低' }) : null),
+        el('div', { class: 'platform-meta', text: `${p.count} 条爆料 · 点击去原爆料` })),
+      el('div', { class: 'platform-price-wrap' },
+        el('div', { class: 'platform-price', text: formatPrice(p.price) }),
+        deltaText ? el('div', {
+          class: `platform-delta ${p.delta < 0 ? 'platform-delta--low' : 'platform-delta--high'}`,
+          text: deltaText,
+        }) : null)));
+  }
+  container.appendChild(card);
+}
+
+/** 概览的数据源健康状态：失败就说失败，空就说空，不把两者混成一句「暂无」 */
+function renderSourceStatus(container) {
+  const community = state.data.community;
+  const communityDeals = community?.deals ?? state.deals ?? [];
+  const entries = [
+    {
+      name: '历史价', view: 'price',
+      loading: state.loading.history,
+      error: state.errors.history,
+      ok: Boolean(state.data.history?.points?.length),
+      emptyText: '未收录',
+    },
+    {
+      name: 'B站', view: 'bilibili',
+      loading: state.loading.bilibili,
+      error: state.errors.bilibili,
+      ok: Boolean(state.data.bilibili?.videos?.length),
+      emptyText: '无结果',
+    },
+    {
+      name: '找券', view: 'coupons',
+      loading: state.loading.coupons,
+      error: state.errors.coupons,
+      ok: Boolean(state.data.coupons?.coupons?.length || state.data.coupons?.finalPrice > 0),
+      emptyText: '无结果',
+    },
+    {
+      name: '值得买', view: 'community',
+      loading: state.loading.community,
+      error: state.errors.community || community?.sourceErrors?.smzdm,
+      ok: Boolean(communityDeals.length),
+      emptyText: '无结果',
+    },
+    {
+      name: '识货', view: 'community',
+      loading: state.loading.community,
+      error: community?.sourceErrors?.shihuo,
+      ok: Boolean(community?.shihuo?.length),
+      emptyText: '无结果',
+    },
+  ];
+
+  const row = el('div', { class: 'source-status-row' });
+  for (const entry of entries) {
+    let status = 'empty';
+    let text = entry.emptyText;
+    if (entry.loading) {
+      status = 'loading';
+      text = '加载中';
+    } else if (entry.error) {
+      status = 'error';
+      text = '不可用';
+    } else if (entry.ok) {
+      status = 'ok';
+      text = '正常';
+    }
+    row.appendChild(el('div', {
+      class: `source-chip source-chip--${status}`,
+      title: entry.error || (status === 'ok' ? '本轮已拿到数据' : '本轮没有拿到数据'),
+      on: { click: () => entry.view && router.go(entry.view) },
+    },
+      el('span', { class: 'source-dot' }),
+      el('span', { class: 'source-name', text: entry.name }),
+      el('span', { class: 'source-state', text })));
+  }
+  container.appendChild(el('div', { class: 'card source-status-card' },
+    el('h3', { class: 'card-title', text: '数据源状态' }),
+    row));
 }
 
 function quickCard(iconName, title, desc, targetView) {
@@ -187,9 +316,11 @@ function quickCard(iconName, title, desc, targetView) {
  * @param {{refresh?: boolean}} [opts] refresh=true 时 F5 强刷，跳过缓存读取
  */
 async function doSearch(q, opts = {}) {
+  hideClipboardBanner();
   state.raw = q;
   state.product = null;
   state.deals = [];
+  state.comparison = null;
   state.data = { history: null, videos: null, coupons: null, community: null };
   state.errors = {};
   state.loading = {};
@@ -202,6 +333,7 @@ async function doSearch(q, opts = {}) {
     if (!res || !res.ok) throw new Error((res && res.error) || '搜索失败');
     state.product = res.product;
     state.deals = res.deals || [];
+    state.comparison = res.comparison || null;
     state.url = res.url || '';
     state.keyword = res.keyword || q;
     setStatus(`已加载「${state.keyword.slice(0, 20)}」`);
@@ -291,32 +423,88 @@ async function loadModule(name, fetcher) {
   }
 }
 
-/* ══════════ 盯价 ══════════ */
-async function setWatch(target) {
+/* ══════════ 盯价（多商品） ══════════ */
+function findWatch(url) {
+  if (!url) return null;
+  return state.watches.find((w) => w.url === url) || null;
+}
+
+/** 应用一份最新盯价列表，并同步侧边栏红点 */
+function applyWatches(watches) {
+  state.watches = Array.isArray(watches) ? watches : [];
+  updateWatchDot();
+}
+
+function updateWatchDot() {
+  const dot = document.getElementById('watch-dot');
+  if (dot) dot.hidden = !state.watches.some((w) => w.alerted);
+}
+
+/** 对当前商品新增/更新目标价 */
+async function saveWatch(target) {
   if (!state.url) {
     showToast('该商品暂不支持盯价（缺少商城链接）');
     return;
   }
-  const res = await window.priceLens.watch.set({
-    keyword: state.keyword,
-    url: state.url,
-    target,
-  });
+  const existing = findWatch(state.url);
+  const res = existing
+    ? await window.priceLens.watch.update({ id: existing.id, target })
+    : await window.priceLens.watch.add({ keyword: state.keyword, url: state.url, target });
   if (res && res.ok) {
-    state.watch = res.watch;
-    showToast(`已开启盯价，低于 ¥${target} 时提醒`);
+    applyWatches(res.watches);
+    showToast(existing ? `目标价已改为 ¥${target}` : `已加入盯价，低于 ¥${target} 时提醒`);
     router.rerender();
   } else {
     showToast((res && res.error) || '设置失败');
   }
 }
 
-async function clearWatch() {
-  await window.priceLens.watch.clear();
-  state.watch = null;
-  document.getElementById('watch-dot').hidden = true;
-  showToast('已取消盯价');
-  router.rerender();
+async function removeWatch(id) {
+  const res = await window.priceLens.watch.remove(id);
+  if (res && res.ok) {
+    applyWatches(res.watches);
+    showToast('已删除盯价目标');
+    router.rerender();
+  } else {
+    showToast((res && res.error) || '删除失败');
+  }
+}
+
+async function toggleWatch(id, paused) {
+  const res = await window.priceLens.watch.update({ id, paused });
+  if (res && res.ok) {
+    applyWatches(res.watches);
+    showToast(paused ? '已暂停该目标' : '已恢复该目标');
+    router.rerender();
+  } else {
+    showToast((res && res.error) || '操作失败');
+  }
+}
+
+async function checkAllWatches() {
+  showToast('正在检查盯价目标…');
+  const res = await window.priceLens.watch.checkNow();
+  if (res && res.ok) {
+    applyWatches(res.watches);
+    const hit = res.watches.filter((w) => w.notified).length;
+    showToast(hit > 0 ? `检查完成：${hit} 个目标已到价` : '检查完成，暂无到价目标');
+    if (router.current() === 'price') router.rerender();
+  } else {
+    showToast((res && res.error) || '检查失败');
+  }
+}
+
+/** 在盯价列表点某个目标：载入该商品 */
+function openWatch(watch) {
+  if (watch && watch.url) doSearch(watch.url);
+}
+
+/** 打开盯价页时清掉红点，但保留 notified 防止同价位重复提醒 */
+function ackWatchesIfNeeded() {
+  if (!state.watches.some((w) => w.alerted)) return;
+  window.priceLens.watch.ack().then((res) => {
+    if (res && res.ok) applyWatches(res.watches);
+  }).catch(() => {});
 }
 
 /* ══════════ 主题 ══════════ */
@@ -343,9 +531,12 @@ async function openSettings() {
   if (modalEl) return; // 已打开
   const themeRes = await window.priceLens.getTheme();
   const cacheBytes = await window.priceLens.cache.size();
-  const watchRes = await window.priceLens.watch.get();
-  const credsRes = await window.priceLens.sys.getCreds();
-  state.watch = watchRes?.watch || null;
+  const [watchRes, credsRes, appInfo] = await Promise.all([
+    window.priceLens.watch.list(),
+    window.priceLens.sys.getCreds(),
+    window.priceLens.getAppInfo(),
+  ]);
+  applyWatches(watchRes?.watches || []);
 
   const mask = el('div', {
     class: 'modal-mask',
@@ -398,11 +589,50 @@ async function openSettings() {
     el('div', { class: 'modal-row' },
       el('span', {
         class: 'fs-caption text-secondary',
-        text: state.watch
-          ? `「${state.watch.keyword || '商品'}」目标 ¥${state.watch.target} · 每 30 分钟检查`
+        text: state.watches.length
+          ? `已设置 ${state.watches.length} 个盯价目标 · 每 30 分钟检查`
           : '在「盯价」页设置目标价，低于目标时系统通知',
       }),
-      state.watch ? el('button', { class: 'btn', on: { click: clearWatch } }, '取消') : null)));
+      state.watches.length ? el('button', {
+        class: 'btn',
+        on: { click: () => { closeSettings(); router.go('price'); } },
+      }, '管理') : null)));
+  /* 盯价目标备份：只含目标设置，不含凭证 */
+  modal.appendChild(el('div', { class: 'modal-section' },
+    el('h4', { text: '数据备份' }),
+    el('div', { class: 'modal-row' },
+      el('span', {
+        class: 'fs-caption text-secondary',
+        text: '只导出盯价目标（关键词 / 链接 / 目标价 / 暂停状态），不含 Cookie、apikey 与历史运行态',
+      }),
+      el('div', { style: { display: 'flex', gap: '8px' } },
+        el('button', {
+          class: 'btn',
+          on: {
+            click: async () => {
+              const res = await window.priceLens.sys.exportBackup();
+              if (res?.ok && !res.cancelled) showToast(`已导出 ${res.count} 个盯价目标`);
+              else if (res?.error) showToast(res.error);
+            },
+          },
+        }, '导出'),
+        el('button', {
+          class: 'btn',
+          on: {
+            click: async () => {
+              const res = await window.priceLens.sys.importBackup();
+              if (res?.ok && !res.cancelled) {
+                applyWatches(res.watches);
+                showToast(`导入完成：新增 ${res.added} / 更新 ${res.updated} / 跳过 ${res.skipped}`);
+                closeSettings();
+                router.rerender();
+              } else if (res?.error) {
+                showToast(res.error);
+              }
+            },
+          },
+        }, '导入')))));
+
   /* 数据源凭证（均可选，仅存本机） */
   const apiKeyInput = el('input', {
     class: 'field-input', type: 'text',
@@ -454,7 +684,7 @@ async function openSettings() {
         }, '保存')))));
   modal.appendChild(el('div', { class: 'modal-section' },
     el('h4', { text: '关于' }),
-    el('span', { class: 'fs-caption text-secondary', text: 'PriceLens v2.0 · 数据源：B站 / 什么值得买 / 慢慢买 / 购物党 / 京东' }),
+    el('span', { class: 'fs-caption text-secondary', text: `PriceLens v${appInfo?.version || '2.3.0'} · 数据源：B站 / 什么值得买 / 慢慢买 / 购物党 / 京东 / 识货` }),
     el('div', { class: 'modal-row', style: { marginTop: '8px' } },
       el('span', { class: 'fs-caption text-tertiary', text: '快捷键：Ctrl+K 搜索 · Ctrl+1~4 切换 · F5 刷新 · Ctrl+, 设置' }))));
 
@@ -470,6 +700,13 @@ function closeSettings() {
   }
 }
 
+/** 从主进程重新拉取盯价列表 */
+function refreshWatches() {
+  window.priceLens.watch.list().then((res) => {
+    if (res && res.ok) applyWatches(res.watches);
+  }).catch(() => {});
+}
+
 /* ══════════ 状态栏 / 侧边栏 ══════════ */
 function setStatus(text) {
   document.getElementById('status-text').textContent = text;
@@ -483,6 +720,105 @@ async function refreshCacheSize() {
 async function refreshVersion() {
   const info = await window.priceLens.getAppInfo();
   document.getElementById('status-meta').textContent = `PriceLens v${info.version}`;
+}
+
+/* ══════════ 剪贴板商品链接 ══════════ */
+const CLIPBOARD_DISMISS_KEY = 'pricelens:clipboard-dismissed';
+const CLIPBOARD_RULES = [
+  /https?:\/\/item(?:\.m)?\.jd\.com\/(?:product\/)?\d+\.html[^\s"'<>，。；、）】]*/i,
+  /https?:\/\/(?:detail\.tmall\.com|item\.taobao\.com)\/item\.htm\?[^\s"'<>，。；、）】]*\bid=\d+[^\s"'<>，。；、）】]*/i,
+  /https?:\/\/(?:www\.)?bilibili\.com\/video\/BV[0-9A-Za-z]{10}[^\s"'<>，。；、）】]*/i,
+];
+let clipboardLink = '';
+
+/** 从任意剪贴板文本里认出受支持的商品链接 */
+function detectProductLink(text) {
+  const raw = String(text || '');
+  for (const re of CLIPBOARD_RULES) {
+    const hit = raw.match(re);
+    if (hit) return hit[0];
+  }
+  return '';
+}
+
+/** 同一商品的稳定身份：京东 SKU / 淘宝 id / B 站 BV；认不出再退回完整 URL */
+function linkIdentity(url) {
+  const raw = String(url || '').trim();
+  let m = raw.match(/item(?:\.m)?\.jd\.com\/(?:product\/)?(\d{6,})/i);
+  if (m) return `jd:${m[1]}`;
+  m = raw.match(/(?:detail\.tmall\.com|item\.taobao\.com)\/item[^#]*?[?&]id=(\d{6,})/i);
+  if (m) return `tb:${m[1]}`;
+  m = raw.match(/bilibili\.com\/video\/(BV[0-9A-Za-z]{10})/i);
+  if (m) return `bili:${m[1]}`;
+  return raw;
+}
+
+function sameLink(a, b) {
+  const x = linkIdentity(a);
+  return Boolean(x && x === linkIdentity(b));
+}
+
+function hideClipboardBanner() {
+  const banner = document.getElementById('clipboard-banner');
+  if (!banner) return;
+  banner.hidden = true;
+  clear(banner);
+  clipboardLink = '';
+}
+
+function showClipboardBanner(link) {
+  const banner = document.getElementById('clipboard-banner');
+  if (!banner || !link) return;
+  if (clipboardLink === link && !banner.hidden) return;
+  clipboardLink = link;
+
+  clear(banner);
+  const short = link.replace(/^https?:\/\//i, '').slice(0, 64);
+  const go = el('button', {
+    class: 'btn btn--primary',
+    on: { click: () => { hideClipboardBanner(); doSearch(link); } },
+  }, '去比价');
+  const ignore = el('button', {
+    class: 'btn',
+    on: {
+      click: () => {
+        try { localStorage.setItem(CLIPBOARD_DISMISS_KEY, linkIdentity(link)); } catch { /* ignore */ }
+        hideClipboardBanner();
+      },
+    },
+  }, '忽略');
+  banner.appendChild(icon('copy', 16));
+  banner.appendChild(el('span', { class: 'cb-text' },
+    '检测到剪贴板商品链接：', el('b', { text: short }), '（仅本机读取，不上传）'));
+  banner.appendChild(el('div', { class: 'cb-actions' }, go, ignore));
+  banner.hidden = false;
+}
+
+/** 窗口获得焦点时读一次剪贴板；已忽略/当前商品的链接不再提示 */
+async function readClipboardForBanner() {
+  if (modalEl) return;
+  try {
+    const res = await window.priceLens.sys.readClipboard();
+    if (!res || !res.ok) return;
+    const link = detectProductLink(res.text);
+    if (!link) {
+      hideClipboardBanner();
+      return;
+    }
+    if (sameLink(link, state.url) || sameLink(link, state.raw)) {
+      hideClipboardBanner();
+      return;
+    }
+    try {
+      if (localStorage.getItem(CLIPBOARD_DISMISS_KEY) === linkIdentity(link)) {
+        hideClipboardBanner();
+        return;
+      }
+    } catch { /* ignore */ }
+    showClipboardBanner(link);
+  } catch {
+    /* 剪贴板读取失败不打扰用户 */
+  }
 }
 
 /* ══════════ 启动 ══════════ */
@@ -507,6 +843,7 @@ function boot() {
       for (const item of document.querySelectorAll('.nav-item')) {
         item.classList.toggle('active', item.dataset.view === name);
       }
+      if (name === 'price') ackWatchesIfNeeded();
     },
   });
 
@@ -547,12 +884,21 @@ function boot() {
 
   /* 盯价红点 */
   window.priceLens.onWatchTriggered((payload) => {
-    document.getElementById('watch-dot').hidden = false;
+    const hit = state.watches.find((w) => w.id === payload.id);
+    if (hit) {
+      Object.assign(hit, { current: payload.current, notified: true, alerted: true });
+      updateWatchDot();
+    } else {
+      refreshWatches();
+    }
     showToast(`盯价提醒：「${payload.keyword || '商品'}」已到 ¥${payload.current}`);
+    if (router.current() === 'price') router.rerender();
   });
-  window.priceLens.watch.get().then((res) => {
-    if (res && res.watch) state.watch = res.watch;
-  }).catch(() => {});
+  window.priceLens.onWatchUpdated((payload) => {
+    applyWatches(payload?.watches || []);
+    if (router.current() === 'price') router.rerender();
+  });
+  refreshWatches();
 
   /* 快捷键（规范 §10.1） */
   document.addEventListener('keydown', (e) => {
@@ -572,6 +918,10 @@ function boot() {
       closeSettings(); // 弹窗优先关闭（右键菜单/下拉由各自监听处理）
     }
   });
+
+  /* 剪贴板商品链接：首次启动与窗口重新聚焦时各检查一次（只读本机） */
+  window.addEventListener('focus', () => setTimeout(readClipboardForBanner, 300));
+  setTimeout(readClipboardForBanner, 1200);
 
   /* 初始视图 + 状态栏 */
   router.go('overview');

@@ -212,6 +212,7 @@
 
 /* 盯价红点 */
 .nav-item { position: relative; }
+.nav-dot[hidden] { display: none; }
 .nav-dot {
   position: absolute; right: var(--sp-3); top: 50%;
   width: 8px; height: 8px;
@@ -239,11 +240,47 @@
 }
 
 /* ── 内容区 ── */
+.content-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
 .main-content {
   flex: 1;
   overflow-y: auto;
   padding: var(--sp-6);
   min-width: 0;
+}
+/* 剪贴板商品链接提示（只在本机读取，不上传） */
+.clipboard-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-4) var(--sp-6) 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-btn);
+  border: 1px solid rgba(0,113,227,0.18);
+  background: rgba(0,113,227,0.08);
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+}
+.clipboard-banner[hidden] { display: none; }
+.clipboard-banner > svg { flex-shrink: 0; color: var(--accent); }
+.clipboard-banner .cb-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clipboard-banner .cb-text b { color: var(--text-primary); font-weight: var(--fw-label); }
+.clipboard-banner .cb-actions { display: flex; gap: var(--sp-2); flex-shrink: 0; }
+.clipboard-banner .btn { padding: 3px var(--sp-2); }
+[data-theme="dark"] .clipboard-banner {
+  border-color: rgba(10,132,255,0.25);
+  background: rgba(10,132,255,0.12);
 }
 .main-content::-webkit-scrollbar { width: 6px; }
 .main-content::-webkit-scrollbar-thumb {

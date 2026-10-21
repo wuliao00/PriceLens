@@ -59,7 +59,9 @@ class CacheManager {
 
   async #initInternal() {
     await storage.ensureDir(this.#dir);
-    for (const dir of new Set(Object.values(NAMESPACE_DIRS))) {
+    // `#fileFor` 对未知前缀统一落到 misc/ —— 必须一并建目录，
+    // 否则 history-local: 自建曲线/其它扩展 key 会 ENOENT（冒烟实测抓到）
+    for (const dir of new Set([...Object.values(NAMESPACE_DIRS), 'misc'])) {
       await storage.ensureDir(path.join(this.#dir, dir));
     }
     const loaded = await storage.readJson(this.#indexFile, {});

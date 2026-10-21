@@ -63,18 +63,23 @@ export function renderProductHeader(container, { product, history, onOpenUrl }) 
   const priceNote = priceUnavailable
     ? el('div', { class: 'product-price-note', text: '京东公开查价暂不可用，价格请在京东 App 查看' })
     : null;
+  // 识货没有稳定商品详情页：价格来自识货检索结果，点「去购买」落到识货搜索页
+  const shihuoNote = product.mall === '识货' && current > 0
+    ? el('div', { class: 'product-price-note', text: '识货检索价 · 仅供比价参考，购买请在识货/商城确认' })
+    : null;
 
   const header = el('div', { class: 'card product-header' },
     el('img', {
       class: 'product-img',
-      src: product.image || '../assets/placeholder.svg',
+      src: product.image || 'assets/placeholder.svg',
       alt: '',
-      on: { error: (e) => { e.target.src = '../assets/placeholder.svg'; } },
+      on: { error: (e) => { e.target.src = 'assets/placeholder.svg'; } },
     }),
     el('div', { class: 'product-info' },
       el('h2', { class: 'product-title clamp-2', text: product.title || '未识别到商品' }),
       priceRow,
       priceNote,
+      shihuoNote,
       el('div', { class: 'product-meta' },
         product.mall ? el('span', { class: 'tag tag--accent', text: product.mall }) : null,
         updated ? el('span', { text: updated }) : null,

@@ -94,7 +94,7 @@ class Crawler {
 | 找券（值得买券频道） | `GwdangApi` | ❌ | ❌ | ❌ | ✅（仅显式券文案） | ❌ |
 | 什么值得买 | `SmzdmApi` | ❌ | ❌ | ❌ | ❌ | ✅ 帖子搜索 |
 | 当当 | `DangdangApi` | ❌ | ✅（SSR 搜索） | ❌ | ❌ | ✅ |
-| 识货 | `ShihuoApi` | ❌ | ✅（m 站接口） | ❌ | ❌ | ✅ 兜底源 |
+| 识货 | `ShihuoApi` / `desktop/.../shihuo.js` | ❌ | ✅（m 站接口） | ❌ | ❌ | ✅ 兜底源（桌面端 v2.2.0 起） |
 | 淘宝/拼多多/咕咚/Keep | 无障碍读价 | ✅（本机账号实时读价，无爬虫） | — | — | — | — |
 | 盯价（后台） | `worker/PriceCheckWorker` | ✅ 京东（其他平台接入中） | — | — | — | — |
 
@@ -105,7 +105,7 @@ class Crawler {
 | 数据源 | 当前实况 | 本项目处理 |
 |--------|----------|------------|
 | 当当 搜索 | 列表价格节点已迁移到 `span.search_now_price` | 三级取价（新→旧→文本），解析条数记日志 |
-| 识货 搜索 | PC 搜索地址废弃（302 首页，数据是热榜） | 改走 m 站 `m.shihuo.cn/search?type=goods`；结构不符→空；请求域名是 `m.shihuo.cn`（状态行的诊断键必须与之一致） |
+| 识货 搜索 | PC 搜索地址废弃（302 首页，数据是热榜）；2026-10 实测 m 站接口对匿名请求常返回字面量 `null`（站点限制） | 改走 m 站 `m.shihuo.cn/search?type=goods`；`null`/结构不符→空；绝不回退首页热榜；桌面端与 Android 同样如实降级（请求域名是 `m.shihuo.cn`，状态行的诊断键必须与之一致） |
 | 京东 商品页 | `item.jd.com` 对脚本请求返回风控页（标题"京东验证"） | 改走 `item.m.jd.com` 的 `_itemInfo`；风控页标题不使用 |
 | 京东 查价 | `p.3.cn` 公网 DNS 不再返回可达地址（DoH 双证） | 尽力尝试；失败时价格置空 + UI 明示"请在京东 App 查看" |
 | 慢慢买 公开接口 | 已下线（404） | 用自填 Cookie 的 SSR 通道 / 自建曲线 合并；星罗 apikey 命中榜单时**只有 in-sale 价（goods_list_money）够格补今日点**，`real_money` 是券后历史低价、只作参考展示（不写曲线、不触发降价通知，见 `domain/PriceSampling`） |
@@ -691,6 +691,9 @@ class RateLimiter {
 | v1 | 2.3.0 | 2.0.0 | 初始版本 |
 | v1.1 | 2.5.0 | 2.0.0 | 错误模型对齐 `CrawlerResult` 四态；爬虫接口章节修正为解析器 + ApiClient 管线 + PriceRepository 编排（删除不存在的统一 `Crawler` 接口描述） |
 | v1.2 | 2.5.1 | 2.1.0 | 数据源准确性专项：京东改 m 站 `_itemInfo` 解析、查价不可用时如实置空；识货改 m 站 `type=goods` 接口；找券只认显式券文案；新增 `QueryRelevance` 相关性过滤（两端同规则）与数据源实况表 |
+| v1.6 | 2.8.0.4 | 2.4.0 | 桌面端 v2.4：`search.comparison` 同款多平台聚合（按平台取最低价/价差，不保证同规格）；盯价目标 `lastAlertAt/lastAlertPrice/alertCount` 提醒历史；`sys:export-backup/import-backup` 只导出目标设置（不含凭证/运行态），按 URL 合并上限 20 |
+| v1.5 | 2.8.0.4 | 2.3.0 | 桌面端多商品盯价：`settings.watches[]`（旧单条 `watch` 自动迁移）、`watch:list/add/update/remove/ack/check-now`、逐项 30 分钟轮询（到价一次、回升 102% 再武装）；`history.advice` 历史分位购买建议（样本 <8 不判断）；`sys:read-clipboard` 剪贴板商品链接识别；社区 `sourceErrors` 与概览源健康状态。多盯价查价复用三源合并通道 |
+| v1.4 | 2.8.0.4 | 2.2.0 | 桌面端补齐识货兜底与 B 站商单/夸大标记：`desktop/src/main/crawlers/shihuo.js`（m 站解析、相关性过滤、5 分钟进程内缓存、搜索/社区双接入）；`utils/content-risk.js`（与 Android v2.4.4 同词库 + 联合投稿，额外增加否定语境豁免：不恰饭/无广告/不是商单/并非天花板不标记）；B 站搜索解析抽成纯函数并校验业务码；社区 `sourceErrors` 区分「源不可达」与「无结果」 |
 | v1.3 | 2.6.4 | 2.1.0（修复在 main，未随包发布） | 浮窗门控与读数：商详门控不再依赖 `viaKnownId`（现版京东 view id 全为混淆短名，该条件恒假 → 真机商详页浮窗不弹）；词表收「立即预约」（预约型商品底栏无「立即购买」）；主价「¥1838」+「.9」分体渲染时拼回小数位；节点文本清洗零宽/双向控制字符（京东用 U+200B 填充标题，会污染 CTA 搜索词与缓存 key）。**两端差异记录**：桌面端无当当/识货爬虫；`product.originalPrice` 桌面端旧实现写成等于现价，已改为 0=未知（与 Android `ProductCandidate.originalPrice = null` 同口径，见 `desktop/_unit_check.js` 的 `productFromCandidate` 两条用例） |
 
 > 遵循语义化版本：Breaking Change 升主版本号，新增功能升次版本号，Bug 修复升修订号。
@@ -704,6 +707,9 @@ class RateLimiter {
 | v1.0 | 2026-08-24 | 初始版本发布 |
 | v1.1 | 2026-08-26 | 错误码对齐 `CrawlerResult`；修正爬虫接口架构描述 |
 | v1.2 | 2026-09-25 | 数据源准确性专项修复记录：新增「数据源实况与降级约定」表；京东/识货/找券接口与解析口径更新；新增 `QueryRelevance` 段落 |
+| v1.4 | 2026-10-20 | 桌面端 v2.2.0：识货 m 站兜底源、B 站商单/夸大标记（含否定语境豁免）、B 站业务码解析；补记识货匿名接口返回 `null` 的实况 |
+| v1.5 | 2026-10-20 | 桌面端 v2.3.0：多商品盯价 + 购买建议 + 剪贴板识别 + 数据源健康；旧配置迁移与 `watch:*` 通道 |
+| v1.6 | 2026-10-21 | 桌面端 v2.4.0：多平台对比、提醒历史、目标备份/恢复 |
 
 ---
 

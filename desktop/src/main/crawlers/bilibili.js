@@ -14,6 +14,7 @@
 const crypto = require('node:crypto');
 const http = require('../utils/http-client');
 const { stripTags } = require('../utils/sanitizer');
+const { assess } = require('../utils/content-risk');
 
 /** WBI 混淆密钥重排表（社区公开的固定表） */
 const MIXIN_KEY_ENC_TAB = [
@@ -89,10 +90,40 @@ function randomBuvid() {
 }
 
 /**
+ * 纯解析（无网络）：把搜索接口响应转成视频卡片数据。
+ * 抽成独立函数便于 `_unit_check.js` 用固定 JSON 验证（与 Android
+ * `BiliApi.parseSearchResponse` 同一套约定）：业务码非 0 必须抛错，
+ * 不能把风控/签名失效伪装成「真的没有结果」。
+ * @param {string} body
+ * @returns {Array<{title:string, author:string, play:number, duration:string,
+ *   pic:string, url:string, bvid:string, risk:object}>}
+ */
+function parseSearchResponse(body) {
+  const res = JSON.parse(body);
+  if (res.code !== 0) {
+    throw new Error(`B 站搜索接口返回错误 code=${res.code} ${res.message || ''}`.trim());
+  }
+  const list = Array.isArray(res.data?.result) ? res.data.result : [];
+  return list.slice(0, 12).map((item) => {
+    const title = stripTags(item.title);
+    const tags = stripTags(item.tag || '');
+    return {
+      title,
+      author: stripTags(item.author || ''),
+      play: Number(item.play) || 0,
+      duration: String(item.duration || '00:00'),
+      pic: String(item.pic || '').replace(/^\/\//, 'https://'),
+      url: `https://www.bilibili.com/video/${item.bvid}`,
+      bvid: String(item.bvid || ''),
+      risk: assess(`${title} ${tags}`, Number(item.is_union_video) === 1),
+    };
+  }).filter((v) => v.title && v.url);
+}
+
+/**
  * 搜索评测视频。
  * @param {string} keyword
- * @returns {Promise<{videos: Array<{title:string, author:string, play:number,
- *   duration:string, pic:string, url:string, bvid:string}>}>}
+ * @returns {Promise<{videos: ReturnType<typeof parseSearchResponse>}>}
  */
 async function searchVideos(keyword) {
   const { imgKey, subKey } = await getWbiKeys();
@@ -104,28 +135,14 @@ async function searchVideos(keyword) {
   }, imgKey, subKey);
 
   const qs = new URLSearchParams(signed).toString();
-  const res = await http.getJSON(`https://api.bilibili.com/x/web-interface/wbi/search/type?${qs}`, {
+  const body = await http.getText(`https://api.bilibili.com/x/web-interface/wbi/search/type?${qs}`, {
     headers: {
+      Accept: 'application/json, text/plain, */*',
       Referer: 'https://www.bilibili.com',
       Cookie: `buvid3=${randomBuvid()}; b_nut=${Math.floor(Date.now() / 1000)}`,
     },
   });
-
-  if (res.code !== 0) {
-    throw new Error(`B 站搜索接口返回错误 code=${res.code} ${res.message || ''}`.trim());
-  }
-  const list = Array.isArray(res.data?.result) ? res.data.result : [];
-  const videos = list.slice(0, 12).map((item) => ({
-    title: stripTags(item.title),
-    author: stripTags(item.author || ''),
-    play: Number(item.play) || 0,
-    duration: String(item.duration || '00:00'),
-    pic: String(item.pic || '').replace(/^\/\//, 'https://'),
-    url: `https://www.bilibili.com/video/${item.bvid}`,
-    bvid: String(item.bvid || ''),
-  })).filter((v) => v.title && v.url);
-
-  return { videos };
+  return { videos: parseSearchResponse(body) };
 }
 
 /**
@@ -144,4 +161,4 @@ async function getView(bvid) {
   };
 }
 
-module.exports = { searchVideos, getView, wbiSign, getWbiKeys };
+module.exports = { searchVideos, getView, parseSearchResponse, wbiSign, getWbiKeys };

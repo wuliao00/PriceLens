@@ -9,6 +9,14 @@
  * 保证两端规则不漂移。覆盖：
  *   - utils/relevance.js 相关性规则（分段+顺序+间隔、配件/图书/其它品牌/其它机型）
  *   - utils/ranking.js 跨源候选打分（实况池子的 argmax 必须与 Android 一致）
+ *   - crawlers/shihuo.js 识货 m 站解析（null/错误结构/国补/相关性）
+ *   - utils/content-risk.js 商单/夸大词库、联合投稿、否定语境豁免
+ *   - crawlers/bilibili.js 搜索响应解析（业务码 + risk 注入）
+ *   - cache/storage.js v2.2 单条 watch → v2.3 watches[] 迁移
+ *   - utils/price-advice.js 历史分位购买建议（样本门槛/低位/中位/高位）
+ *   - utils/watch-state.js 盯价状态机（到价一次、回升 2% 再武装、失败隔离、提醒历史）
+ *   - utils/platform-compare.js 多平台聚合（平台归一/最低价/价差/空池）
+ *   - utils/backup.js 盯价目标备份（不含凭证/运行态）、校验、按 URL 合并与上限
  *   - crawlers/gwdang.js 只提取显式券、绝不按价差编造
  *   - crawlers/jd.js 移动页 _itemInfo 解析 + 风控页拒绝
  */
@@ -25,6 +33,14 @@ const { parseItemPage } = require('./src/main/crawlers/jd');
 const { productFromCandidate } = require('./src/main/crawlers/index');
 const linkstars = require('./src/main/crawlers/linkstars');
 const { parsePriceText } = require('./src/main/crawlers/smzdm');
+const { parseSearchPage: parseShihuoPage } = require('./src/main/crawlers/shihuo');
+const { parseSearchResponse: parseBiliSearch } = require('./src/main/crawlers/bilibili');
+const { assess: assessContentRisk } = require('./src/main/utils/content-risk');
+const { advise } = require('./src/main/utils/price-advice');
+const { normalizeWatches, newWatchId } = require('./src/main/cache/storage');
+const { nextWatchState, failedWatchState } = require('./src/main/utils/watch-state');
+const { comparePlatforms, mallOf } = require('./src/main/utils/platform-compare');
+const { buildBackup, parseBackup, mergeBackup } = require('./src/main/utils/backup');
 
 const FIXTURES = path.join(__dirname, '..', 'app', 'src', 'test', 'resources', 'fixtures');
 const fixture = (name) => fs.readFileSync(path.join(FIXTURES, name), 'utf8');
@@ -125,6 +141,138 @@ check('series suffix is never filtered out', () => {
   assert.strictEqual(isRelevant('mate 80', '华为 Mate 80 Pro Max 手机 16GB+1TB 极昼金'), true);
   assert.strictEqual(isRelevant('x8s', 'OPPO Find X8s+ 5G手机 12GB+512GB'), true);
   assert.strictEqual(isRelevant('iphone 15', 'Apple iPhone 15 Pro 5G手机 256GB'), true);
+});
+
+// ===== 识货 m 站搜索解析（与 Android ShihuoParserTest 同夹具同用例） =====
+console.log('== 识货搜索解析（与 Android ShihuoParserTest 同用例） ==');
+check('null body yields empty list instead of junk', () => {
+  assert.deepStrictEqual(parseShihuoPage(fixture('shihuo_null.json'), 'iPhone 15'), []);
+});
+check('error status yields empty list', () => {
+  assert.deepStrictEqual(parseShihuoPage(fixture('shihuo_error.json'), 'iPhone 15'), []);
+});
+check('goods list is parsed with subsidy flag and search page url', () => {
+  const items = parseShihuoPage(fixture('shihuo_search.json'), 'iPhone 15');
+  assert.strictEqual(items.length, 4);
+  const iphone17 = items[0];
+  assert.strictEqual(iphone17.goodsId, 7929848);
+  assert.strictEqual(iphone17.price, 7499);
+  assert.strictEqual(iphone17.hasSubsidy, true);
+  assert.strictEqual(iphone17.brand, 'Apple/苹果');
+  assert.ok(iphone17.url.includes('shihuo.cn/search/goods'));
+  assert.ok(iphone17.url.includes('iPhone'));
+});
+check('relevance filter drops unrelated hot goods and accessories', () => {
+  const items = parseShihuoPage(fixture('shihuo_search.json'), 'iPhone 15');
+  const relevant = items.filter((it) => isRelevant('iPhone 15', it.title));
+  // 夹具含：iPhone17 Pro（机型不符剔除）、iPhone 15 手机（保留）、
+  // Nike 板鞋（热榜，剔除）、"适用 iPhone 15 手机壳"（配件前缀，剔除）
+  assert.strictEqual(relevant.length, 1);
+  assert.ok(relevant[0].title.includes('iPhone 15'));
+  assert.ok(!relevant.some((it) => it.title.includes('Nike') || it.title.includes('手机壳')));
+});
+check('device query with no matching model yields empty rather than other models', () => {
+  const items = parseShihuoPage(fixture('shihuo_search.json'), 'iPhone 15');
+  assert.ok(!items.some((it) => isRelevant('iPhone 15', it.title) && it.title.includes('iPhone17')));
+});
+
+// ===== 商单/夸大标记（与 Android ContentRiskTest 同用例） =====
+console.log('== 商单/夸大标记（与 Android ContentRiskTest 同用例） ==');
+check('clean text is not flagged', () => {
+  const risk = assessContentRisk('真实测评：这盏台灯连续使用 30 天的体验');
+  assert.strictEqual(risk.flagged, false);
+  assert.strictEqual(risk.sponsored, false);
+  assert.strictEqual(risk.hype, false);
+});
+check('sponsor word triggers sponsored with matched word', () => {
+  const risk = assessContentRisk('本视频是商单，大家理性观看');
+  assert.strictEqual(risk.sponsored, true);
+  assert.strictEqual(risk.sponsorWord, '商单');
+  assert.strictEqual(risk.flagged, true);
+  assert.strictEqual(risk.hype, false);
+});
+check('hype word returns first hit in word list order', () => {
+  const risk = assessContentRisk('这款键盘简直天花板，yyds');
+  assert.strictEqual(risk.hype, true);
+  assert.strictEqual(risk.hypeWord, '天花板'); // 词库顺序："天花板" 在 "yyds" 之前
+  assert.strictEqual(risk.sponsored, false);
+});
+check('matching is case insensitive', () => {
+  const risk = assessContentRisk('YYDS 永远的神');
+  assert.strictEqual(risk.hypeWord, 'yyds');
+  assert.strictEqual(risk.hype, true);
+});
+check('union video alone counts as sponsored', () => {
+  const risk = assessContentRisk('聊聊最近买的手机', true);
+  assert.strictEqual(risk.sponsored, true);
+  assert.strictEqual(risk.sponsorWord, '联合投稿');
+  assert.strictEqual(risk.flagged, true);
+});
+check('explicit sponsor word wins over union video label', () => {
+  const risk = assessContentRisk('感谢金主爸爸的支持', true);
+  assert.strictEqual(risk.sponsorWord, '金主');
+});
+check('sponsor and hype can be flagged together', () => {
+  const risk = assessContentRisk('恰饭产品，全网最低价，赶紧入手');
+  assert.strictEqual(risk.sponsored, true);
+  assert.strictEqual(risk.hype, true);
+  assert.strictEqual(risk.sponsorWord, '恰饭');
+  assert.strictEqual(risk.hypeWord, '全网最低');
+});
+check('negated sponsor/hype words are not flagged (desktop-only improvement)', () => {
+  // 实况误伤：B 站大量标题写「不恰饭」「无广告」「不是商单」自证独立
+  for (const text of ['不恰饭真测评', '无广告，真实体验', '不是商单，自费购买', '拒绝恰饭']) {
+    const risk = assessContentRisk(text);
+    assert.strictEqual(risk.sponsored, false, `不应把「${text}」判成商单`);
+    assert.strictEqual(risk.flagged, false, `不应把「${text}」整条标记`);
+  }
+  assert.strictEqual(assessContentRisk('不是天花板，只是好用').hype, false);
+  assert.strictEqual(assessContentRisk('没有全网最低，但很值').hype, false);
+  // 否定词只豁免紧邻的命中；同句里另一次肯定命中仍要标记
+  assert.strictEqual(assessContentRisk('不是没有广告，是恰饭').sponsored, true);
+  assert.strictEqual(assessContentRisk('无脑冲').hype, true); // 词本身以「无」开头，不算否定
+});
+
+// ===== B 站搜索响应解析：业务码与 risk 注入 =====
+console.log('== B 站搜索解析（业务码 + 内容风险注入） ==');
+check('parse attaches risk from title/tags/union flag', () => {
+  const body = JSON.stringify({
+    code: 0,
+    data: {
+      result: [
+        {
+          title: '<em class="keyword">iPhone 15</em> 真实评测',
+          author: 'UP-A', play: 1234, duration: '08:00',
+          pic: '//i0.hdslb.com/bfs/archive/a.jpg', bvid: 'BV1xx411c7mD',
+          tag: '数码 商单', is_union_video: 0,
+        },
+        {
+          title: '这款键盘天花板，yyds', author: 'UP-B', play: 1,
+          duration: '01:00', pic: '//i0.hdslb.com/bfs/archive/b.jpg',
+          bvid: 'BV1yy411c7mE', tag: '', is_union_video: 0,
+        },
+        {
+          title: '随便聊聊最近买的手机', author: 'UP-C', play: 2,
+          duration: '02:00', pic: '//i0.hdslb.com/bfs/archive/c.jpg',
+          bvid: 'BV1zz411c7mF', tag: '', is_union_video: 1,
+        },
+      ],
+    },
+  });
+  const videos = parseBiliSearch(body);
+  assert.strictEqual(videos.length, 3);
+  assert.strictEqual(videos[0].title, 'iPhone 15 真实评测');
+  assert.strictEqual(videos[0].pic, 'https://i0.hdslb.com/bfs/archive/a.jpg');
+  assert.strictEqual(videos[0].risk.sponsored, true);
+  assert.strictEqual(videos[0].risk.sponsorWord, '商单');
+  assert.strictEqual(videos[1].risk.hype, true);
+  assert.strictEqual(videos[1].risk.hypeWord, '天花板');
+  assert.strictEqual(videos[2].risk.sponsorWord, '联合投稿');
+  assert.strictEqual(videos[2].risk.flagged, true);
+});
+check('business code != 0 throws instead of returning empty', () => {
+  const body = JSON.stringify({ code: -412, message: '请求被拦截' });
+  assert.throws(() => parseBiliSearch(body), /code=-412/);
 });
 
 // ===== 2026-09-28：跨源候选打分（Android CandidateRankingTest 同权重同期望值） =====
@@ -278,8 +426,6 @@ check('没有候选时给出全零占位，不抛异常', () => {
   assert.strictEqual(p.url, '');
 });
 
-console.log(`\n通过 ${passed} 项，失败 ${failed} 项${process.exitCode ? '（存在失败项）' : '，全部通过'}`);
-
 // ---------- 值得买价格高亮：括号说明不许被吞进数字（与安卓 SmzdmParserTest 同用例）----------
 console.log('\n== 值得买价格高亮解析（与安卓同用例）==');
 check('284元（淘金币可抵37.14元起） → 284', () => assert.strictEqual(parsePriceText('284元（淘金币可抵37.14元起）'), 284));
@@ -290,3 +436,211 @@ check('认不出 → null', () => {
   assert.strictEqual(parsePriceText('暂无报价'), null);
   assert.strictEqual(parsePriceText(''), null);
 });
+
+// ===== 多商品盯价：v2.2 单条 watch 迁移与脏数据清理 =====
+console.log('== 盯价列表迁移（v2.2 单条 → v2.3 watches[]） ==');
+check('legacy single watch is migrated into watches with an id', () => {
+  const list = normalizeWatches([], {
+    keyword: 'iPhone 15', url: 'https://item.jd.com/100012043978.html',
+    target: 3999, current: 4199, notified: true, since: 1700000000000,
+  });
+  assert.strictEqual(list.length, 1);
+  assert.ok(list[0].id.startsWith('w_'));
+  assert.strictEqual(list[0].target, 3999);
+  assert.strictEqual(list[0].current, 4199);
+  assert.strictEqual(list[0].notified, true);
+  assert.strictEqual(list[0].paused, false);
+});
+check('invalid url / target are dropped; duplicate urls keep the first', () => {
+  assert.deepStrictEqual(normalizeWatches([
+    { url: 'javascript:alert(1)', target: 10 },
+    { url: 'https://item.jd.com/1.html', target: 0 },
+  ]), []);
+  const dup = normalizeWatches([
+    { url: 'https://item.jd.com/1.html', target: 100 },
+    { url: 'https://item.jd.com/1.html', target: 200 },
+  ], null);
+  assert.strictEqual(dup.length, 1);
+  assert.strictEqual(dup[0].target, 100);
+});
+check('new watch ids are unique', () => {
+  assert.notStrictEqual(newWatchId(), newWatchId());
+});
+
+// ===== 历史分位购买建议 =====
+console.log('== 购买建议（历史分位，样本门槛 8） ==');
+const advicePoints = Array.from({ length: 10 }, (_, i) => ({
+  date: `2026-09-${String(i + 1).padStart(2, '0')}`, price: 100 + i * 10,
+}));
+check('fewer than 8 samples yields unknown instead of a false conclusion', () => {
+  const a = advise({ current: 100, points: advicePoints.slice(0, 7) });
+  assert.strictEqual(a.level, 'unknown');
+  assert.ok(a.detail.includes('少于 8'));
+  assert.strictEqual(a.percentile, null);
+});
+check('current at sample bottom is low and says so', () => {
+  const a = advise({ current: 100, points: advicePoints });
+  assert.strictEqual(a.level, 'low');
+  assert.strictEqual(a.label, '可以考虑入手');
+  assert.ok(a.detail.includes('样本最低价'));
+  assert.strictEqual(a.lowest, 100);
+  assert.strictEqual(a.highest, 190);
+});
+check('current around median is mid', () => {
+  const a = advise({ current: 145, points: advicePoints });
+  assert.strictEqual(a.level, 'mid');
+  assert.strictEqual(a.percentile, 0.5);
+  assert.strictEqual(a.label, '价格中等');
+});
+check('current at sample top is high and says so', () => {
+  const a = advise({ current: 190, points: advicePoints });
+  assert.strictEqual(a.level, 'high');
+  assert.strictEqual(a.label, '建议再等等');
+  assert.ok(a.detail.includes('样本最高价'));
+  assert.strictEqual(a.percentile, 1);
+});
+
+// ===== 盯价状态机：到价只提醒一次、回升 2% 再武装 =====
+console.log('== 盯价状态机（纯函数） ==');
+const watchBase = {
+  id: 'w_test', keyword: '测试商品', url: 'https://item.jd.com/1.html',
+  target: 100, current: 120, lowest: 90, notified: false, alerted: false,
+  paused: false, lastChecked: 0, lastError: null,
+};
+check('price at target alerts once and latches notified', () => {
+  const first = nextWatchState(watchBase, { current: 99, lowest: 95 }, 1000);
+  assert.strictEqual(first.alert, true);
+  assert.strictEqual(first.updated.notified, true);
+  assert.strictEqual(first.updated.alerted, true);
+  assert.strictEqual(first.updated.current, 99);
+  assert.strictEqual(first.updated.lowest, 95);
+  assert.strictEqual(first.updated.alertCount, 1);
+  assert.strictEqual(first.updated.lastAlertAt, 1000);
+  assert.strictEqual(first.updated.lastAlertPrice, 99);
+  const second = nextWatchState(first.updated, { current: 99, lowest: 95 }, 2000);
+  assert.strictEqual(second.alert, false, '同价位不应重复通知');
+  assert.strictEqual(second.updated.notified, true);
+});
+check('2 percent rebound rearms; a 1 percent rebound does not', () => {
+  const hit = nextWatchState(watchBase, { current: 99, lowest: 95 }, 1000).updated;
+  const slight = nextWatchState(hit, { current: 101, lowest: 95 }, 2000).updated;
+  assert.strictEqual(slight.notified, true, '101 未超过目标价 102%，不应重新武装');
+  const rebound = nextWatchState(slight, { current: 103, lowest: 95 }, 3000);
+  assert.strictEqual(rebound.updated.notified, false);
+  assert.strictEqual(rebound.alert, false, '回升本身不触发提醒');
+  const again = nextWatchState(rebound.updated, { current: 99, lowest: 95 }, 4000);
+  assert.strictEqual(again.alert, true, '重新武装后再次到价应再次提醒');
+  assert.strictEqual(again.updated.alertCount, 2);
+  assert.strictEqual(again.updated.lastAlertAt, 4000);
+});
+check('invalid current and network failure become per-target lastError', () => {
+  const empty = nextWatchState(watchBase, { current: 0 }, 1000);
+  assert.strictEqual(empty.alert, false);
+  assert.strictEqual(empty.updated.lastError, '当前价暂不可得');
+  const failed = failedWatchState(watchBase, '网络错误', 2000);
+  assert.strictEqual(failed.lastError, '网络错误');
+  assert.strictEqual(failed.lastChecked, 2000);
+  assert.strictEqual(failed.notified, false);
+});
+
+// ===== 同款多平台对比 =====
+console.log('== 同款多平台对比（按平台取最低价） ==');
+check('groups by mall, keeps the lowest offer and computes deltas', () => {
+  const result = comparePlatforms({ price: 4399 }, [
+    { mall: '京东', price: 4199, url: 'https://item.jd.com/1.html', title: '京东低' },
+    { mall: '京东', price: 4299, url: 'https://item.jd.com/2.html', title: '京东高' },
+    { mall: '天猫', price: 4499, url: 'https://detail.tmall.com/item.htm?id=1', title: '天猫' },
+    { price: 3999, url: 'https://mobile.yangkeduo.com/goods.html?goods_id=1', title: '拼多多' },
+    { mall: '京东', price: 0, url: 'https://item.jd.com/3.html' },
+    { mall: '京东', price: 1, url: 'javascript:alert(1)' },
+  ]);
+  assert.strictEqual(result.platformCount, 3);
+  assert.strictEqual(result.offerCount, 4);
+  assert.deepStrictEqual(result.platforms.map((p) => p.mall), ['拼多多', '京东', '淘宝']);
+  assert.strictEqual(result.platforms[0].price, 3999);
+  assert.strictEqual(result.lowestMall, '拼多多');
+  assert.strictEqual(result.spread, 500);
+  assert.strictEqual(result.platforms.find((p) => p.mall === '京东').count, 2);
+  assert.strictEqual(result.platforms.find((p) => p.mall === '京东').delta, -200);
+  assert.strictEqual(result.platforms.find((p) => p.mall === '淘宝').delta, 100);
+});
+check('mall can be inferred from url and unknown hosts are kept as-is', () => {
+  assert.strictEqual(mallOf({ mall: '京东商城', url: '' }), '京东');
+  assert.strictEqual(mallOf({ mall: '', url: 'https://item.jd.com/1.html' }), '京东');
+  assert.strictEqual(mallOf({ mall: '', url: 'https://mobile.yangkeduo.com/goods.html' }), '拼多多');
+  assert.strictEqual(mallOf({ mall: '', url: 'https://shop.example.com/item/1' }), 'shop.example.com');
+});
+check('unknown current price leaves deltas unknown and empty pool is safe', () => {
+  const result = comparePlatforms({ price: 0 }, [
+    { mall: '京东', price: 100, url: 'https://item.jd.com/1.html' },
+  ]);
+  assert.strictEqual(result.current, null);
+  assert.strictEqual(result.platforms[0].delta, null);
+  const empty = comparePlatforms({ price: 100 }, []);
+  assert.strictEqual(empty.platformCount, 0);
+  assert.strictEqual(empty.lowest, null);
+  assert.strictEqual(empty.spread, null);
+});
+
+// ===== 盯价备份/恢复 =====
+console.log('== 盯价备份/恢复（只含目标设置，不含凭证与运行态） ==');
+check('export keeps only user settings', () => {
+  const built = buildBackup([{
+    id: 'w1', keyword: '测试商品', url: 'https://item.jd.com/1.html',
+    target: 100, paused: true, since: 123,
+    current: 90, lowest: 80, notified: true, alerted: true,
+    lastChecked: 456, lastError: '网络错误', alertCount: 2, lastAlertAt: 789,
+  }], 1700000000000);
+  assert.strictEqual(built.app, 'pricelens');
+  assert.strictEqual(built.schemaVersion, 1);
+  assert.strictEqual(built.watches.length, 1);
+  const w = built.watches[0];
+  assert.strictEqual(w.target, 100);
+  assert.strictEqual(w.paused, true);
+  for (const runtime of ['current', 'lowest', 'notified', 'alerted', 'lastChecked', 'lastError', 'alertCount', 'lastAlertAt']) {
+    assert.ok(!(runtime in w), `运行态字段 ${runtime} 不应进入备份`);
+  }
+  assert.ok(!JSON.stringify(built).toLowerCase().includes('cookie'));
+  assert.ok(!JSON.stringify(built).toLowerCase().includes('apikey'));
+});
+check('invalid/old/empty backups are rejected with useful errors', () => {
+  assert.throws(() => parseBackup('not json'), /不是有效的 JSON/);
+  assert.throws(() => parseBackup(JSON.stringify({ schemaVersion: 99, watches: [] })), /不支持的备份版本/);
+  assert.throws(() => parseBackup(JSON.stringify({ schemaVersion: 1, watches: [] })), /没有可导入/);
+});
+check('merge updates same URL, adds new targets and caps at 20', () => {
+  const existing = [
+    { id: 'a', keyword: 'A', url: 'https://item.jd.com/1.html', target: 100, current: 120, lowest: 90, notified: true, alerted: true },
+    { id: 'b', keyword: 'B', url: 'https://item.jd.com/2.html', target: 200, current: 210, lowest: 190 },
+  ];
+  const imported = [
+    { id: 'old-a', keyword: 'A2', url: 'https://item.jd.com/1.html', target: 88, paused: true },
+    { id: 'new-c', keyword: 'C', url: 'https://item.jd.com/3.html', target: 300 },
+  ];
+  const merged = mergeBackup(existing, imported);
+  assert.strictEqual(merged.updated, 1);
+  assert.strictEqual(merged.added, 1);
+  assert.strictEqual(merged.skipped, 0);
+  assert.strictEqual(merged.watches.length, 3);
+  const a = merged.watches.find((w) => w.url === 'https://item.jd.com/1.html');
+  assert.strictEqual(a.target, 88);
+  assert.strictEqual(a.keyword, 'A2');
+  assert.strictEqual(a.current, 120, '运行态 current 应保留');
+  assert.strictEqual(a.notified, false, '改目标后应重置提醒闩锁');
+  const c = merged.watches.find((w) => w.url === 'https://item.jd.com/3.html');
+  assert.notStrictEqual(c.id, 'new-c', '导入的新目标应换成本机 id');
+  assert.ok(c.id.startsWith('w_'));
+
+  const full = Array.from({ length: 20 }, (_, i) => ({
+    url: `https://item.jd.com/${100 + i}.html`, target: 10 + i,
+  }));
+  const capped = mergeBackup(full, [
+    { url: 'https://item.jd.com/999.html', target: 1 },
+    { url: 'https://item.jd.com/998.html', target: 2 },
+  ]);
+  assert.strictEqual(capped.watches.length, 20);
+  assert.strictEqual(capped.added, 0);
+  assert.strictEqual(capped.skipped, 2);
+});
+
+console.log(`\n通过 ${passed} 项，失败 ${failed} 项${process.exitCode ? '（存在失败项）' : '，全部通过'}`);

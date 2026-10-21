@@ -13,7 +13,7 @@
  */
 'use strict';
 
-const { ipcMain, shell, Notification, dialog, app, nativeTheme, BrowserWindow } = require('electron');
+const { ipcMain, shell, Notification, dialog, app, nativeTheme, BrowserWindow, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const crawlers = require('./crawlers');
@@ -21,6 +21,8 @@ const CacheManager = require('./cache/manager');
 const storage = require('./cache/storage');
 const scripts = require('./scripts/script-manager');
 const { openLoginWindow } = require('./mmb-login');
+const { nextWatchState, failedWatchState } = require('./utils/watch-state');
+const backup = require('./utils/backup');
 
 /** 各类数据的缓存 TTL（毫秒） */
 const TTL = {
@@ -32,6 +34,7 @@ const TTL = {
 };
 
 const WATCH_INTERVAL_MS = 30 * 60 * 1000; // 盯价轮询：30 分钟
+const MAX_WATCHES = 20; // 同时盯价目标上限（与 UI 文案一致）
 
 /** 自建历史曲线本地采样库的 TTL（400 天，覆盖一年周期） */
 const LOCAL_CURVE_TTL = 400 * 24 * 3600 * 1000;
@@ -132,7 +135,7 @@ function registerIpcHandlers({ getMainWindow, logger }) {
     const creds = storage.getSettings();
     const localKey = `history-local:${target}`;
     return guard('crawl:history', () =>
-      cached(`history:${target}`, TTL.history,
+      cached(`history:v3:${target}`, TTL.history,
         () => crawlers.getHistoryMerged(target, {
           apikey: creds.linkstars_apikey,
           cookie: creds.mmb_cookie,
@@ -215,6 +218,61 @@ function registerIpcHandlers({ getMainWindow, logger }) {
     return { ok: true };
   });
 
+  /* ── 盯价目标备份/恢复（只含目标设置，不含凭证与运行态） ── */
+  ipcMain.handle('sys:export-backup', async () => {
+    try {
+      const win = getMainWindow();
+      const date = new Date().toISOString().slice(0, 10);
+      const options = {
+        title: '导出盯价备份',
+        defaultPath: path.join(app.getPath('documents'), `PriceLens-盯价备份-${date}.json`),
+        filters: [{ name: 'JSON 备份', extensions: ['json'] }],
+      };
+      const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+      if (result.canceled || !result.filePath) return { ok: true, cancelled: true };
+      const data = backup.buildBackup(getWatches());
+      await fs.writeFile(result.filePath, JSON.stringify(data, null, 2), 'utf-8');
+      logger.info(`已导出盯价备份: ${result.filePath}（${data.watches.length} 个目标）`);
+      return { ok: true, path: result.filePath, count: data.watches.length };
+    } catch (err) {
+      return { ok: false, error: friendlyError(err) };
+    }
+  });
+
+  ipcMain.handle('sys:import-backup', async () => {
+    try {
+      const win = getMainWindow();
+      const options = {
+        title: '导入盯价备份',
+        properties: ['openFile'],
+        filters: [{ name: 'JSON 备份', extensions: ['json'] }],
+      };
+      const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+      if (result.canceled || !result.filePaths?.length) return { ok: true, cancelled: true };
+      const file = result.filePaths[0];
+      const stat = await fs.stat(file);
+      if (stat.size > 2 * 1024 * 1024) return { ok: false, error: '备份文件超过 2MB，拒绝导入' };
+      const imported = backup.parseBackup(await fs.readFile(file, 'utf-8'));
+      const merged = backup.mergeBackup(getWatches(), imported);
+      saveWatches(merged.watches);
+      syncWatchTimer();
+      sendWatchUpdated();
+      logger.info(`已导入盯价备份: 新增 ${merged.added} / 更新 ${merged.updated} / 跳过 ${merged.skipped}`);
+      return { ok: true, ...merged, watches: getWatches() };
+    } catch (err) {
+      return { ok: false, error: friendlyError(err) };
+    }
+  });
+
+  ipcMain.handle('sys:read-clipboard', () => {
+    try {
+      const text = clipboard.readText() || '';
+      return { ok: true, text: String(text).slice(0, 2000) };
+    } catch (err) {
+      return { ok: false, error: friendlyError(err) };
+    }
+  });
+
   ipcMain.handle('sys:notify', async (_e, title, body) => {
     const t = String(title ?? 'PriceLens').slice(0, 100);
     const b = String(body ?? '').slice(0, 300);
@@ -286,86 +344,246 @@ function registerIpcHandlers({ getMainWindow, logger }) {
     return { ok: true, path: filePath };
   });
 
-  /* ══════════ 盯价提醒 ══════════ */
+  /* ══════════ 盯价提醒（多商品） ══════════ */
 
   let watchTimer = null;
+  let watchChecking = false;
 
-  /**
-   * 执行一次盯价检查：当前价 ≤ 目标价 → 系统通知 + 渲染层红点；
-   * 价格回升到目标价 * 1.02 以上 → 重置触发标记（可再次提醒）。
-   */
-  async function checkWatch() {
-    const watch = storage.getSettings().watch;
-    if (!watch || !watch.url || !(watch.target > 0)) return;
-    try {
-      const history = await crawlers.getHistory(watch.url); // 轮询直连，绕过长 TTL
-      const current = history.current;
-      if (!(current > 0)) return;
-      if (current <= watch.target) {
-        if (!watch.notified) {
-          storage.updateSettings({
-            watch: { ...watch, current, notified: true },
-          });
-          const msg = `「${watch.keyword}」当前 ¥${current}，已低于目标价 ¥${watch.target}`;
-          if (Notification.isSupported()) {
-            new Notification({ title: 'PriceLens 盯价提醒', body: msg }).show();
-          }
-          const win = getMainWindow();
-          if (win && !win.isDestroyed()) win.webContents.send('watch:triggered', { ...watch, current });
-          logger.info(`盯价触发: ${msg}`);
-        }
-      } else if (current > watch.target * 1.02 && watch.notified) {
-        storage.updateSettings({ watch: { ...watch, current, notified: false } });
-      } else {
-        storage.updateSettings({ watch: { ...watch, current } });
-      }
-    } catch (err) {
-      logger.warn(`盯价轮询失败: ${err.message}`);
+  function getWatches() {
+    const list = storage.getSettings().watches;
+    return Array.isArray(list) ? list : [];
+  }
+
+  function saveWatches(watches) {
+    storage.updateSettings({ watches });
+  }
+
+  /** 有未暂停的目标才跑 30 分钟定时器；全部暂停/删除时停掉，避免空转 */
+  function syncWatchTimer() {
+    const hasActive = getWatches().some((w) => !w.paused);
+    if (hasActive && !watchTimer) {
+      watchTimer = setInterval(() => { checkWatch().catch(() => {}); }, WATCH_INTERVAL_MS);
+      watchTimer.unref?.();
+    } else if (!hasActive && watchTimer) {
+      clearInterval(watchTimer);
+      watchTimer = null;
     }
   }
 
-  function ensureWatchTimer() {
-    if (watchTimer) return;
-    watchTimer = setInterval(checkWatch, WATCH_INTERVAL_MS);
-    watchTimer.unref?.();
+  /** 盯价走与用户查价相同的三源合并通道（慢慢买 Cookie / 星罗 / 自建曲线） */
+  async function fetchWatchHistory(watch) {
+    const creds = storage.getSettings();
+    const localKey = `history-local:${watch.url}`;
+    return crawlers.getHistoryMerged(watch.url, {
+      apikey: creds.linkstars_apikey,
+      cookie: creds.mmb_cookie,
+      readLocal: async () => ((await cache.get(localKey)) || {}).data?.points || [],
+      writeLocal: async (points) => { await cache.set(localKey, { points }, LOCAL_CURVE_TTL); },
+    });
   }
 
-  ipcMain.handle('watch:set', async (_e, cfg) => {
+  /**
+   * 检查单个目标：到价只提醒一次；回升到目标价 102% 以上后重新武装。
+   * 失败只写在该目标的 lastError，不影响其它目标。
+   */
+  async function checkOneWatch(watch) {
+    if (!watch || watch.paused) return watch;
+    try {
+      const history = await fetchWatchHistory(watch);
+      const { updated, alert } = nextWatchState(watch, history);
+
+      if (alert) {
+        const msg = `「${updated.keyword || '商品'}」当前 ¥${updated.current}，已低于目标价 ¥${updated.target}`;
+        if (Notification.isSupported()) {
+          const notification = new Notification({ title: 'PriceLens 盯价提醒', body: msg });
+          notification.on('click', () => {
+            const win = getMainWindow();
+            if (win && !win.isDestroyed()) {
+              win.show();
+              win.focus();
+            }
+          });
+          notification.show();
+        }
+        const win = getMainWindow();
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('watch:triggered', {
+            id: updated.id,
+            keyword: updated.keyword,
+            current: updated.current,
+            target: updated.target,
+            url: updated.url,
+          });
+        }
+        logger.info(`盯价触发: ${msg}`);
+      }
+      return updated;
+    } catch (err) {
+      return failedWatchState(watch, friendlyError(err));
+    }
+  }
+
+  /** 把最新列表推给渲染层（后台检查完成后刷新列表，不必用户手动点） */
+  function sendWatchUpdated() {
+    const win = getMainWindow();
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('watch:updated', { watches: getWatches() });
+    }
+  }
+
+  /**
+   * 执行一轮检查；ids 为空表示全部（托盘手动检查）。
+   * @param {string[]|null} [ids]
+   */
+  async function checkWatch(ids = null) {
+    if (watchChecking) return getWatches();
+    watchChecking = true;
+    try {
+      const watches = getWatches();
+      if (watches.length === 0) return [];
+      const wanted = Array.isArray(ids) ? new Set(ids) : null;
+      const next = watches.slice();
+      let changed = false;
+      for (let i = 0; i < next.length; i++) {
+        if (wanted && !wanted.has(next[i].id)) continue;
+        next[i] = await checkOneWatch(next[i]);
+        changed = true;
+        saveWatches(next.slice()); // 每项落盘，进程中途退出也不丢已检查结果
+      }
+      if (changed) sendWatchUpdated();
+      syncWatchTimer();
+      return getWatches();
+    } finally {
+      watchChecking = false;
+    }
+  }
+
+  /** 新增/更新当前商品的盯价目标（同 URL 去重） */
+  async function addWatch(cfg) {
     const keyword = validQuery(cfg?.keyword) || '';
     const url = validUrl(cfg?.url);
     const target = Number(cfg?.target);
     if (!url) return { ok: false, error: '缺少有效的商品链接，请先搜索商品' };
     if (!(target > 0)) return { ok: false, error: '请输入大于 0 的目标价' };
-    storage.updateSettings({
-      watch: { keyword, url, target, notified: false, current: null, since: Date.now() },
-    });
-    ensureWatchTimer();
-    setTimeout(checkWatch, 3000); // 设置后 3 秒做首次检查
-    logger.info(`盯价已设置: ${keyword} 目标 ¥${target}`);
-    return { ok: true, watch: storage.getSettings().watch };
+
+    const watches = getWatches();
+    const index = watches.findIndex((w) => w.url === url);
+    let watch;
+    if (index >= 0) {
+      watch = {
+        ...watches[index],
+        keyword: keyword || watches[index].keyword,
+        target,
+        paused: false,
+        notified: false,
+        alerted: false,
+        lastError: null,
+      };
+      watches[index] = watch;
+    } else {
+      if (watches.length >= MAX_WATCHES) {
+        return { ok: false, error: `最多同时盯 ${MAX_WATCHES} 个商品，请先删除一个目标` };
+      }
+      watch = {
+        id: storage.newWatchId(),
+        keyword,
+        url,
+        target,
+        current: null,
+        lowest: null,
+        paused: false,
+        notified: false,
+        alerted: false,
+        since: Date.now(),
+        lastChecked: 0,
+        lastError: null,
+        lastAlertAt: 0,
+        lastAlertPrice: null,
+        alertCount: 0,
+      };
+      watches.push(watch);
+    }
+    saveWatches(watches);
+    syncWatchTimer();
+    setTimeout(() => { checkWatch([watch.id]).catch(() => {}); }, 300);
+    logger.info(`盯价已设置: ${keyword} 目标 ¥${target}（共 ${watches.length} 个）`);
+    return { ok: true, watch, watches: getWatches() };
+  }
+
+  ipcMain.handle('watch:list', () => ({ ok: true, watches: getWatches() }));
+
+  ipcMain.handle('watch:add', async (_e, cfg) => addWatch(cfg));
+  ipcMain.handle('watch:set', async (_e, cfg) => addWatch(cfg)); // 兼容旧调用
+
+  ipcMain.handle('watch:update', async (_e, cfg) => {
+    const id = String(cfg?.id || '');
+    const watches = getWatches();
+    const index = watches.findIndex((w) => w.id === id);
+    if (index < 0) return { ok: false, error: '盯价目标不存在' };
+
+    const patch = {};
+    if (cfg?.target != null) {
+      const target = Number(cfg.target);
+      if (!(target > 0)) return { ok: false, error: '请输入大于 0 的目标价' };
+      patch.target = target;
+      patch.notified = false;
+      patch.alerted = false;
+      patch.lastError = null;
+    }
+    if (typeof cfg?.paused === 'boolean') patch.paused = cfg.paused;
+    if (typeof cfg?.keyword === 'string' && cfg.keyword.trim()) patch.keyword = cfg.keyword.trim().slice(0, 100);
+
+    watches[index] = { ...watches[index], ...patch };
+    saveWatches(watches);
+    syncWatchTimer();
+    if (patch.target != null || patch.paused === false) {
+      setTimeout(() => { checkWatch([id]).catch(() => {}); }, 300);
+    }
+    return { ok: true, watch: watches[index], watches: getWatches() };
   });
 
-  ipcMain.handle('watch:get', () => ({ ok: true, watch: storage.getSettings().watch || null }));
+  ipcMain.handle('watch:remove', async (_e, id) => {
+    const target = String(id || '');
+    const before = getWatches();
+    const watches = before.filter((w) => w.id !== target);
+    if (watches.length === before.length) return { ok: false, error: '盯价目标不存在' };
+    saveWatches(watches);
+    syncWatchTimer();
+    logger.info(`已删除盯价目标（剩余 ${watches.length} 个）`);
+    return { ok: true, watches };
+  });
 
-  /** 立即执行一次盯价检查（托盘菜单 / 手动触发） */
+  /** 打开盯价页时清掉红点；notified 保留，避免同价位重复弹通知 */
+  ipcMain.handle('watch:ack', () => {
+    const watches = getWatches().map((w) => ({ ...w, alerted: false }));
+    saveWatches(watches);
+    return { ok: true, watches };
+  });
+
+  ipcMain.handle('watch:get', () => {
+    const watches = getWatches();
+    return { ok: true, watches, watch: watches[0] || null };
+  });
+
+  /** 立即执行一次全部检查（托盘菜单 / 手动触发） */
   ipcMain.handle('watch:check-now', async () => {
-    await checkWatch();
-    return { ok: true, watch: storage.getSettings().watch || null };
+    const watches = await checkWatch();
+    return { ok: true, watches };
   });
 
   ipcMain.handle('watch:clear', async () => {
-    storage.updateSettings({ watch: null });
+    saveWatches([]);
     if (watchTimer) {
       clearInterval(watchTimer);
       watchTimer = null;
     }
-    return { ok: true };
+    return { ok: true, watches: [] };
   });
 
-  // 启动恢复：上次退出前已设置盯价 → 自动续上 30 分钟轮询（后台任务持久化）
-  if (storage.getSettings().watch) {
-    ensureWatchTimer();
-    logger.info('检测到未完成的盯价任务，已恢复 30 分钟轮询');
+  // 启动恢复：上次退出前已有的盯价目标 → 自动续上 30 分钟轮询
+  if (getWatches().length > 0) {
+    syncWatchTimer();
+    logger.info(`检测到 ${getWatches().length} 个盯价目标，已恢复 30 分钟轮询`);
   }
 
   /* ══════════ 自定义脚本 ══════════ */

@@ -18,6 +18,122 @@
   立过同一条规矩，这次是把同一条规矩补到漏掉的那一处）
 - YAML 用 python 解析过（step 的 `env/if/name/run` 齐全），`${TAG#v}` 的取名逻辑本机跑过
 
+## [Desktop 2.4.0] - 2026-10-21
+
+### Added（桌面端）
+
+- **同款多平台对比**：新增 `utils/platform-compare.js`，把同关键词爆料按平台归一
+  （京东/淘宝/拼多多/唯品会/苏宁/抖音/识货等），每个平台取最低价并计算与当前价的差额；
+  概览新增「同款多平台」卡片，明确标注「不保证同规格」，只做关键词相关聚合，不把低价说成同款最低。
+- **盯价提醒历史**：每个目标记录 `lastAlertAt` / `lastAlertPrice` / `alertCount`，状态机在真正
+  触发提醒时写入；盯价列表展示「上次提醒 X 前 @ ¥Y」和「累计提醒 N 次」。
+- **盯价目标备份/恢复**：新增 `utils/backup.js` + `sys:export-backup` / `sys:import-backup`，
+  设置页提供导出/导入 JSON。备份只含关键词、链接、目标价、暂停状态与 since，
+  **不含 Cookie / 星罗 apikey / current / lowest / notified 等运行态**；导入按 URL 合并、
+  同 URL 以备份为准并重置提醒闩锁，新目标换发本机 id，上限 20、超出部分跳过并如实提示。
+
+### Verification
+
+- `cd desktop && npm test`：72 项通过（新增平台聚合、备份导出/校验/合并/上限、提醒历史用例）。
+- `npm run lint`：44 个 JS 文件通过语法检查。
+- Electron UI 冒烟：同款多平台 3 行（拼多多最低 / 京东 / 淘宝）、提醒历史「上次提醒 1 小时前 @ ¥1899」、
+  设置页导出/导入按钮与 v2.4.0-smoke 版本、5 个源状态、12 条视频/3 个风险标签、无控制台错误。
+- 真实盯价 IPC 端到端：本地曲线 → 加入 → 检查 → 暂停 → 恢复 → 删除，`PASS`。
+- `npm run build` 产出 `PriceLens-2.4.0-x64.exe`（114,251,691 字节，
+  sha256 `6d06bc6adfe59cf2685d6248dd2e80a6a05816d2acca0393b6b5151865ca10f4`）与
+  `PriceLens-2.4.0-x64.zip`（157,018,731 字节，
+  sha256 `423f30753cb78dfa65ea5ee85947e787e0c4557cad9414c6be15c86a4530bcf0`）；
+  asar 内版本 2.4.0、含 `platform-compare.js` / `backup.js` / `watch-state.js`；
+  解包后的 `PriceLens.exe` 实启成功（日志版本 2.4.0）。安装包未做代码签名。
+
+## [Desktop 2.3.0] - 2026-10-20
+
+### Added（桌面端）
+
+- **多商品盯价**：`settings.json` 由单条 `watch` 迁移为 `watches[]`（旧配置自动迁移并落盘），
+  最多同时盯 20 个商品；新增 `watch:list/add/update/remove/ack/check-now`，支持逐项暂停/恢复/删除、
+  立即检查全部。后台每 30 分钟逐项轮询，到价只提醒一次、回升到目标价 102% 以上再武装；
+  单个目标失败只写该目标的 `lastError`，不影响其它目标。盯价查价走与用户查价相同的三源合并通道
+  （慢慢买 Cookie / 星罗 / 自建曲线）。
+- **历史分位购买建议**：新增 `utils/price-advice.js`，按当前价在历史采样中的分位给出
+  「可以考虑入手 / 价格中等 / 建议再等等」；样本少于 8 个点返回「样本不足」，不硬下结论。
+  `history.advice` 由主进程统一计算，历史缓存 key 升至 `history:v3:` 以刷新旧缓存。
+- **剪贴板商品链接识别**：窗口聚焦时读取本机剪贴板，识别京东/淘宝/B 站商品链接并在内容区顶部提示
+  「去比价」；忽略后按商品身份（SKU / 淘宝 id / BV）记住，不再重复打扰。只在本机解析，不上传。
+- **数据源健康**：概览新增历史价/B站/找券/值得买/识货五个源的状态（正常/无结果/不可用/加载中），
+  点击可跳到对应视图；源失败不再和「确实没结果」混成一句「暂无数据」。
+- **盯价页常驻列表**：即使当前商品没有历史曲线，也能查看和管理全部盯价目标；当前商品支持
+  保存目标、暂停/恢复、删除，列表支持查看/暂停/删除和立即检查。
+
+### Fixed（桌面端）
+
+- 设置页「关于」原来硬编码 `PriceLens v2.0`，改用 `getAppInfo()` 的实际版本。
+- 侧边栏盯价红点的 `hidden` 属性被样式覆盖，未触发时也显示；补 `.nav-dot[hidden]{display:none}`。
+- 盯价列表的当前价/目标价/最低价/检查时间改为独立 span，恢复 CSS gap 间距。
+- **缓存管理器没有创建 `misc/` 目录**：`history-local:` 自建曲线等未知前缀 key 写入会
+  `ENOENT`，导致本地曲线/盯价自采点实际落不了盘。初始化时一并创建 `misc/`（真实 IPC 冒烟抓到）。
+  这同时修复了 v2.1 起自建曲线「看似写入、实际失败」的隐患。
+
+### Verification
+
+- `cd desktop && npm test`：66 项通过（新增盯价迁移、购买建议、盯价状态机用例）。
+- `npm run lint`：40 个 JS 文件通过语法检查。
+- Electron 合成数据 UI 冒烟：剪贴板提示可忽略、5 个源状态正常、购买建议/3 个盯价目标渲染、
+  暂停后状态变为「已暂停」、12 条视频与 3 个风险标签、无控制台错误。
+- 真实 IPC 端到端（临时 userData + 预置本地曲线）：`watch:add` → 首次检查读到 current=4299 /
+  lowest=4199 → 暂停 → 恢复 → 删除，`RESULT: PASS`；同时抓出并修复 `misc/` 缓存目录缺失。
+- `npm run build` 产出 `PriceLens-2.3.0-x64.exe`（114,248,817 字节，
+  sha256 `a4d4097e5b620235c4d213e10c8680c83fbecd677a7a38ec419687cfa3ca5d24`）与
+  `PriceLens-2.3.0-x64.zip`（157,014,825 字节，
+  sha256 `4c286c69a34bf9350ae6882228cadf382bba7795c6176619df501fbb4fa653ed`）；
+  asar 内版本 2.3.0、含 `watch-state.js` / `price-advice.js` / `content-risk.js`；
+  解包后的 `PriceLens.exe` 实启成功（日志版本 2.3.0）。安装包未做代码签名。
+
+## [Desktop 2.2.0] - 2026-10-20
+
+### Added（桌面端）
+
+- **识货同款兜底源**：新增 `desktop/src/main/crawlers/shihuo.js`，解析 `m.shihuo.cn/search?type=goods`
+  结构化结果（标题 / 价格 / 品牌 / 销量 / 国补），按 `QueryRelevance` 过滤配件、热榜与其它机型；
+  值得买无可用商品候选时用识货补商品头，社区页展示「识货同款」卡片。识货没有稳定商品详情页，
+  条目统一跳识货搜索页，**不把搜索页当作历史价/盯价的商品链接**。5 分钟进程内缓存避免搜索与
+  社区重复请求同域接口（限流 1 req/3s）。
+- **B 站商单/夸大宣传标记**：新增 `desktop/src/main/utils/content-risk.js`，沿用 Android v2.4.4
+  的商单词库、夸大话术词库与「联合投稿」信号；B 站搜索解析注入 `risk`，命中视频挂
+  「疑似商单 / 夸大宣传」标签并沉底，顶部提示命中数，只标记不删除。
+- **否定语境豁免（桌面端先做）**：「不恰饭」「无广告」「不是商单」「并非天花板」不再误标；
+  Android 仍是裸子串匹配，待后续同步。
+- **社区源级降级**：什么值得买与识货并行取数、失败隔离；`sourceErrors` 区分「源不可达」与
+  「确实没结果」，部分失败时仍展示另一源的数据。
+- **B 站解析纯函数**：`parseSearchResponse()` 校验业务码（`code != 0` 抛错，不再把风控伪装成空结果），
+  并支持固定 JSON 夹具测试。
+
+### Fixed（桌面端）
+
+- 修复图片占位符路径错误（`../assets/placeholder.svg` → `assets/placeholder.svg`）：
+  无图/加载失败时不再显示破图图标，商品头、视频卡片、识货卡片统一回退到本地占位图。
+- `desktop/_unit_check.js` 的汇总行原先打印在值得买价格用例之前，现移到全部用例之后。
+
+### Verification
+
+- `cd desktop && npm run lint`：40 个 JS 文件通过语法检查。
+- `cd desktop && npm test`：56 项解析/规则用例通过（含与 Android 同名的识货、内容风险用例）。
+- `_crawler_check.js "iPhone 15"` 实况：值得买 3 条、B 站 12 条可解析；识货接口返回字面量
+  `null`（站点匿名限制），应用按空结果降级，未伪造数据。
+- Electron 合成数据 UI 冒烟：识货卡片 3 条、风险标签 3 个、沉底顺序与提示文案均正确；
+  控制台无错误（脚本 `desktop/_smoke_ui.js`，被 `.gitignore` 忽略）。
+- `npm run build` 产出 `PriceLens-2.2.0-x64.exe`（114,241,864 字节，
+  sha256 `935733ef985e7b2690dae6becc1a6458fab98b63ba73b8464297e260440ad455`）与
+  `PriceLens-2.2.0-x64.zip`（157,005,825 字节，
+  sha256 `ce8eb5117c8d9f9cd271c3b40e0b6c3e881d9cc0932ea3cefa96f648526e8ea2`）；
+  asar 内已包含 `shihuo.js` / `content-risk.js` 与「12 条全渲染、标记沉底」的改动；
+  解包后的 `PriceLens.exe` 实启成功（窗口标题 PriceLens，日志版本 2.2.0）。安装包未做代码签名。
+
+### Known differences
+
+- 本版未改动 Android `ContentRiskRules`，否定语境豁免目前仅桌面端具备。
+
+
 
 ### 修复（CI 门禁的一条真实缺陷：暖缓存必然假红；详见 §9.31 三）
 
