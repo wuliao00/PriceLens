@@ -85,7 +85,7 @@
 | 平台 | Gitee（国内直链，免登录） | GitHub Release | 蓝奏云 | 夸克网盘 | 123云盘 |
 |------|--------|----------|--------|----------|----------|
 | **Android v2.8.0.4** | [PriceLens-2.8.0.4.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.4.apk) | [Release v2.8.0.4](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4) | [PriceLens-2.8.0.4.apk.zip](https://www.ilanzou.com/s/PZ4d1SXy?code=klmZ)（**解压后**才是 .apk） | [pricelens](https://pan.quark.cn/s/7daae292ba34)（内含裸 .apk，免解压） | [pricelens](https://1828156079.share.123pan.cn/123pan/w5lUjv-Pxk3h?pwd=SRoZ)（提取码 SRoZ） |
-| **Windows v2.1.1** | — | [Release v2.8.0.4](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4) | [同上链接内的 zip](https://www.ilanzou.com/s/PZ4d1SXy?code=klmZ) | [同上链接内的 zip](https://pan.quark.cn/s/7daae292ba34) | [同上链接内的 zip](https://1828156079.share.123pan.cn/123pan/w5lUjv-Pxk3h?pwd=SRoZ) |
+| **Windows v2.6.0** + **扩展 v1.0.0** | [Gitee 发行版（扩展 + 源码）](https://gitee.com/wuliao11541/PriceLens/releases) | [GitHub Release v2.6.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)（安装器/便携 zip/扩展） | 旧版 v2.1.1（以 GitHub 新包为准） | 旧版 v2.1.1（以 GitHub 新包为准） | 旧版 v2.1.1（以 GitHub 新包为准） |
 
   提取码：蓝奏云 **klmZ**（已含在链接参数里，打开即可下载）；123云盘 **SRoZ**；夸克网盘无需提取码。
   三个网盘分享的都是同一个 `pricelens` 目录，内含 Android 包与 Windows 包各一份。
@@ -168,8 +168,9 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 
 **下载**：见上方 [国内加速下载](#国内加速下载推荐) 表格，或 [Releases](https://github.com/wuliao00/PriceLens/releases) 中的 NSIS 安装器 / ZIP 便携版
 
-> v2.6.0 的桌面端源码与本地构建已完成，并包含 Chrome/Edge 扩展（v1.0.0）与手机 App 局域网联动；
-> 正式安装包/扩展包尚未上传 Release；上方网盘/Releases 链接当前仍指向 v2.1.x 基线。
+> v2.6.0 桌面端与 v1.0.0 扩展已发布：[GitHub Release](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)。
+> Gitee 发行版（releases 页面里的 `v2.6.0-desktop`）含扩展与源码；桌面安装包超过 Gitee 100MB 附件上限，请从 GitHub 下载。
+> 网盘仍是旧版 v2.1.1，不要拿旧包比对 2.6.0 的 sha256。
 
 **源码构建**：
 ```bash
