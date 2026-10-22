@@ -80,8 +80,9 @@ taobao:654321098765  taobao   66.0  active=1   ← 桌面下发
 
 ## 5. 边界（如实）
 
-- 本次 UI 取证跑在 **debug 签名 `com.pricelens.dev`** 上，不是公开 2.8.0.4/2.8.0.5 的 release APK；
-  修复已进 `main` 并抬到 2.8.0.5/26，release APK 仍需 CI 用正式钥匙 `c759cbb8…` 出包后在真机复验一次。
+- 本次 UI 取证先在 **debug 签名 `com.pricelens.dev`** 上跑通；随后又用 **CI 正式签名包**
+  `PriceLens-2.8.0.5.apk`（`com.pricelens`，cert `c759cbb8…`）在真机复验了测试连接 / 恢复 / 备份，
+  见 §7。仍有一条没做：从 ≤2.6.5 的旧签名包覆盖安装（签名不同，必须卸载重装，属已知限制）。
 - 手机上的数据是为取证播种的（1 个收藏 + 2 个盯价）；拼多多目标刻意保留，用来验证“不支持平台不伪造”。
 - 桌面 2.6.0 便携版仍为自签名（`CN=PriceLens (Self-Signed)`，`B253FA…F501AF`）；Windows 仍会提示
   “未知发布者”，这是没有 CA 代码签名证书的硬限制，不是漏签。
@@ -101,3 +102,17 @@ taobao:654321098765  taobao   66.0  active=1   ← 桌面下发
   `9ed8513a…e691e`、`resources/app.asar` `8295c209…10f3` 与本地签名包一致；
   `Get-AuthenticodeSignature` 显示自签证书 Subject 正确（Status=UnknownError，未装根证书）。
 - 发布包的主程序是**自签名**，不是 CA 签名；Windows 仍可能提示未知发布者。README 已写明。
+
+## 7. 2.8.0.5 正式签名包真机复验（2026-10-22）
+
+- 包：`PriceLens-2.8.0.5.apk`，**3,325,823 B**，sha256
+  `0481d3987f99a354385442fa3522b06d605ba6cd3ac27bd63c67324c2c1db843`，
+  证书 SHA-256 `c759cbb8ca2bda75799d75336d615390ec5737d83cb588703bef09821205b5e0`（同 2.8.0.4）。
+- 安装：设备上 `com.pricelens` 原为 2.8.0.3/24（在分身空间 user 10）；`pm install -r` 升到 2.8.0.5/26。
+  为不碰分身空间数据，用 `pm install-existing --user 0` 在主用户启用一份干净实例做 UI 取证，测试完
+  `pm uninstall --user 0` 清掉；user 10 的 2.8.0.5 与数据保留。
+- 读数：版本页 **v2.8.0.5**；测试连接 **“连接成功：WebDAV 可用，认证通过”**；
+  恢复 **“0 个收藏 / 3 个盯价目标”**；立即备份 **“已备份：pricelens-20261022-094707.json”**，
+  桌面日志 **“收到 3 个目标（可用 3），新增 0 / 更新 3 / 跳过 0”**。
+- Gitee raw 回读：HTTP 200，3,325,823 B，sha256 与 CI 产物一致；`update.json` 已回填 26 / 2.8.0.5。
+- 截图：`assets/screenshots/mobile-sync-2026-10-21/07-release-version.png` … `10-release-backup-ok.png`。
