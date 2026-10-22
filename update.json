@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-08T12:35:00Z",
+  "generatedAt": "2026-10-22T01:49:51Z",
   "channel": "stable",
   "latest": {
-    "versionCode": 25,
-    "versionName": "2.8.0.4",
-    "releaseDate": "2026-10-08"
+    "versionCode": 26,
+    "versionName": "2.8.0.5",
+    "releaseDate": "2026-10-21"
   },
   "minSupportedVersionCode": 14,
   "forceBelow": 13,
@@ -13,12 +13,12 @@
   "apkUrls": [
     {
       "label": "Gitee（国内直连）",
-      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.4.apk",
+      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.5.apk",
       "kind": "apk"
     },
     {
       "label": "GitHub Release",
-      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.8.0.4/PriceLens-2.8.0.4.apk",
+      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.8.0.5/PriceLens-2.8.0.5.apk",
       "kind": "apk"
     },
     {
@@ -28,18 +28,17 @@
     },
     {
       "label": "GitHub Release 页",
-      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4",
+      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.5",
       "kind": "page"
     }
   ],
-  "sha256": "efba3cb5f046929362c84dec1892bb36e1c112dc19bba03b7cfa25597c8b32f7",
-  "sizeBytes": 3325811,
+  "sha256": "0481d3987f99a354385442fa3522b06d605ba6cd3ac27bd63c67324c2c1db843",
+  "sizeBytes": 3325823,
   "notes": [
-    "修一条判定串味：App 判断「我的无障碍服务开没开」原来用的是子串匹配，而调试包的包名 com.pricelens.dev 本身就含 com.pricelens —— 同一台手机上并装正式版与调试包时，两边会互相把对方的开关读成自己的：一边开着，另一边也显示「已开启」，你照着提示去开，界面还是说你没开。现在按本包自己的组件名判，并配了 7 条单元测试钉住",
-    "设置页「Shizuku 一键授权（可选）」那一行：按钮原来叫「授权 Shizuku」，同一个词一行里两遍，把标题挤成两行还断在半个括号上；去掉按钮的主语，标题回到一行",
-    "设置页慢慢买 Cookie 那一行：「登录自动抓取」按钮被说明文字挤成两行，现在说明自己换行、按钮保住单行",
-    "识别、比价、盯价的判定链与找券评测本版一字未动 —— 973 条单测 × 两个变体全绿，找券 P/R/F1 仍是 1.0000，无回退",
-    "签名：与 2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 / 2.8.0.3 同一枚密钥（证书 SHA-256 c759cbb8…205b5e0），可直接覆盖升级，本机数据不丢；停在 ≤2.6.5 的用户需卸载重装一次"
+    "真机取证修复：桌面端「手机联动」的局域网 WebDAV 是 HTTP，而 App 原先按默认安全策略禁止明文，真机上点「测试连接」会报“连不上”（不是网络问题）。现在只为 localhost/RFC1918/链路本地/ULA/.local 放行明文，公网明文仍拒绝（含 30x 跳转）",
+    "真机复验（vivo V2156A / Android 11）：测试连接成功；恢复 0 个收藏 / 3 个盯价目标；立即备份后桌面收到 3 个目标（新增 0 / 更新 3 / 跳过 0）",
+    "桌面端 skipped 计数修正：平台不支持 + 超出 20 个上限分开统计，不再出现“拼多多目标被丢但显示跳过 0”",
+    "签名：与 2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 / 2.8.0.3 / 2.8.0.4 同一枚 release 钥匙（证书 SHA-256 c759cbb8…205b5e0），可直接覆盖升级，本机数据不丢；停在 ≤2.6.5 的用户需卸载重装一次"
   ],
   "cooldownHours": 24
 }

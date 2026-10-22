@@ -6,7 +6,7 @@
 >
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）+ Chrome/Edge 浏览器扩展
 >
-> 作者：**莫** | 版本：Android v2.8.0.4（2.8.0.5 待发）/ Desktop v2.6.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
+> 作者：**莫** | 版本：Android v2.8.0.5 / Desktop v2.6.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
 
 [![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -84,25 +84,24 @@
 
 | 平台 | Gitee（国内直链，免登录） | GitHub Release | 蓝奏云 | 夸克网盘 | 123云盘 |
 |------|--------|----------|--------|----------|----------|
-| **Android v2.8.0.4** | [PriceLens-2.8.0.4.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.4.apk) | [Release v2.8.0.4](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.4) | [PriceLens-2.8.0.4.apk.zip](https://www.ilanzou.com/s/PZ4d1SXy?code=klmZ)（**解压后**才是 .apk） | [pricelens](https://pan.quark.cn/s/7daae292ba34)（内含裸 .apk，免解压） | [pricelens](https://1828156079.share.123pan.cn/123pan/w5lUjv-Pxk3h?pwd=SRoZ)（提取码 SRoZ） |
+| **Android v2.8.0.5** | [PriceLens-2.8.0.5.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.5.apk) | [Release v2.8.0.5](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.5) | 旧版 2.8.0.4（以 Gitee/GitHub 新包为准） | 旧版 2.8.0.4（以 Gitee/GitHub 新包为准） | 旧版 2.8.0.4（以 Gitee/GitHub 新包为准） |
 | **Windows v2.6.0** + **扩展 v1.0.0** | [Gitee 分卷签名包（13×9MiB，免登录）](https://gitee.com/wuliao11541/PriceLens/raw/dist/README-desktop-2.6.0.md) | [GitHub Release v2.6.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)（安装器/便携 zip/扩展） | 旧版 v2.1.1（以 GitHub 新包为准） | 旧版 v2.1.1（以 GitHub 新包为准） | 旧版 v2.1.1（以 GitHub 新包为准） |
 
   提取码：蓝奏云 **klmZ**（已含在链接参数里，打开即可下载）；123云盘 **SRoZ**；夸克网盘无需提取码。
   三个网盘分享的都是同一个 `pricelens` 目录，内含 Android 包与 Windows 包各一份。
-  ⚠️ **蓝奏云与 123云盘 那份外面套了一层 zip**（文件名是 `PriceLens-2.8.0.4.apk.zip`），
-  Android 不能直接安装 zip —— 下载后先解压，得到 `PriceLens-2.8.0.4.apk` 再装。
-  夸克那份是裸 .apk，下载即可安装。
-  安装前想确认拿到的是同一份，比对下面这个 sha256 即可（三个网盘与 Gitee 直链都是同一次 CI 出的包）。
+  ⚠️ 三个网盘仍是 **2.8.0.4** 的旧包（蓝奏云/123云盘那份外面还套了一层 zip，
+  解压后得到 `PriceLens-2.8.0.4.apk`）；**2.8.0.5 请走 Gitee / GitHub**。
+  安装前想确认拿到的是同一份，比对下面对应版本的 sha256。
 
-  **v2.8.0.4 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源，
+  **v2.8.0.5 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源，
   已回读校验：Gitee raw 下载回来的文件与 CI 签名产物 sha256 逐字节相同），
-  包体 3,325,811 字节，
-  `sha256 = efba3cb5f046929362c84dec1892bb36e1c112dc19bba03b7cfa25597c8b32f7`
+  包体 3,325,823 字节，
+  `sha256 = 0481d3987f99a354385442fa3522b06d605ba6cd3ac27bd63c67324c2c1db843`
   （这个值与 `update.json` 里的 `sha256` 必须一致；每次重新出包都三处同步：清单、
   `dist` 分支的包、GitHub Release 附件）。
   ⚠️ **v2.7.0 起改用正式 release 密钥签名**（此前 ≤2.6.5 的对外包为 debug 密钥签名）：从 ≤2.6.5 覆盖安装 2.7.0
   会因签名不同失败，需**卸载重装一次**，本机自采的盯价数据会清空，深表歉意。
-  **2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 / 2.8.0.3 / 2.8.0.4 六版已逐版核对为同一枚密钥**
+  **2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 / 2.8.0.3 / 2.8.0.4 / 2.8.0.5 七版已逐版核对为同一枚密钥**
   （证书 `CN=wuliao00, OU=PriceLens`，SHA-256 前缀 `c759cbb8`），所以这六版之间可直接覆盖升级、
   数据不丢，应用内"检查更新"也能直接升，不再断链。
 
@@ -172,8 +171,10 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 > Gitee 的桌面包已按 **9MiB × 13 卷**重压缩（自签名便携版；Gitee raw >10MB 需登录，9MiB 才能免登录直链）：
 > [分卷包说明与校验](https://gitee.com/wuliao11541/PriceLens/raw/dist/README-desktop-2.6.0.md)；
 > 下载 `download-desktop-2.6.0.ps1` 可一键下载+校验+解压，或手动下全 13 卷后用 7-Zip 解 `.001`。
-> **手机联动需要 Android 2.8.0.5+**：2.8.0.4 及更早版本按默认安全策略禁止明文 HTTP，
-> 真机上点「测试连接」会报“连不上”（不是网络问题）。取证见 `docs/verification-mobile-sync-2026-10-21.md`。
+> **手机联动需要 Android 2.8.0.5+（已发布）**：2.8.0.4 及更早版本按默认安全策略禁止明文 HTTP，
+> 真机上点「测试连接」会报“连不上”（不是网络问题）。2.8.0.5 已在真机上复验：
+> 测试连接、恢复 0 收藏/3 盯价目标、立即备份（桌面收到 3 目标）全部通过。
+> 取证见 `docs/verification-mobile-sync-2026-10-21.md`。
 > 网盘仍是旧版 v2.1.1，不要拿旧包比对 2.6.0 的 sha256。
 
 **源码构建**：
