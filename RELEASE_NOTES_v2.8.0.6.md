@@ -14,7 +14,7 @@
 - 桌面依赖锁文件升级：vite 8.3.5、undici 7.30.1 / 6.29.1、fast-uri 3.1.9、
   source-map-js 1.2.2、brace-expansion 1.1.21 / 2.1.7 / 5.0.12；`npm test` 78/78 通过。
 - `http-cache-semantics@4.2.0`、`sprintf-js@1.1.3` 上游暂无修复版本，保留告警，不做破坏性替换。
-- 本轮不重发桌面安装包；依赖修复随下一次桌面构建进入安装器。
+- 桌面安装器（NSIS）本轮未重发；Release 附带的 2.6.0 便携 zip 已用升级后的依赖重新构建。
 
 ## 安装
 

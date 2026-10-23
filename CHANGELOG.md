@@ -23,7 +23,7 @@
   source-map-js 1.2.2、brace-expansion 1.1.21 / 2.1.7 / 5.0.12；`npm test` 78/78 通过。
 - `http-cache-semantics@4.2.0` 与 `sprintf-js@1.1.3` 上游暂无修复版本，仍是构建期传递依赖；
   本轮不做破坏性的 fork/替换，Dependabot 会继续保留这两条提示。
-- 本轮不重发桌面安装包；依赖修复随下一次桌面构建进入安装器。
+- 桌面安装器（NSIS）本轮未重发；Release 附带的 2.6.0 便携 zip 已用升级后的依赖重新构建。
 
 ### 版本
 
