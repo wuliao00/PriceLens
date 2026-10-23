@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-22T01:49:51Z",
+  "generatedAt": "2026-10-23T01:52:15Z",
   "channel": "stable",
   "latest": {
-    "versionCode": 26,
-    "versionName": "2.8.0.5",
-    "releaseDate": "2026-10-21"
+    "versionCode": 27,
+    "versionName": "2.8.0.6",
+    "releaseDate": "2026-10-23"
   },
   "minSupportedVersionCode": 14,
   "forceBelow": 13,
@@ -13,12 +13,12 @@
   "apkUrls": [
     {
       "label": "Gitee（国内直连）",
-      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.5.apk",
+      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.6.apk",
       "kind": "apk"
     },
     {
       "label": "GitHub Release",
-      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.8.0.5/PriceLens-2.8.0.5.apk",
+      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.8.0.6/PriceLens-2.8.0.6.apk",
       "kind": "apk"
     },
     {
@@ -28,17 +28,17 @@
     },
     {
       "label": "GitHub Release 页",
-      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.5",
+      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.6",
       "kind": "page"
     }
   ],
-  "sha256": "0481d3987f99a354385442fa3522b06d605ba6cd3ac27bd63c67324c2c1db843",
-  "sizeBytes": 3325823,
+  "sha256": "4191158593511017f65bbc5c4ba4b653e30ebad2ca5b7fc2e58ba7d642a9232a",
+  "sizeBytes": 3325827,
   "notes": [
-    "真机取证修复：桌面端「手机联动」的局域网 WebDAV 是 HTTP，而 App 原先按默认安全策略禁止明文，真机上点「测试连接」会报“连不上”（不是网络问题）。现在只为 localhost/RFC1918/链路本地/ULA/.local 放行明文，公网明文仍拒绝（含 30x 跳转）",
-    "真机复验（vivo V2156A / Android 11）：测试连接成功；恢复 0 个收藏 / 3 个盯价目标；立即备份后桌面收到 3 个目标（新增 0 / 更新 3 / 跳过 0）",
-    "桌面端 skipped 计数修正：平台不支持 + 超出 20 个上限分开统计，不再出现“拼多多目标被丢但显示跳过 0”",
-    "签名：与 2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 / 2.8.0.3 / 2.8.0.4 同一枚 release 钥匙（证书 SHA-256 c759cbb8…205b5e0），可直接覆盖升级，本机数据不丢；停在 ≤2.6.5 的用户需卸载重装一次"
+    "端侧模型下载支持国内镜像：gh-proxy.com → ghproxy.net → GitHub 自动回退，下完仍按内置 sha256 校验",
+    "桌面依赖安全升级（vite / undici / fast-uri / source-map-js / brace-expansion）；本轮不重发桌面安装包",
+    "包含 2.8.0.5 的局域网 WebDAV 明文放行修复：只放行 localhost/RFC1918/链路本地/ULA/.local，公网明文仍拒绝",
+    "签名与 2.7.0–2.8.0.5 同一把 release 钥匙（证书 SHA-256 c759cbb8…205b5e0），可直接覆盖升级，本机数据不丢"
   ],
   "cooldownHours": 24
 }

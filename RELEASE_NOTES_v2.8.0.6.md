@@ -24,8 +24,8 @@
 
 ## 产物与校验
 
-- `PriceLens-2.8.0.6.apk` — __SIZE__ B
-  - sha256 `__SHA256__`
+- `PriceLens-2.8.0.6.apk` — 3,325,827 B
+  - sha256 `4191158593511017f65bbc5c4ba4b653e30ebad2ca5b7fc2e58ba7d642a9232a`
   - 证书 SHA-256 `c759cbb8ca2bda75799d75336d615390ec5737d83cb588703bef09821205b5e0`
   - Gitee 免登录直链：`https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.6.apk`
   - GitHub Release：`https://github.com/wuliao00/PriceLens/releases/download/v2.8.0.6/PriceLens-2.8.0.6.apk`
