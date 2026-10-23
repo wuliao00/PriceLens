@@ -15,9 +15,9 @@ import okhttp3.Request
  * 发新版模型 = 换 tag/换摘要 = 一次 App 更新，这与"权重不进 APK"并不矛盾：
  * 进 APK 的是**几十字节的清单**，几百 MB 的权重始终走下载。
  *
- * [URLS] 是候选列表：GitHub 是主源（单文件上限 2GB、release 带 sha 校验），
- * 国内直连慢时可以先挂镜像（顺序即优先级）。**第一版只填主源**，镜像等有实测再补 ——
- * 没验过的地址写进来只会变成"下不动的时候多等一轮超时"。
+ * [URLS] 是候选列表，按顺序尝试：国内直连 GitHub 常被卡住，所以先走两个实测可用的
+ * GitHub 加速镜像，官方地址留作最后兜底。镜像只是传输通道 —— 下载完成后仍会用
+ * 编译期写死的 [SHA256] 校验，镜像返回坏文件/被替换的文件不会安装。
  */
 object ModelRepository {
 
@@ -32,9 +32,22 @@ object ModelRepository {
     const val RELEASE_TAG = "model-qwen3-0.6b-q4km-v1"
 
     val URLS = listOf(
+        "https://gh-proxy.com/https://github.com/wuliao00/PriceLens/releases/download/$RELEASE_TAG/$FILE_NAME",
+        "https://ghproxy.net/https://github.com/wuliao00/PriceLens/releases/download/$RELEASE_TAG/$FILE_NAME",
         "https://github.com/wuliao00/PriceLens/releases/download/$RELEASE_TAG/$FILE_NAME"
     )
+
+    /** 生产用的模型身份；单测可以换成一个小文件，不必真的下 397MB */
+    val spec = ModelSpec(FILE_NAME, SHA256, BYTES, URLS)
 }
+
+/** 模型文件名、摘要、字节数与候选下载地址；[ModelStore] 只依赖这一份描述。 */
+data class ModelSpec(
+    val fileName: String,
+    val sha256: String,
+    val bytes: Long,
+    val urls: List<String>
+)
 
 /**
  * 模型文件的落盘与下载（纯 JVM：只用 `java.io` + OkHttp，不 import `android.*`）。
@@ -46,15 +59,18 @@ object ModelRepository {
  *     追加到已有内容后面会得到一个长度正确、内容错位的文件，而且 sha256 还会告诉你"坏"，却不告诉你为什么；
  *  3. **校验不过就删**：留着只会让下一轮误判"已装"。
  */
-class ModelStore(private val baseDir: File) {
+class ModelStore(
+    private val baseDir: File,
+    private val spec: ModelSpec = ModelRepository.spec
+) {
 
-    val modelFile: File get() = File(baseDir, ModelRepository.FILE_NAME)
+    val modelFile: File get() = File(baseDir, spec.fileName)
 
-    private val partFile: File get() = File(baseDir, ModelRepository.FILE_NAME + ".part")
+    private val partFile: File get() = File(baseDir, spec.fileName + ".part")
 
     fun isInstalled(): Boolean {
         if (!isPresentQuick()) return false
-        return sha256Of(modelFile) == ModelRepository.SHA256
+        return sha256Of(modelFile) == spec.sha256
     }
 
     /**
@@ -63,30 +79,53 @@ class ModelStore(private val baseDir: File) {
      * 而"大小对了但内容坏了"这种事只可能来自外部破坏 —— 真正的裁决在下载完成时（[download] 里算过）
      * 与即将接上的 `LlamaRuntime.load()`（它加载失败会返回 null，不会硬跑）。
      */
-    fun isPresentQuick(): Boolean = modelFile.isFile && modelFile.length() == ModelRepository.BYTES
+    fun isPresentQuick(): Boolean = modelFile.isFile && modelFile.length() == spec.bytes
 
     /**
-     * 下载（可续传）。返回 true = 校验通过、已就位。
+     * 下载（可续传）。按 [ModelSpec.urls] 顺序尝试镜像/主源，任一源下完且校验通过即返回 true。
      *
-     * @param onProgress (已下载字节, 总字节)；总字节未知时给 [ModelRepository.BYTES]（我们有权威值）
+     * @param onProgress (已下载字节, 总字节)；总字节未知时给 [ModelSpec.bytes]（我们有权威值）
      */
     fun download(client: OkHttpClient, onProgress: (Long, Long) -> Unit): Boolean {
         baseDir.mkdirs()
+        // 上一轮可能刚好写完就崩了：完整且校验通过的 .part 直接转正，不再重下。
+        if (partFile.isFile && partFile.length() == spec.bytes && sha256Of(partFile) == spec.sha256) {
+            if (modelFile.exists()) modelFile.delete()
+            if (partFile.renameTo(modelFile)) return true
+        }
+        var lastError: IOException? = null
+        for (url in spec.urls) {
+            try {
+                if (downloadFrom(client, url, onProgress)) return true
+            } catch (e: IOException) {
+                lastError = e
+            }
+        }
+        if (lastError != null) throw lastError
+        return false
+    }
+
+    private fun downloadFrom(
+        client: OkHttpClient,
+        url: String,
+        onProgress: (Long, Long) -> Unit
+    ): Boolean {
+        // 长度已经到（或超过）目标值却还没通过校验，说明上一轮留下了坏 .part；
+        // 再发 Range 只会拿 416，删掉重下才是唯一出路。
+        if (partFile.isFile && partFile.length() >= spec.bytes) partFile.delete()
         val existing = if (partFile.isFile) partFile.length() else 0L
-        val url = ModelRepository.URLS.first()
         val request = Request.Builder()
             .url(url)
             .apply { if (existing > 0) header("Range", "bytes=$existing-") }
             .build()
 
-        val response = client.newCall(request).execute()
-        response.use { resp ->
+        client.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
             // 206 = 服务端接受了 Range；200 = 它忽略了 Range，这时候必须从头写
             val resuming = resp.code == 206 && existing > 0
             if (!resuming && partFile.exists()) partFile.delete()
             val body = resp.body ?: throw IOException("空响应体")
-            val total = ModelRepository.BYTES
+            val total = spec.bytes
             var written = if (resuming) existing else 0L
             body.byteStream().use { input ->
                 partFile.outputStream().use { output ->
@@ -103,7 +142,7 @@ class ModelStore(private val baseDir: File) {
             }
         }
 
-        if (partFile.length() != ModelRepository.BYTES || sha256Of(partFile) != ModelRepository.SHA256) {
+        if (partFile.length() != spec.bytes || sha256Of(partFile) != spec.sha256) {
             // 宁可不装，也不装一个坏文件：留着半截只会让下一轮误判"已安装"
             partFile.delete()
             return false
