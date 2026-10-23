@@ -105,11 +105,7 @@ class ModelStore(
         return false
     }
 
-    private fun downloadFrom(
-        client: OkHttpClient,
-        url: String,
-        onProgress: (Long, Long) -> Unit
-    ): Boolean {
+    private fun downloadFrom(client: OkHttpClient, url: String, onProgress: (Long, Long) -> Unit): Boolean {
         // 长度已经到（或超过）目标值却还没通过校验，说明上一轮留下了坏 .part；
         // 再发 Range 只会拿 416，删掉重下才是唯一出路。
         if (partFile.isFile && partFile.length() >= spec.bytes) partFile.delete()
