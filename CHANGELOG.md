@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [2.8.0.6] - 2026-10-23
+
+### 新增（端侧模型下载支持国内镜像）
+
+- `ModelRepository.URLS` 改为按 **gh-proxy.com → ghproxy.net → GitHub** 顺序尝试；
+  `ModelStore` 逐源回退，任一源下完仍按编译期内置的 sha256 校验，坏文件不安装。
+- 新增 `ModelStoreTest` 3 条：首个源 503、镜像返回坏文件、完整 `.part` 直接转正
+  （JUnitCore 直跑 3/3 通过）。
+- 新增 `docs/模型下载镜像.md`；README 更新四个网盘镜像与模型下载入口。
+  镜像实测：gh-proxy.com 完整下载 396,705,472 字节，sha256 与 GitHub Release 一致；
+  ghproxy.net 支持 200/206 与 Range，大小一致。
+
+### 维护（桌面依赖安全升级）
+
+- `desktop/package-lock.json` 升级：vite 8.3.5、undici 7.30.1 / 6.29.1、fast-uri 3.1.9、
+  source-map-js 1.2.2、brace-expansion 1.1.21 / 2.1.7 / 5.0.12；`npm test` 78/78 通过。
+- `http-cache-semantics@4.2.0` 与 `sprintf-js@1.1.3` 上游暂无修复版本，仍是构建期传递依赖；
+  本轮不做破坏性的 fork/替换，Dependabot 会继续保留这两条提示。
+- 本轮不重发桌面安装包；依赖修复随下一次桌面构建进入安装器。
+
+### 版本
+
+- `versionCode 27 / versionName 2.8.0.6`；与 2.7.0–2.8.0.5 使用同一把 release 钥匙，
+  可直接覆盖升级，本机数据不丢。
+
 ## [2.8.0.5] - 2026-10-21
 
 ### 修复（真机取证：桌面端「手机联动」在 Android 上被明文策略拦死）
