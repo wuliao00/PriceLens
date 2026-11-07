@@ -20,15 +20,23 @@ const BADGE_RULES = [
  * 渲染视频视图。
  * @param {HTMLElement} container
  * @param {{videos: Array<{title:string, author:string, play:number,
- *   duration:string, pic:string, url:string, risk?:object}> | null, error?: string}} ctx
+ *   duration:string, pic:string, url:string, risk?:object}> | null,
+ *   error?: string, onRetry?: ()=>void}} ctx
  */
-export function renderVideoView(container, { videos, error }) {
+export function renderVideoView(container, { videos, error, onRetry }) {
+  container.appendChild(el('div', { class: 'view-head' },
+    el('h2', { class: 'vh-title' }, icon('tv', 20), 'B站评测'),
+    el('div', { class: 'vh-sub', text: '聚合最新评测视频 · 避坑 / 推荐角标 · 疑似商单自动沉底' })));
+
   if (error) {
     container.appendChild(el('div', { class: 'card empty-state' },
       icon('tv', 48),
       el('div', { class: 'e-title', text: 'B 站数据源暂不可用' }),
       el('div', { class: 'e-desc', text: error }),
-      el('button', { class: 'btn', on: { click: () => window.location.reload() } }, '稍后重试')));
+      el('button', {
+        class: 'btn btn--primary',
+        on: { click: () => (onRetry ? onRetry() : window.location.reload()) },
+      }, icon('refresh', 14), '重试')));
     return;
   }
   if (!videos || videos.length === 0) {
@@ -39,23 +47,88 @@ export function renderVideoView(container, { videos, error }) {
     return;
   }
 
-  /* 被标记（疑似商单/夸大宣传）的视频沉底，其余保持原相关度顺序。
-   * Array.prototype.sort 在 V8 里稳定，等价 Android sortedBy 的稳定语义。 */
-  const sorted = [...videos].sort((a, b) => (a.risk?.flagged ? 1 : 0) - (b.risk?.flagged ? 1 : 0));
-  const flaggedCount = videos.filter((v) => v.risk?.flagged).length;
+  const isWarn = (v) => BADGE_RULES[0].re.test(v.title);
+  const isRec = (v) => BADGE_RULES[1].re.test(v.title);
+  const isRisk = (v) => Boolean(v.risk?.flagged);
+
+  /* 筛选 + 排序（视图本地状态；切换只重绘网格，不重拉数据） */
+  const FILTERS = [
+    { key: 'all', label: '全部', match: () => true },
+    { key: 'warn', label: '避坑', match: isWarn },
+    { key: 'rec', label: '推荐', match: isRec },
+    { key: 'risk', label: '风险标记', match: isRisk },
+  ];
+  let filterKey = 'all';
+  let sortBy = 'relevance'; // relevance=相关度（风险沉底） / play=最多播放
+
+  const flaggedCount = videos.filter(isRisk).length;
   if (flaggedCount > 0) {
     container.appendChild(el('div', { class: 'risk-hint' },
       icon('warn', 14),
       el('span', { text: `${flaggedCount} 条视频被标记为疑似商单/含夸大宣传话术，已沉底展示（规则识别仅供参考）` })));
   }
 
-  const grid = el('div', { class: 'video-grid' });
-  // 接口最多返回 12 条；不截成 6 条——否则「被标记视频沉底」后可能一条都看不到，
-  // 顶部却写着「已沉底展示」。全部渲染，由页面滚动承载（与 Android 列表同语义）。
-  for (const video of sorted) {
-    grid.appendChild(buildVideoCard(video));
+  const gridWrap = el('div', {});
+  const chips = {};
+  const toolbar = el('div', { class: 'video-toolbar' });
+  for (const f of FILTERS) {
+    const count = videos.filter(f.match).length;
+    const chip = el('button', {
+      class: `filter-chip${f.key === filterKey ? ' active' : ''}`,
+      on: {
+        click: () => {
+          if (filterKey === f.key) return;
+          filterKey = f.key;
+          for (const [k, node] of Object.entries(chips)) node.classList.toggle('active', k === f.key);
+          redrawGrid();
+        },
+      },
+    }, f.label, el('span', { class: 'fc-count', text: String(count) }));
+    chips[f.key] = chip;
+    toolbar.appendChild(chip);
   }
-  container.appendChild(grid);
+  toolbar.appendChild(el('div', { class: 'filter-spacer' }));
+  const sortSelect = el('select', {
+    class: 'field-input',
+    style: { width: 'auto', padding: '5px 10px' },
+    title: '排序方式',
+    on: {
+      change: () => { sortBy = sortSelect.value; redrawGrid(); },
+    },
+  },
+    el('option', { value: 'relevance', text: '相关度优先' }),
+    el('option', { value: 'play', text: '最多播放' }));
+  toolbar.appendChild(sortSelect);
+  container.appendChild(toolbar);
+  container.appendChild(gridWrap);
+
+  function redrawGrid() {
+    const filter = FILTERS.find((f) => f.key === filterKey);
+    let shown = videos.filter(filter.match);
+    if (sortBy === 'play') {
+      shown = [...shown].sort((a, b) => (Number(b.play) || 0) - (Number(a.play) || 0));
+    } else {
+      /* 被标记（疑似商单/夸大宣传）的视频沉底，其余保持原相关度顺序。
+       * Array.prototype.sort 在 V8 里稳定，等价 Android sortedBy 的稳定语义。 */
+      shown = [...shown].sort((a, b) => (isRisk(a) ? 1 : 0) - (isRisk(b) ? 1 : 0));
+    }
+    gridWrap.textContent = '';
+    if (shown.length === 0) {
+      gridWrap.appendChild(el('div', { class: 'card empty-state' },
+        icon('tv', 40),
+        el('div', { class: 'e-title', text: '该筛选下暂无视频' }),
+        el('div', { class: 'e-desc', text: '换个筛选条件，或切回「全部」看看。' })));
+      return;
+    }
+    const grid = el('div', { class: 'video-grid' });
+    // 接口最多返回 12 条；不截成 6 条——否则「被标记视频沉底」后可能一条都看不到，
+    // 顶部却写着「已沉底展示」。全部渲染，由页面滚动承载（与 Android 列表同语义）。
+    for (const video of shown) {
+      grid.appendChild(buildVideoCard(video));
+    }
+    gridWrap.appendChild(grid);
+  }
+  redrawGrid();
 }
 
 /**

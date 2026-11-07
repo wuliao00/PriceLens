@@ -5,7 +5,7 @@
  *   - 视图路由（概览 / B站 / 盯价 / 找券 / 社区）
  *   - 主题、快捷键、设置弹窗、状态栏、盯价红点
  */
-import { el, icon, clear, copyText } from './utils/dom.js';
+import { el, icon, clear, copyText, svgEl } from './utils/dom.js';
 import { formatPrice, formatBytes, timeAgo } from './utils/format.js';
 import { openExternalSafe } from './utils/sanitize.js';
 import { initSearchBar } from './components/search-bar.js';
@@ -45,7 +45,11 @@ const views = {
     /* 主进程按模块名 'bilibili' 写入 state.data，读取端须对齐（曾误读 state.data.videos 致空态） */
     render: (c) => (state.loading.bilibili && !state.data.bilibili)
       ? c.appendChild(renderSkeleton('bilibili'))
-      : renderVideoView(c, { videos: state.data.bilibili?.videos ?? null, error: state.errors.bilibili }),
+      : renderVideoView(c, {
+          videos: state.data.bilibili?.videos ?? null,
+          error: state.errors.bilibili,
+          onRetry: () => retryModule('bilibili'),
+        }),
   },
   price: {
     render: (c) => (state.loading.history && !state.data.history)
@@ -107,10 +111,7 @@ function renderOverview(container) {
         el('div', { class: 'e-desc', text: state.errors.search }),
         el('button', { class: 'btn', on: { click: () => searchApi?.focus() } }, '重新搜索')));
     } else {
-      container.appendChild(el('div', { class: 'card empty-state' },
-        icon('search', 48),
-        el('div', { class: 'e-title', text: '输入商品名或粘贴链接开始' }),
-        el('div', { class: 'e-desc', text: '30 秒完成「种草 → 盯价 → 找券 → 社区验证」四步决策。按 Ctrl+K 聚焦搜索框。' })));
+      renderDashboard(container);
     }
     return;
   }
@@ -150,6 +151,234 @@ function renderOverview(container) {
     }
     container.appendChild(card);
   }
+}
+
+/* ══════════ 概览仪表盘（未搜索时的主屏幕） ══════════ */
+
+/** 读取本地搜索历史（与 search-bar 同一份 localStorage 数据） */
+function readRecentSearches() {
+  try {
+    const arr = JSON.parse(localStorage.getItem('pricelens:history') || '[]');
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string' && x.trim()) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 盯价目标是否已到价（与主进程判定一致：有现价且 ≤ 目标价） */
+function watchHit(w) {
+  return !w.paused && w.current > 0 && w.target > 0 && w.current <= w.target;
+}
+
+function renderDashboard(container) {
+  /* Hero：品牌主张 + 主行动 */
+  const hero = el('div', { class: 'card dash-hero' },
+    el('div', { class: 'dh-eyebrow' }, icon('sparkles', 14), 'Market Observatory'),
+    el('div', { class: 'dh-title', text: '先看清行情，再决定下单' }),
+    el('div', {
+      class: 'dh-desc',
+      text: '搜一件商品，30 秒走完「历史价 → B站评测 → 隐藏券 → 社区爆料」四步验证；设好目标价，到价自动提醒。',
+    }),
+    el('div', { class: 'dh-actions' },
+      el('button', {
+        class: 'btn btn--primary',
+        on: { click: focusSearch },
+      }, icon('search', 14), '开始搜索'),
+      el('button', {
+        class: 'btn',
+        on: { click: openHelp },
+      }, icon('keyboard', 14), '快捷键')));
+  hero.appendChild(buildHeroSpark());
+  container.appendChild(hero);
+
+  /* 最近搜索 chips（本机历史，无则不显示） */
+  const recent = readRecentSearches().slice(0, 6);
+  if (recent.length > 0) {
+    const row = el('div', { class: 'recent-row' },
+      el('span', { class: 'recent-label' }, icon('clock', 13), '最近搜索'));
+    for (const q of recent) {
+      row.appendChild(el('button', {
+        class: 'recent-chip',
+        title: q,
+        on: { click: () => { searchApi?.setValue(q); doSearch(q); } },
+      }, el('span', { text: q }), icon('arrow-right', 12)));
+    }
+    container.appendChild(row);
+  }
+
+  /* 双栏：左＝盯价总览，右＝到价动态 + 四步指南 */
+  const grid = el('div', { class: 'dash-grid' });
+  const left = el('div', { class: 'dash-col' });
+  const right = el('div', { class: 'dash-col' });
+  left.appendChild(buildDashWatchCard());
+  right.appendChild(buildAlertFeedCard());
+  right.appendChild(buildGuideCard());
+  grid.appendChild(left);
+  grid.appendChild(right);
+  container.appendChild(grid);
+}
+
+/** Hero 底部装饰行情线（纯静态 SVG，无外部数据） */
+function buildHeroSpark() {
+  const svg = svgEl('svg', { viewBox: '0 0 600 54', preserveAspectRatio: 'none' });
+  const line = svgEl('path', {
+    d: 'M0 40 L40 36 L80 41 L120 30 L160 34 L200 22 L240 28 L280 18 L320 24 L360 12 L400 20 L440 10 L480 16 L520 8 L560 14 L600 6',
+    fill: 'none', stroke: 'var(--accent)', 'stroke-width': '1.5', 'stroke-linecap': 'round',
+  });
+  const area = svgEl('path', {
+    d: 'M0 40 L40 36 L80 41 L120 30 L160 34 L200 22 L240 28 L280 18 L320 24 L360 12 L400 20 L440 10 L480 16 L520 8 L560 14 L600 6 L600 54 L0 54 Z',
+    fill: 'var(--accent-soft)', stroke: 'none',
+  });
+  svg.appendChild(area);
+  svg.appendChild(line);
+  return el('div', { class: 'dh-spark', 'aria-hidden': 'true' }, svg);
+}
+
+/** 左栏：盯价总览（统计 + 最近目标，全部来自真实盯价列表） */
+function buildDashWatchCard() {
+  const watches = state.watches;
+  const hits = watches.filter(watchHit).length;
+  const active = watches.filter((w) => !w.paused).length;
+  const paused = watches.length - active;
+
+  const card = el('div', { class: 'card' },
+    el('div', { class: 'platform-head' },
+      el('h3', { class: 'card-title' },
+        '盯价总览',
+        watches.length ? el('span', { class: 'ct-count', text: `${watches.length}/20` }) : null),
+      el('button', {
+        class: 'btn btn--text',
+        on: { click: () => router.go('price') },
+      }, '管理', icon('arrow-right', 13))));
+
+  card.appendChild(el('div', { class: 'dash-stats' },
+    el('div', { class: 'dash-stat dash-stat--hit' },
+      el('div', { class: 'ds-value', text: String(hits) }),
+      el('div', { class: 'ds-label', text: '已到价' })),
+    el('div', { class: 'dash-stat dash-stat--watch' },
+      el('div', { class: 'ds-value', text: String(active) }),
+      el('div', { class: 'ds-label', text: '盯价中' })),
+    el('div', { class: 'dash-stat dash-stat--pause' },
+      el('div', { class: 'ds-value', text: String(paused) }),
+      el('div', { class: 'ds-label', text: '已暂停' }))));
+
+  if (watches.length === 0) {
+    card.appendChild(el('div', { class: 'empty-state', style: { padding: '20px 12px' } },
+      icon('target', 36),
+      el('div', { class: 'e-title', text: '还没有盯价目标' }),
+      el('div', { class: 'e-desc', text: '搜索商品后，在「盯价」页设置目标价，低于目标时自动提醒。' }),
+      el('button', { class: 'btn', on: { click: focusSearch } }, '去搜一件商品')));
+    return card;
+  }
+
+  /* 到价的排前面，其余按最近检查时间倒序，最多展示 5 条 */
+  const sorted = [...watches].sort((a, b) => {
+    const ha = watchHit(a) ? 1 : 0;
+    const hb = watchHit(b) ? 1 : 0;
+    if (ha !== hb) return hb - ha;
+    return (b.lastChecked || 0) - (a.lastChecked || 0);
+  });
+  const list = el('div', {});
+  for (const w of sorted.slice(0, 5)) {
+    list.appendChild(buildDashWatchItem(w));
+  }
+  card.appendChild(list);
+  if (watches.length > 5) {
+    card.appendChild(el('div', {
+      class: 'fs-caption text-tertiary',
+      style: { textAlign: 'center', marginTop: '8px', cursor: 'pointer' },
+      on: { click: () => router.go('price') },
+      text: `查看全部 ${watches.length} 个目标 →`,
+    }));
+  }
+  return card;
+}
+
+/** 仪表盘里的单条盯价（点击载入该商品） */
+function buildDashWatchItem(w) {
+  const hit = watchHit(w);
+  let statusClass = 'wait';
+  let statusText = '等待降价';
+  if (w.paused) { statusClass = 'pause'; statusText = '已暂停'; }
+  else if (hit) { statusClass = 'hit'; statusText = '已到价'; }
+  else if (w.lastError) { statusClass = 'error'; statusText = '查询失败'; }
+
+  return el('div', {
+    class: 'dash-watch-item',
+    title: '点击载入该商品',
+    on: { click: () => openWatch(w) },
+  },
+    el('div', { class: 'dwi-main' },
+      el('div', { class: 'dwi-title clamp-1', text: w.keyword || w.url }),
+      el('div', { class: 'dwi-prices' },
+        el('b', { class: hit ? 'dwi-hit' : '', text: w.current > 0 ? formatPrice(w.current) : '价格未知' }),
+        el('span', { text: `目标 ${formatPrice(w.target)}` }))),
+    el('div', { class: 'dwi-side' },
+      el('div', { class: `dwi-status dwi-status--${statusClass}`, text: statusText }),
+      w.lastChecked ? el('div', { class: 'dwi-time', text: timeAgo(w.lastChecked) }) : null));
+}
+
+/** 右栏：到价动态（来自盯价记录里的 lastAlertAt / lastAlertPrice） */
+function buildAlertFeedCard() {
+  const alerts = state.watches
+    .filter((w) => w.lastAlertAt > 0)
+    .sort((a, b) => b.lastAlertAt - a.lastAlertAt)
+    .slice(0, 5);
+
+  const card = el('div', { class: 'card' },
+    el('h3', { class: 'card-title' },
+      '到价动态',
+      alerts.length ? el('span', { class: 'ct-count', text: String(alerts.length) }) : null));
+
+  if (alerts.length === 0) {
+    card.appendChild(el('div', {
+      class: 'fs-caption text-tertiary',
+      style: { lineHeight: '1.7' },
+      text: '还没有到价记录。目标价达成后，这里会留下每一次提醒的时间与价格。',
+    }));
+    return card;
+  }
+
+  for (const w of alerts) {
+    const priceText = w.lastAlertPrice > 0 ? formatPrice(w.lastAlertPrice) : formatPrice(w.target);
+    card.appendChild(el('div', {
+      class: 'alert-feed-item',
+      style: { cursor: 'pointer' },
+      title: '点击载入该商品',
+      on: { click: () => openWatch(w) },
+    },
+      el('div', { class: 'afi-icon' }, icon('bell', 15)),
+      el('div', { class: 'afi-main' },
+        el('div', { class: 'afi-title clamp-1' },
+          `「${w.keyword || '商品'}」已到 `, el('b', { text: priceText })),
+        el('div', {
+          class: 'afi-time',
+          text: `${timeAgo(w.lastAlertAt)} · 目标 ${formatPrice(w.target)}${w.alertCount > 1 ? ` · 累计提醒 ${w.alertCount} 次` : ''}`,
+        }))));
+  }
+  return card;
+}
+
+/** 右栏：四步闭环指南 */
+function buildGuideCard() {
+  const steps = [
+    ['种草', '搜商品名或粘贴京东 / 淘宝 / B站链接，一眼看清当前价与历史低位。'],
+    ['盯价', '设一个目标价，每 30 分钟自动检查，到价弹系统通知。'],
+    ['找券', '聚合隐藏优惠券与到手价，别让券躺在页面角落。'],
+    ['验证', 'B站评测避坑标记 + 值得买爆料 + 识货比价，下单前最后一道闸。'],
+  ];
+  const card = el('div', { class: 'card' },
+    el('h3', { class: 'card-title', text: '四步闭环' }));
+  const wrap = el('div', { class: 'steps' });
+  steps.forEach(([title, desc], i) => {
+    wrap.appendChild(el('div', { class: 'step' },
+      el('div', { class: 'step-num', text: String(i + 1) }),
+      el('div', {},
+        el('div', { class: 'step-title', text: title }),
+        el('div', { class: 'step-desc', text: desc }))));
+  });
+  card.appendChild(wrap);
+  return card;
 }
 
 /** 概览四张卡片的状态文案 */
@@ -305,7 +534,8 @@ function quickCard(iconName, title, desc, targetView) {
   },
     el('div', { class: 'q-icon' }, icon(iconName, 18)),
     el('div', { class: 'q-title', text: title }),
-    el('div', { class: 'q-desc', text: desc }));
+    el('div', { class: 'q-desc', text: desc }),
+    el('div', { class: 'q-arrow' }, icon('arrow-right', 14)));
 }
 
 /* ══════════ 搜索与数据调度 ══════════ */
@@ -429,15 +659,37 @@ function findWatch(url) {
   return state.watches.find((w) => w.url === url) || null;
 }
 
-/** 应用一份最新盯价列表，并同步侧边栏红点 */
+/** 应用一份最新盯价列表，并同步侧边栏红点 / 徽标 / 状态栏 */
 function applyWatches(watches) {
   state.watches = Array.isArray(watches) ? watches : [];
   updateWatchDot();
+  /* 仪表盘直接展示盯价数据：列表变化时同步刷新 */
+  if (router && router.current() === 'overview' && !state.product) router.rerender();
 }
 
 function updateWatchDot() {
+  const anyAlerted = state.watches.some((w) => w.alerted);
   const dot = document.getElementById('watch-dot');
-  if (dot) dot.hidden = !state.watches.some((w) => w.alerted);
+  if (dot) dot.hidden = !anyAlerted;
+
+  const badge = document.getElementById('watch-count');
+  if (badge) {
+    badge.hidden = state.watches.length === 0;
+    badge.textContent = String(state.watches.length);
+    badge.classList.toggle('nav-badge--alert', anyAlerted);
+  }
+
+  const summary = document.getElementById('status-watch');
+  if (summary) {
+    summary.hidden = state.watches.length === 0;
+    if (state.watches.length > 0) {
+      const hits = state.watches.filter(watchHit).length;
+      const active = state.watches.filter((w) => !w.paused).length;
+      summary.textContent = hits > 0
+        ? `盯价 ${active} · ${hits} 个已到价`
+        : `盯价 ${active} 个目标 · 每 30 分钟检查`;
+    }
+  }
 }
 
 /** 对当前商品新增/更新目标价 */
@@ -690,7 +942,7 @@ async function openSettings() {
     el('h4', { text: '关于' }),
     el('span', { class: 'fs-caption text-secondary', text: `PriceLens v${appInfo?.version || '2.3.0'} · 数据源：B站 / 什么值得买 / 慢慢买 / 购物党 / 京东 / 识货` }),
     el('div', { class: 'modal-row', style: { marginTop: '8px' } },
-      el('span', { class: 'fs-caption text-tertiary', text: '快捷键：Ctrl+K 搜索 · Ctrl+1~4 切换 · F5 刷新 · Ctrl+, 设置' }))));
+      el('span', { class: 'fs-caption text-tertiary', text: '快捷键：Ctrl+K 搜索 · Ctrl+1~4 切换 · F5 刷新 · Ctrl+, 设置 · Ctrl+/ 帮助' }))));
 
   const root = document.getElementById('modal-root');
   root.appendChild(mask);
@@ -800,6 +1052,47 @@ function closeSettings() {
     modalEl.remove();
     modalEl = null;
   }
+}
+
+/* ══════════ 快捷键帮助弹窗 ══════════ */
+function openHelp() {
+  if (modalEl) return;
+  const mask = el('div', {
+    class: 'modal-mask',
+    on: { click: (e) => { if (e.target === mask) closeSettings(); } },
+  });
+  const modal = el('div', { class: 'modal' },
+    el('h3', { class: 'modal-title' }, icon('keyboard', 18), '键盘快捷键'));
+
+  const rows = [
+    ['聚焦搜索框', ['Ctrl', 'K']],
+    ['盯价 / 历史价格', ['Ctrl', '1']],
+    ['B站评测', ['Ctrl', '2']],
+    ['找券', ['Ctrl', '3']],
+    ['社区爆料', ['Ctrl', '4']],
+    ['强制刷新当前商品', ['F5']],
+    ['打开设置', ['Ctrl', ',']],
+    ['快捷键帮助', ['Ctrl', '/']],
+    ['关闭弹窗 / 下拉', ['Esc']],
+  ];
+  const grid = el('div', { class: 'shortcut-grid' });
+  for (const [desc, keys] of rows) {
+    grid.appendChild(el('div', { class: 'sc-desc', text: desc }));
+    grid.appendChild(el('div', { class: 'sc-keys' },
+      keys.map((k) => el('span', { class: 'kbd', text: k }))));
+  }
+  modal.appendChild(el('div', { class: 'modal-section' }, grid));
+  modal.appendChild(el('div', {
+    class: 'fs-caption text-tertiary',
+    style: { lineHeight: '1.7' },
+    text: '鼠标技巧：价格图表悬停查看逐日价格；「导出 PNG」保存当前曲线；盯价列表右键可暂停 / 删除。',
+  }));
+  modal.appendChild(el('div', { class: 'modal-row', style: { justifyContent: 'flex-end', marginTop: '12px' } },
+    el('button', { class: 'btn btn--primary', on: { click: closeSettings } }, '知道了')));
+
+  mask.appendChild(modal);
+  document.getElementById('modal-root').appendChild(mask);
+  modalEl = mask;
 }
 
 /** 从主进程重新拉取盯价列表 */
@@ -976,6 +1269,10 @@ function boot() {
   const gearBtn = document.getElementById('btn-settings');
   clear(gearBtn);
   gearBtn.appendChild(icon('gear', 16));
+  const helpBtn = document.getElementById('btn-help');
+  clear(helpBtn);
+  helpBtn.appendChild(icon('keyboard', 16));
+  helpBtn.addEventListener('click', openHelp);
   for (const navIcon of document.querySelectorAll('.nav-icon')) {
     clear(navIcon);
     navIcon.appendChild(icon(navIcon.dataset.icon, 20));
@@ -1017,6 +1314,9 @@ function boot() {
     } else if (e.ctrlKey && e.key === ',') {
       e.preventDefault();
       openSettings();
+    } else if (e.ctrlKey && e.key === '/') {
+      e.preventDefault();
+      openHelp();
     } else if (e.key === 'F5') {
       e.preventDefault();
       if (state.raw) doSearch(state.raw, { refresh: true });

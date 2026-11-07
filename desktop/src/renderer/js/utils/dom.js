@@ -95,6 +95,16 @@ const ICONS = {
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
   dollar: '<path d="M12 4v16"/><path d="M16.5 7.5c-.8-1.4-2.4-2-4.5-2-2.5 0-4.5 1.1-4.5 3s2 2.6 4.5 3 4.5 1.1 4.5 3-2 3-4.5 3c-2.1 0-3.7-.6-4.5-2"/>',
   thumbsup: '<path d="M7 10.5 10.8 3.5c1.6.2 2.4 1.2 2.4 3l-.7 4h5.1a2 2 0 0 1 2 2.4l-1.2 6a2 2 0 0 1-2 1.6H7"/><path d="M7 10.5H4.5A1.5 1.5 0 0 0 3 12v8a1.5 1.5 0 0 0 1.5 1.5H7"/>',
+  keyboard: '<rect x="3" y="6.5" width="18" height="11" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/>',
+  target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.8" fill="currentColor" stroke="none"/>',
+  'arrow-right': '<path d="M4.5 12h15"/><path d="m13.5 6 6 6-6 6"/>',
+  'trend-down': '<path d="m3.5 7 6 6 3.5-3.5 7 7.5"/><path d="M20 12.5V17h-4.5"/>',
+  'trend-up': '<path d="m3.5 17 6-6 3.5 3.5 7-7.5"/><path d="M20 11.5V7h-4.5"/>',
+  pause: '<path d="M9 5.5v13M15 5.5v13"/>',
+  refresh: '<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3.5V8h-4.5"/>',
+  info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><circle cx="12" cy="7.8" r="0.5" fill="currentColor" stroke="none"/>',
+  download: '<path d="M12 3.5V15"/><path d="m7 10.5 5 5 5-5"/><path d="M4.5 19.5h15"/>',
+  sparkles: '<path d="M12 4.5 13.6 9l4.4 1.5-4.4 1.5L12 16.5 10.4 12 6 10.5 10.4 9 12 4.5Z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/>',
 };
 
 /**

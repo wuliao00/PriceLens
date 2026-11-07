@@ -19,6 +19,10 @@ import { showToast } from './toast.js';
 export function renderCouponView(container, ctx) {
   const { coupons, finalPrice, currentPrice, product, error, onRetry } = ctx;
 
+  container.appendChild(el('div', { class: 'view-head' },
+    el('h2', { class: 'vh-title' }, icon('ticket', 20), '找券'),
+    el('div', { class: 'vh-sub', text: '聚合隐藏优惠券 · 预计到手价 · 右键复制券码 / 领券链接' })));
+
   if (error && (!coupons || coupons.length === 0)) {
     /* 降级态：展示具体源与错误类型，并提供重试入口 */
     container.appendChild(el('div', { class: 'card empty-state' },
@@ -36,7 +40,9 @@ export function renderCouponView(container, ctx) {
     animateNumber(priceEl, finalPrice, { format: (n) => formatPrice(Math.round(n)) }); // 600ms countUp
     const formulaParts = [];
     if (currentPrice) formulaParts.push(`原价 ${formatPrice(currentPrice)}`);
-    if (coupons && coupons.length) formulaParts.push(`优惠 -${formatPrice(currentPrice - finalPrice)}`);
+    if (coupons && coupons.length && currentPrice > finalPrice) {
+      formulaParts.push(`优惠 -${formatPrice(currentPrice - finalPrice)}`);
+    }
 
     container.appendChild(el('div', { class: 'card final-price-card' },
       el('div', { class: 'final-price-label', text: '预计到手价' }),
@@ -55,6 +61,9 @@ export function renderCouponView(container, ctx) {
   }
 
   /* 券列表 */
+  container.appendChild(el('h3', { class: 'card-title', style: { marginTop: '16px' } },
+    '可用优惠券',
+    el('span', { class: 'ct-count', text: String(coupons.length) })));
   for (const coupon of coupons) {
     container.appendChild(buildCouponCard(coupon));
   }

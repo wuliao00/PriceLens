@@ -1,47 +1,77 @@
 /**
- * 设计令牌（规范 §1.1）—— 所有 UI 必须引用这些变量，禁止硬编码魔法数值。
+ * 设计令牌 v2.7「行情观测站」
+ * ---------------------------
+ * 配色从比价这件事本身长出来：深墨绿是行情终端的底色，
+ * 薄荷绿=降价/到价，信号红=当前价/涨价，琥珀=优惠券/提醒，
+ * 青蓝=信息/数据源。亮色是冷调纸面，暗色是深墨绿玻璃。
+ * 所有 UI 必须引用这些变量，禁止硬编码魔法数值。
  */
 :root {
   /* ── 字体 ── */
   --font-stack: -apple-system, BlinkMacSystemFont,
                 "Segoe UI Variable Text", "Segoe UI",
-                Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+                "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI",
+                  "Microsoft YaHei", var(--font-stack);
+  --font-mono: "Cascadia Code", "SF Mono", "Fira Code", Consolas, monospace;
 
   /* ── 字号 / 字重 ── */
-  --fs-display:  28px; --fw-display: 700;
-  /* 展示档（2026-10-03 令牌收口）：这四个数原先是散在 components.css 里的裸 px，
-     调字阶的人改上面五档看不到它们，等于两套字号真相。值一律照搬原样，不改观感。 */
-  --fs-hero:     40px;   /* 到手价大数字（.final-price） */
-  --fs-amount:   24px;   /* 券面额（.coupon-amount） */
+  --fs-display:  30px; --fw-display: 750;
+  --fs-hero:     44px;   /* 到手价大数字（.final-price） */
+  --fs-amount:   26px;   /* 券面额（.coupon-amount） */
   --fs-price:    18px;   /* 列表里的成交价（.deal-item .d-price） */
   --fs-subtitle: 16px;   /* 商品主标题（.product-title） */
-  --fs-title:    20px; --fw-title:   600;
+  --fs-title:    18px; --fw-title:   650;
   --fs-body:     14px; --fw-body:    400;
   --fs-caption:  12px; --fw-caption: 400;
-  --fs-label:    11px; --fw-label:   600;
+  --fs-label:    11px; --fw-label:   650;
 
-  /* ── 亮色 ── */
-  --bg-app:        #f5f5f7;
-  --bg-card:       rgba(255,255,255,0.72);
+  /* ── 亮色：冷调纸面 + 墨绿 ── */
+  --bg-app:        #eef1ec;
+  --bg-card:       rgba(255,255,255,0.82);
   --bg-card-solid: #ffffff;
-  --bg-sidebar:    rgba(255,255,255,0.30);
-  --bg-input:      rgba(0,0,0,0.05);
-  --bg-hover:      rgba(0,0,0,0.04);
+  --bg-sidebar:    rgba(255,255,255,0.55);
+  --bg-input:      rgba(23,37,31,0.055);
+  --bg-hover:      rgba(23,37,31,0.05);
+  --bg-inset:      rgba(23,37,31,0.035);
 
-  --text-primary:   #1d1d1f;
-  --text-secondary: #86868b;
-  --text-tertiary:  #aeaeb2;
+  --text-primary:   #17251f;
+  --text-secondary: #5b6b62;
+  --text-tertiary:  #93a198;
 
-  --accent:    #0071e3;
-  --danger:    #ff3b30;
-  --success:   #34c759;
-  --warning:   #ff9500;
+  --accent:      #0b7a5e;   /* 主操作：深薄荷绿 */
+  --accent-ink:  #ffffff;   /* accent 上的文字 */
+  --accent-soft: rgba(11,122,94,0.10);
+  --danger:      #d84437;   /* 当前价 / 涨价 / 删除 */
+  --danger-soft: rgba(216,68,55,0.10);
+  --success:     #0e9f6e;   /* 降价 / 到价 / 历史最低 */
+  --success-soft:rgba(14,159,110,0.12);
+  --warning:     #c07f00;   /* 优惠券 / 先涨后降 */
+  --warning-soft:rgba(217,142,4,0.14);
+  --info:        #0e8ca8;   /* 数据源 / 链接 / 信息 */
+  --info-soft:   rgba(14,140,168,0.10);
 
-  /* ── 阴影 ── */
-  --shadow-1: 0  2px  8px rgba(0,0,0,0.04);
-  --shadow-2: 0  8px 24px rgba(0,0,0,0.08);
-  --shadow-3: 0 16px 48px rgba(0,0,0,0.12);
+  /* 图表六色（色相分离 + 直接标注，色盲也可读） */
+  --chart-1: #0b7a5e;  /* 价格主线：墨绿 */
+  --chart-2: #d84437;  /* 最高 / 警示：信号红 */
+  --chart-3: #c07f00;  /* 目标价：琥珀 */
+  --chart-4: #0e8ca8;  /* 信息：青蓝 */
+  --chart-5: #6a58c9;  /* 辅助：堇紫 */
+  --chart-6: #5f7a22;  /* 辅助：橄榄 */
+
+  /* 背景光晕（分层氛围，低饱和不抢内容） */
+  --glow-1: rgba(11,122,94,0.10);
+  --glow-2: rgba(217,142,4,0.08);
+  --glow-3: rgba(14,140,168,0.07);
+  --grid-line: rgba(23,37,31,0.045);
+
+  /* ── 边框 / 阴影 ── */
+  --border:        rgba(23,37,31,0.09);
+  --border-strong: rgba(23,37,31,0.16);
+  --shadow-1: 0 1px 2px rgba(23,37,31,0.05), 0 2px 8px rgba(23,37,31,0.04);
+  --shadow-2: 0 4px 12px rgba(23,37,31,0.08), 0 12px 32px rgba(23,37,31,0.07);
+  --shadow-3: 0 8px 24px rgba(23,37,31,0.14), 0 24px 64px rgba(23,37,31,0.14);
+  --shadow-accent: 0 4px 16px rgba(11,122,94,0.28);
 
   /* ── 圆角 ── */
   --radius-window: 12px;
@@ -63,33 +93,56 @@
   --dur-slow:    500ms;
 
   /* ── 毛玻璃 ── */
-  --glass-blur:  blur(20px) saturate(180%);
+  --glass-blur:  blur(20px) saturate(160%);
 
   /* ── 布局尺寸 ── */
-  --titlebar-h: 48px;
-  --statusbar-h: 28px;
-  --sidebar-w: 200px;
+  --titlebar-h: 52px;
+  --statusbar-h: 30px;
+  --sidebar-w: 212px;
 }
 
-/* ── 暗色覆盖 ── */
+/* ── 暗色：深墨绿行情终端 ── */
 [data-theme="dark"] {
-  --bg-app:        #000000;
-  --bg-card:       rgba(28,28,30,0.72);
-  --bg-card-solid: #1c1c1e;
-  --bg-sidebar:    rgba(28,28,30,0.50);
-  --bg-input:      rgba(255,255,255,0.08);
-  --bg-hover:      rgba(255,255,255,0.06);
+  --bg-app:        #0a1210;
+  --bg-card:       rgba(19,31,27,0.78);
+  --bg-card-solid: #13201b;
+  --bg-sidebar:    rgba(13,22,19,0.72);
+  --bg-input:      rgba(232,242,236,0.07);
+  --bg-hover:      rgba(232,242,236,0.06);
+  --bg-inset:      rgba(0,0,0,0.22);
 
-  --text-primary:   #f5f5f7;
-  --text-secondary: #98989d;
-  --text-tertiary:  #636366;
+  --text-primary:   #e9f3ed;
+  --text-secondary: #9db3a7;
+  --text-tertiary:  #64796e;
 
-  --accent:  #0a84ff;
-  --danger:  #ff453a;
-  --success: #30d158;
-  --warning: #ff9f0a;
+  --accent:      #35d9a6;
+  --accent-ink:  #06231a;
+  --accent-soft: rgba(53,217,166,0.13);
+  --danger:      #ff6b5e;
+  --danger-soft: rgba(255,107,94,0.14);
+  --success:     #3ddc97;
+  --success-soft:rgba(61,220,151,0.14);
+  --warning:     #f4b63f;
+  --warning-soft:rgba(244,182,63,0.15);
+  --info:        #4cc3e0;
+  --info-soft:   rgba(76,195,224,0.13);
 
-  --shadow-1: 0  2px  8px rgba(0,0,0,0.30);
-  --shadow-2: 0  8px 24px rgba(0,0,0,0.40);
-  --shadow-3: 0 16px 48px rgba(0,0,0,0.50);
+  --chart-1: #35d9a6;
+  --chart-2: #ff6b5e;
+  --chart-3: #f4b63f;
+  --chart-4: #4cc3e0;
+  --chart-5: #a08bff;
+  --chart-6: #b4d465;
+
+  --glow-1: rgba(53,217,166,0.09);
+  --glow-2: rgba(244,182,63,0.05);
+  --glow-3: rgba(76,195,224,0.06);
+  --grid-line: rgba(233,243,237,0.035);
+
+  --border:        rgba(233,243,237,0.09);
+  --border-strong: rgba(233,243,237,0.18);
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.30), 0 2px 8px rgba(0,0,0,0.22);
+  --shadow-2: 0 4px 12px rgba(0,0,0,0.36), 0 12px 32px rgba(0,0,0,0.30);
+  --shadow-3: 0 8px 24px rgba(0,0,0,0.5), 0 24px 64px rgba(0,0,0,0.45);
+  --shadow-accent: 0 4px 18px rgba(53,217,166,0.22);
 }

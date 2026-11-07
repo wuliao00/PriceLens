@@ -13,7 +13,7 @@
 </head>
 <body>
   <div class="app-window" id="app-window">
-    <!-- ── 自定义标题栏 48px ── -->
+    <!-- ── 自定义标题栏 ── -->
     <header class="titlebar" id="titlebar">
       <div class="traffic-lights" id="traffic-lights" title="窗口控制">
         <div class="dot dot--close" id="tl-close" role="button" aria-label="关闭"></div>
@@ -24,10 +24,12 @@
       <div class="search-bar" id="search-bar">
         <input class="search-input" id="search-input" type="text" spellcheck="false"
                placeholder="输入商品名 / 粘贴京东、淘宝、B站链接" autocomplete="off" />
+        <div class="search-kbd" aria-hidden="true"><span class="kbd">Ctrl</span><span class="kbd">K</span></div>
         <div class="search-dropdown" id="search-dropdown" hidden></div>
       </div>
 
       <div class="titlebar-actions">
+        <button class="icon-btn" id="btn-help" aria-label="快捷键帮助" title="快捷键 (Ctrl+/)"></button>
         <button class="icon-btn" id="btn-theme" aria-label="切换主题" title="主题"></button>
         <button class="icon-btn" id="btn-settings" aria-label="设置" title="设置 (Ctrl+,)"></button>
         <div class="win-controls">
@@ -41,22 +43,42 @@
     <!-- ── 主体：侧边栏 + 内容区 ── -->
     <div class="app-body">
       <aside class="sidebar" id="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <!-- 静态品牌标记：透镜里的行情线（可信内联 SVG，非外部数据） -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="10.5" cy="10.5" r="7"></circle>
+              <path d="m15.8 15.8 4.7 4.7"></path>
+              <path d="m6.8 12.2 2.2-2.6 1.8 1.5 2.6-3.4"></path>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <div class="brand-name">PriceLens</div>
+            <div class="brand-sub">行情观测站</div>
+          </div>
+        </div>
+
         <nav class="nav-list" id="nav-list">
           <div class="nav-item" data-view="overview" title="概览">
             <span class="nav-icon" data-icon="grid"></span><span class="nav-label">概览</span>
           </div>
-          <div class="nav-item" data-view="bilibili" title="B站评测">
-            <span class="nav-icon" data-icon="tv"></span><span class="nav-label">B站</span>
-          </div>
-          <div class="nav-item" data-view="price" title="历史价格">
+          <div class="nav-item" data-view="price" title="历史价格与盯价 (Ctrl+1)">
             <span class="nav-icon" data-icon="chart"></span><span class="nav-label">盯价</span>
+            <span class="nav-badge" id="watch-count" hidden>0</span>
+            <span class="nav-kbd"><span class="kbd">1</span></span>
             <span class="nav-dot" id="watch-dot" hidden></span>
           </div>
-          <div class="nav-item" data-view="coupons" title="优惠券">
-            <span class="nav-icon" data-icon="ticket"></span><span class="nav-label">找券</span>
+          <div class="nav-item" data-view="bilibili" title="B站评测 (Ctrl+2)">
+            <span class="nav-icon" data-icon="tv"></span><span class="nav-label">B站评测</span>
+            <span class="nav-kbd"><span class="kbd">2</span></span>
           </div>
-          <div class="nav-item" data-view="community" title="什么值得买社区">
+          <div class="nav-item" data-view="coupons" title="优惠券 (Ctrl+3)">
+            <span class="nav-icon" data-icon="ticket"></span><span class="nav-label">找券</span>
+            <span class="nav-kbd"><span class="kbd">3</span></span>
+          </div>
+          <div class="nav-item" data-view="community" title="什么值得买社区 (Ctrl+4)">
             <span class="nav-icon" data-icon="chat"></span><span class="nav-label">社区</span>
+            <span class="nav-kbd"><span class="kbd">4</span></span>
           </div>
           <div class="nav-item" data-view="scripts" title="自定义脚本（PowerShell）">
             <span class="nav-icon" data-icon="edit"></span><span class="nav-label">脚本</span>
@@ -77,10 +99,13 @@
       </div>
     </div>
 
-    <!-- ── 状态栏 28px ── -->
+    <!-- ── 状态栏 ── -->
     <footer class="statusbar">
-      <span class="status-text" id="status-text">就绪</span>
-      <span class="status-meta" id="status-meta">PriceLens v2.0</span>
+      <div class="status-left">
+        <span class="status-text" id="status-text">就绪</span>
+        <span class="status-watch" id="status-watch" hidden></span>
+      </div>
+      <span class="status-meta" id="status-meta">PriceLens</span>
     </footer>
   </div>
 

@@ -1,33 +1,33 @@
 /**
- * 关键帧动画（规范 §9 动画规范表）
- * 红线：≤400ms、无 bounce、只动 transform + opacity。
+ * 关键帧动画 v2.7
+ * 红线：≤400ms、无 bounce、只动 transform + opacity（合成器友好）。
  */
 
-/* 窗口出现：opacity 0→1 + scale 0.98→1（300ms --ease-apple） */
+/* 窗口出现：opacity 0→1 + scale 0.98→1 */
 @keyframes windowIn {
   from { opacity: 0; transform: scale(0.98); }
   to   { opacity: 1; transform: scale(1); }
 }
 
-/* Tab 内容进入：opacity + translateY(12px)（300ms --ease-apple） */
+/* 内容进入：opacity + translateY(12px) */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Tab 旧内容退场（150ms，先出后入） */
+/* 旧内容退场（150ms，先出后入） */
 @keyframes fadeDownOut {
   from { opacity: 1; transform: translateY(0); }
   to   { opacity: 0; transform: translateY(8px); }
 }
 
-/* 弹窗出现：scale 0.95→1（250ms --ease-apple） */
+/* 弹窗出现：scale 0.95→1 */
 @keyframes modalIn {
   from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: scale(1); }
 }
 
-/* 右键菜单：从点击位置展开 0.95→1（200ms） */
+/* 右键菜单：从点击位置展开 */
 @keyframes menuIn {
   from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: scale(1); }
@@ -45,13 +45,20 @@
   to   { opacity: 1; }
 }
 
-/* 侧边栏盯价红点脉冲（仅 transform + opacity，合成器友好） */
+/* 盯价红点 / 数据源脉冲（仅 transform + opacity） */
 @keyframes pulseRing {
   0%       { transform: scale(1);   opacity: 0.5; }
   70%,100% { transform: scale(2.4); opacity: 0; }
 }
 
-/* 骨架屏 Shimmer（规范 §9，循环 linear；translateX 扫光，不触发重绘） */
+/* 到价徽章弹出 */
+@keyframes badgePop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* 骨架屏 Shimmer（循环 linear；translateX 扫光） */
 @keyframes shimmer {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
@@ -67,7 +74,7 @@
 .view-enter { animation: fadeUp var(--dur-normal) var(--ease-apple); }
 .view-leave { animation: fadeDownOut 150ms var(--ease-in); }
 
-/* ── 暗色切换过渡（§10.5：无闪烁，CSS 变量切换） ── */
+/* ── 暗色切换过渡（无闪烁，CSS 变量切换） ── */
 .theme-transition,
 .theme-transition * {
   transition: background-color var(--dur-normal) var(--ease-out),

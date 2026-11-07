@@ -31,6 +31,10 @@ export function renderCommunityView(container, ctx) {
   const shihuoItems = Array.isArray(shihuo) ? shihuo : [];
   const dealItems = Array.isArray(deals) ? deals : [];
 
+  container.appendChild(el('div', { class: 'view-head' },
+    el('h2', { class: 'vh-title' }, icon('chat', 20), '社区验证'),
+    el('div', { class: 'vh-sub', text: '什么值得买爆料 · 识货同款 · 值/不值投票与热评' })));
+
   if (error && dealItems.length === 0 && shihuoItems.length === 0) {
     /* 降级态：展示具体源与错误类型（反爬拦截/超时/解析失败），并提供重试入口 */
     container.appendChild(el('div', { class: 'card empty-state' },
