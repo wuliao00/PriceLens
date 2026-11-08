@@ -1,0 +1,76 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:compileDebugAidl UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:loadKtlintReporters UP-TO-DATE
+> Task :app:runKtlintCheckOverAndroidTestDebugSourceSet NO-SOURCE
+> Task :app:ktlintAndroidTestDebugSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverAndroidTestReleaseSourceSet NO-SOURCE
+> Task :app:ktlintAndroidTestReleaseSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverAndroidTestSourceSet NO-SOURCE
+> Task :app:ktlintAndroidTestSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverDebugSourceSet NO-SOURCE
+> Task :app:ktlintDebugSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverKotlinScripts UP-TO-DATE
+> Task :app:ktlintKotlinScriptCheck UP-TO-DATE
+> Task :app:kspDebugKotlin
+> Task :app:runKtlintCheckOverMainSourceSet
+> Task :app:ktlintMainSourceSetCheck
+> Task :app:runKtlintCheckOverReleaseSourceSet NO-SOURCE
+> Task :app:ktlintReleaseSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverTestDebugSourceSet NO-SOURCE
+> Task :app:ktlintTestDebugSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverTestFixturesDebugSourceSet NO-SOURCE
+> Task :app:ktlintTestFixturesDebugSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverTestFixturesReleaseSourceSet NO-SOURCE
+> Task :app:ktlintTestFixturesReleaseSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverTestFixturesSourceSet NO-SOURCE
+> Task :app:ktlintTestFixturesSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverTestReleaseSourceSet NO-SOURCE
+> Task :app:ktlintTestReleaseSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverTestSourceSet
+
+> Task :app:ktlintTestSourceSetCheck FAILED
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\test\java\com\pricelens\data\repository\SourceUnreachableCacheTest.kt:34:21 Missing newline after ';'
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\test\java\com\pricelens\data\repository\SourceUnreachableCacheTest.kt:124:20 Missing newline after "("
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\test\java\com\pricelens\data\repository\SourceUnreachableCacheTest.kt:124:20 Argument should be on a separate line (unless all arguments can fit a single line)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\test\java\com\pricelens\data\repository\SourceUnreachableCacheTest.kt:125:63 Missing newline before ")"
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\test\java\com\pricelens\data\repository\SourceUnreachableCacheTest.kt:125:64 Missing newline before ")"
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\test\java\com\pricelens\ui\common\EmptyStateCauseTest.kt:54:50 A comment in a 'value_argument_list' is only allowed when placed on a separate line (cannot be auto-corrected)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\test\java\com\pricelens\ui\components\SourceChipStateTest.kt:65:66 Missing newline after '{'
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\test\java\com\pricelens\ui\components\SourceChipStateTest.kt:65:76 Missing newline before '}'
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:ktlintTestSourceSetCheck'.
+> A failure occurred while executing org.jlleitschuh.gradle.ktlint.worker.ConsoleReportWorkAction
+   > KtLint found code style violations. Please see the following reports:
+     - C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\build\reports\ktlint\ktlintTestSourceSetCheck\ktlintTestSourceSetCheck.txt
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2m 29s
+25 actionable tasks: 5 executed, 20 up-to-date
+EXIT=1

@@ -1,0 +1,10 @@
+### TEST-com.pricelens.domain.WatchPriceSourceTest.xml tests=3 failures=3 timestamp=2026-09-28T22:55:11
+- listed price wins over the ranked coupon price when p3cn is down
+  java.lang.AssertionError: 现价必须取 goods_list_money（在售价） expected:<5999.0> but was:<4999.0>
+- ranked coupon price stays a reference and never alerts or joins the curve
+  java.lang.AssertionError: 券后历史低价没有资格当今日的曲线采样点 expected null, but was:<PriceSample(price=4999.0, source=LINKSTARS_HISTORY_LOW)>
+- a coupon-only reference does not tilt the buy signal
+  java.lang.AssertionError: 历史低价参考不该被写成「今天的点」混进曲线 expected:<[5200.0, 6500.0, 6400.0]> but was:<[5200.0, 6500.0, 6400.0, 4999.0]>
+### TEST-com.pricelens.data.remote.DangdangParserTest.xml tests=4 failures=1 timestamp=2026-09-28T22:55:02
+- every parsed row yields a real absolute image url instead of the lazy placeholder
+  java.lang.AssertionError: 第 2 条(p12368941769) 主图应为绝对地址，实际「images/model/guan/url_none.png」

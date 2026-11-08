@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pricelens.domain.WatchTargetPolicyTest" tests="36" skipped="0" failures="0" errors="0" timestamp="2026-09-28T22:55:12" hostname="WIN-P2AFI2DC2LF" time="0.259">
+  <properties/>
+  <testcase name="empty target list is not a stalled round" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.028"/>
+  <testcase name="pure numeric keyword is also recognized as the same sku" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.003"/>
+  <testcase name="skip reason per target distinguishes channel id and price problems" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.008"/>
+  <testcase name="recognized external id is reported in the rejection for transparency" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.003"/>
+  <testcase name="J prefixed sku from the price api is normalized before validation" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.012"/>
+  <testcase name="candidate url of a different sku blocks prefill even when keyword matches" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.007"/>
+  <testcase name="mixed targets are accounted by reason without double counting" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.005"/>
+  <testcase name="unknown source yields missing id reason" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="keyword sku parsing accepts links and bare digits only" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="jd sku attached to a taobao link is refused as platform conflict" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="lookup exception counts every trackable target of that platform as skipped" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.003"/>
+  <testcase name="valid jd sku becomes watchable with prefixed primary key" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="no usable history value yields the no history reason" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="six digit sku is the accepted lower bound" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="smzdm article url without a jd product link cannot be watched" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.002"/>
+  <testcase name="skip counts add up and keep reason priority" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.011"/>
+  <testcase name="non numeric and too short skus are rejected as malformed" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="non jd candidates are never labeled as jd" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.002"/>
+  <testcase name="first save of a valid id creates a new target" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.008"/>
+  <testcase name="only jd has a server side lookup channel" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="same id with a refreshed but recognizable title updates in place" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.008"/>
+  <testcase name="history pulled from another deal link is never prefilled" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.004"/>
+  <testcase name="same id with a clearly different title needs explicit confirm" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.027"/>
+  <testcase name="illegal primary key is blocked before touching room" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.033"/>
+  <testcase name="price above target does not trigger a notification" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.006"/>
+  <testcase name="smzdm post pointing at a jd product is watchable as jd" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.005"/>
+  <testcase name="blank-only sku is treated as missing id" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="title similarity ignores punctuation decoration and self-operated prefix" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.006"/>
+  <testcase name="history from the same sku prefills the target price" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.012"/>
+  <testcase name="share link with sku query param yields the same sku" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.007"/>
+  <testcase name="external id extraction rejects legacy broken rows" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="zero priced response is treated as no price rather than a drop" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <testcase name="empty sku is rejected instead of producing the shared jd colon key" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.004"/>
+  <testcase name="unreachable p3cn yields all targets as price unavailable and round stalled" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.003"/>
+  <testcase name="inactive row still occupies the primary key so it must be confirmed too" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.003"/>
+  <testcase name="jd mobile site url yields the same sku as the desktop url" classname="com.pricelens.domain.WatchTargetPolicyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

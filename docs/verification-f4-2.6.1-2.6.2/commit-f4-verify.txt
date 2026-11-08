@@ -1,0 +1,30 @@
+verify(F4): 红-绿验证通过 + 红 8/227→绿，ktlint 收口，版本升至 2.6.2（versionCode 16）
+
+接手 4186e29（那笔提交自述"一次测试都没跑过"）后的验证与补齐，不是新功能。
+
+红（先证明用例能分辨新旧行为）：只保留测试、把实现层回退到 7c3438b，
+`testDebugUnitTest` = 227 tests completed, 8 failed —— 8 项全在这次新增的
+SourceUnreachableTest(5) 与 SourceUnreachableCacheTest(3)，其余 219 项保持通过，
+说明失败来自被测行为而不是夹具坏了。另 3 个用例类
+（CrawlerOutcomeMappingTest / SourceChipStateTest / EmptyStateCauseTest）测的是本次
+新建的纯函数，在旧树上根本没有对应符号、不可编译，故红跑时移出、绿跑时移回。
+
+本次补齐三处：
+
+1. 注释里的自述与实现不符（会说谎的注释比没注释更坏）：
+   OverviewScreen.kt 与 strings_search.xml 都写"判定在 ui/overview/
+   OverviewEmptyState.causeOf"，实际入口是 ui/common/EmptyStateCause.kt 的
+   EmptyStateCauseOf.of()。已改为真实符号名。
+2. ktlintCheck 冷缓存后报 11 处（前两轮构建是 UP-TO-DATE 假绿）：
+   EmptyStateCause.kt:23 枚举末项多余尾逗号（新代码，已删）；
+   PriceRepository.kt 五个 kvSource 调用一处两参（`standard:argument-list-wrapping`）。
+   后者格式与 7c3438b 逐字相同——即 2.6.1 发布包同样违规，只是这次改到相邻行才暴露；
+   按同文件 getPriceHistory（第 87 行起，一参一行，未被报）的既有约定改成一参一行，
+   纯格式、零行为改动。
+3. versionCode 15 → 16、versionName 2.6.1 → 2.6.2：客户端只比整数 versionCode，
+   沿用 15 则已装 2.6.1 的设备永远收不到更新提示，修复对真实用户等于不存在。
+
+桌面端无需改动：`crawlers/index.js:102` 关键词通道不吞异常、`smzdm.js:58/93`、
+`gwdang.js:64/73`、`bilibili.js:114-116`（读业务码 code）一律 throw，
+`ipc-handlers.js:91-99` 转成 {ok:false,error}，`renderer/js/app.js:202` 起按 ok 分流。
+本轮是 Android 向桌面端拉平。`node desktop/_unit_check.js` 34 项通过（未改动）。

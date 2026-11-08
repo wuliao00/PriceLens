@@ -1,0 +1,80 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:compileDebugAidl UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:hiltAggregateDepsDebug UP-TO-DATE
+> Task :app:hiltJavaCompileDebug UP-TO-DATE
+> Task :app:transformDebugClassesWithAsm UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:kspDebugUnitTestKotlin UP-TO-DATE
+> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:hiltAggregateDepsDebugUnitTest UP-TO-DATE
+> Task :app:hiltJavaCompileDebugUnitTest NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :app:transformDebugUnitTestClassesWithAsm UP-TO-DATE
+
+> Task :app:testDebugUnitTest
+
+SourceUnreachableTest > 识货 被拦截时不得静默返回空列表 FAILED
+    java.lang.AssertionError at SourceUnreachableTest.kt:42
+
+SourceUnreachableTest > 找券 被拦截时不得静默返回空列表 FAILED
+    java.lang.AssertionError at SourceUnreachableTest.kt:42
+
+SourceUnreachableTest > 当当 被拦截时不得静默返回空列表 FAILED
+    java.lang.AssertionError at SourceUnreachableTest.kt:42
+
+SourceUnreachableTest > B站 被拦截时不得静默返回空列表 FAILED
+    java.lang.AssertionError at SourceUnreachableTest.kt:42
+
+SourceUnreachableTest > 值得买爆料 被拦截时不得静默返回空列表 FAILED
+    java.lang.AssertionError at SourceUnreachableTest.kt:42
+
+SourceUnreachableCacheTest > three unreachable rounds degrade the source instead of counting as success FAILED
+    java.lang.AssertionError at SourceUnreachableCacheTest.kt:68
+
+SourceUnreachableCacheTest > unreachable source without any snapshot must signal failure, not empty success FAILED
+    java.lang.AssertionError at SourceUnreachableCacheTest.kt:85
+
+SourceUnreachableCacheTest > unreachable source falls back to the cached snapshot instead of replacing it with empty FAILED
+    java.lang.AssertionError at SourceUnreachableCacheTest.kt:109
+
+227 tests completed, 8 failed
+
+> Task :app:testDebugUnitTest FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///C:/Users/Administrator/AppData/Local/Temp/pl-verify/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 1m 33s
+32 actionable tasks: 1 executed, 31 up-to-date
+EXIT=1

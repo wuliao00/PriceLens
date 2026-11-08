@@ -1,0 +1,90 @@
+{
+  "user_version": 5,
+  "runs": [
+    {
+      "atMs": 1794126292553,
+      "targets": 3,
+      "checked": 1,
+      "hits": 1,
+      "note": "目标 3，查到价 1，命中 1，同款搜索 3，已提醒 1，失败源 识货"
+    },
+    {
+      "atMs": 1794126148919,
+      "targets": 3,
+      "checked": 1,
+      "hits": 1,
+      "note": "目标 3，查到价 1，命中 1，同款搜索 3，已提醒 1，失败源 识货"
+    },
+    {
+      "atMs": 1794115961819,
+      "targets": 4,
+      "checked": 3,
+      "hits": 1,
+      "note": "本轮到价 1 个：iPhone 15 同款价 ¥4899 ≤ 目标 ¥4999"
+    },
+    {
+      "atMs": 1794108761819,
+      "targets": 4,
+      "checked": 3,
+      "hits": 0,
+      "note": "同款搜索命中 3/4；京东直查不可达，已用当当/识货同款价兜底"
+    },
+    {
+      "atMs": 1794101561819,
+      "targets": 4,
+      "checked": 2,
+      "hits": 0,
+      "note": "本轮到价 1 个：iPhone 15 同款价 ¥4899 ≤ 目标 ¥4999"
+    },
+    {
+      "atMs": 1794094361819,
+      "targets": 4,
+      "checked": 3,
+      "hits": 1,
+      "note": "同款搜索命中 3/4；京东直查不可达，已用当当/识货同款价兜底"
+    }
+  ],
+  "purchases": [
+    {
+      "platform": "jd",
+      "title": "Apple iPhone 15 128GB 蓝色",
+      "price": 5299.0,
+      "lastSeenPrice": 4899.0,
+      "claimableYuan": 380.0,
+      "claimedAtMs": 0,
+      "windowDaysOverride": 0
+    },
+    {
+      "platform": "taobao",
+      "title": "亚瑟士 GEL-KAYANO 31 跑鞋",
+      "price": 899.0,
+      "lastSeenPrice": 949.0,
+      "claimableYuan": 0.0,
+      "claimedAtMs": 0,
+      "windowDaysOverride": 0
+    },
+    {
+      "platform": "pdd",
+      "title": "罗技 MX Master 3S 鼠标",
+      "price": 599.0,
+      "lastSeenPrice": 549.0,
+      "claimableYuan": 49.0,
+      "claimedAtMs": 0,
+      "windowDaysOverride": 0
+    }
+  ],
+  "price_history_counts": [
+    [
+      "jd:100012043978",
+      45
+    ],
+    [
+      "jd:100057292028",
+      20
+    ],
+    [
+      "taobao:678901234",
+      1
+    ]
+  ]
+}

@@ -6,7 +6,11 @@
 >
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）+ Chrome/Edge 浏览器扩展
 >
-> 作者：**莫** | 版本：Android v2.8.0.6 / Desktop v2.7.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
+> 作者：**莫** | 版本：Android v2.9.0 / Desktop v2.7.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
+>
+> **v2.9.0（2026-11-08）大更新**：Android UI 全量重做（「熔金行情」）+ 信息源准确性引擎 + 自动追价/价保助手。
+> 详见 [CHANGELOG 2.9.0](CHANGELOG.md) 与 [真机验证记录](docs/verification-2.9.0/README.md)；
+> 正式 APK 尚未发布（本机无签名钥匙），当前可下载版本仍为 v2.8.0.6。
 
 [![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -43,7 +47,11 @@
 | 盯价目标备份/恢复 | ✅ JSON + WebDAV | ✅ 本机 JSON + 手机 App 局域网 WebDAV 双向同步 |
 | 手机 App 局域网联动 | — | ✅ 设置里开启，手机现有备份/恢复指向电脑即可 |
 | 剪贴板商品链接识别 | ✅ 回前台横条 | ✅ 窗口聚焦提示 + 一键去比价 |
-| 盯价后台任务（30min 周期） | ✅ WorkManager | ✅ 多商品（上限 20）+ 暂停/恢复 + 托盘常驻 |
+| 盯价后台任务（自适应 30–360min） | ✅ 自适应链 + WorkManager 兜底 | ✅ 多商品（上限 20）+ 暂停/恢复 + 托盘常驻 |
+| **自动追价：关键词自动搜索**（淘宝/拼多多/当当/识货等无直查接口的平台） | ✅ 关键词搜索选「同款搜索价」，来源与口径如实标注 | — |
+| **价保助手**（买后自动比价：可申请金额/截止日/幂等提醒） | ✅ 京东/天猫/拼多多/唯品会档位 + 6h 巡检 | — |
+| **信息源准确性引擎**（多源共识/口径归一/离群/陈旧/来源健康板/纠错） | ✅ 纯函数引擎 + 真机证据面板 | — |
+| **买前防套**（近历史低 / 先涨后降 / 单源核价提示） | ✅ 概览与详情徽标 | ✅（桌面端为购买建议徽章） |
 | 自定义脚本 | ✅ Shizuku ADB | ✅ PowerShell 本机执行 |
 | 数据存储 | 本机 Room + TLRU | 本机 JSON 缓存（LRU + TTL） |
 | 分发方式 | APK（需签名） | NSIS 安装器 + ZIP 便携版；扩展为解压加载/商店包 |
@@ -51,6 +59,25 @@
 ---
 
 ## 📸 界面预览（Android 真机截图）
+
+#### v2.9.0「熔金行情」+ 准确性 / 自动追价 / 价保（真机 vivo V2156A / Android 11，2026-11-08）
+
+| 概览 · 金英雄区 | 搜索结果 · 准确性徽标 | 盯价 · 自动追价中心 |
+|--------|----------|-------------|
+| ![概览](assets/screenshots/android-290-overview.png) | ![准确性](assets/screenshots/android-290-accuracy.png) | ![自动追价中心](assets/screenshots/android-290-autotrack-center.png) |
+
+| 盯价目标列表 | 自动化中心 · 运行历史 | 价保助手 |
+|--------|----------|-------------|
+| ![盯价目标](assets/screenshots/android-290-watch-targets.png) | ![运行历史](assets/screenshots/android-290-autotrack-history.png) | ![价保助手](assets/screenshots/android-290-protection.png) |
+
+| 到价通知（真机） | 社区（同款过滤） | 我的 · 深色模式 |
+|--------|----------|-------------|
+| ![到价通知](assets/screenshots/android-290-notification.png) | ![社区](assets/screenshots/android-290-community.png) | ![深色](assets/screenshots/android-290-dark.png) |
+
+> 以上为 v2.9.0 调试包（`com.pricelens.dev`）真机截图，完整证据链（设备/权限/演示数据/DB/通知/问题修复表）见
+> [docs/verification-2.9.0/README.md](docs/verification-2.9.0/README.md)。
+> 到价通知示例来自**真机自动追价实跑**：关键词自动搜索找到「亚瑟士 GEL-KAYANO 31 … 同款搜索价 ¥829 ≤ 目标价 ¥899」。
+> 历史截图（B 站评测 / 社区 · 识货 / 搜索兜底等）保留在下方旧版表格中。
 
 | B 站评测（含商单/夸大标记） | 社区 · 识货信息源 | 搜索 · 识货兜底 |
 |--------|----------|-------------|
@@ -84,7 +111,7 @@
 
 | 平台 | Gitee（国内直链，免登录） | GitHub Release |
 |------|--------|----------|
-| **Android v2.8.0.6** | [PriceLens-2.8.0.6.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.6.apk) | [Release v2.8.0.6](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.6) |
+| **Android v2.8.0.6**（最新可下载；2.9.0 源码已就绪、待出正式包） | [PriceLens-2.8.0.6.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.6.apk) | [Release v2.8.0.6](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.6) |
 | **Windows v2.7.0** | 本版未制分卷；可直连 GitHub 时用右栏 | [GitHub Release v2.7.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.7.0-desktop)（安装器/便携 zip） |
 | Windows v2.6.0 + **扩展 v1.0.0**（旧版） | [Gitee 分卷签名包（13×9MiB，免登录）](https://gitee.com/wuliao11541/PriceLens/raw/dist/README-desktop-2.6.0.md) | [GitHub Release v2.6.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)（安装器/便携 zip/扩展） |
 
@@ -110,6 +137,13 @@
 **2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 / 2.8.0.3 / 2.8.0.4 / 2.8.0.5 / 2.8.0.6 八版已逐版核对为同一枚密钥**
 （证书 `CN=wuliao00, OU=PriceLens`，SHA-256 前缀 `c759cbb8`），所以这八版之间可直接覆盖升级、
 数据不丢，应用内"检查更新"也能直接升，不再断链。
+
+> **v2.9.0（源码已就绪，正式包待出）**：本轮大更新新增信息源准确性引擎、自动追价（关键词自动搜索）
+> 与价保助手，DB 升到 v5（`auto_track_runs` / `purchase_records`，**升级不丢数据**）。
+> 由于维护机没有 release keystore、本轮也未把 `update.json` 指向不存在的资产，
+> **当前可下载版本仍为 v2.8.0.6**；正式包由维护机 `build-apk.ps1` 或 CI release 流程产出后，
+> 再按「清单 / dist 分支 / Release 附件」三处同步。真机验证记录见
+> [docs/verification-2.9.0/README.md](docs/verification-2.9.0/README.md)。
 
 
 ---
@@ -137,7 +171,27 @@
 | 「京东公开查价暂不可用，价格请在京东 App 查看」 | 京东已下线匿名公开查价接口（`p.3.cn` DNS 已不返回可达地址） | 用无障碍实时价（打开京东商品页即得本机账号价） |
 | 「未发现优惠券（仅展示爆料中明确写出的券）」 | 券源只认爆料里写明的券，**不做价差推算** | 看爆料链接里的原文 |
 | 「历史价 未查询 / 需在设置填入慢慢买 Cookie」 | 慢慢买公开接口已下线 | 设置里「登录自动抓取」慢慢买 Cookie（应用内登录即可），或填星罗 apikey |
-| 「该商品没有可跟踪的平台 ID」 | 该平台暂无服务端查价通道（当前仅京东可后台盯价） | 改盯有京东链接的同款，或用无障碍实时价自行判断 |
+| 「该商品没有可跟踪的平台 ID」 | 只出现在认不出平台的链接上 | 该链接无法确定商品身份，改用商品页无障碍读价或在 App 内搜索 |
+| 「同款搜索价 ¥X ≤ 目标价 ¥Y」 | 淘宝/拼多多/当当/识货等无直查接口的平台，靠**关键词自动搜索**找到的同款报价（不是平台实时价） | 文案里已标来源；介意精确度就点开同款核对规格，或直接用商品页浮窗价 |
+
+---
+
+### 🤖 自动追价 / 价保助手怎么用（v2.9.0 新增）
+
+- **自动追价**：盯价页顶部就是开关与频率（30/60/120/180/360 分钟）。开启后按自适应节奏自动搜索
+  所有盯价目标（京东走直查 + 同款搜索兜底；淘宝/拼多多/当当/识货走关键词同款搜索），
+  到价按免打扰/仅 WiFi/忽略记忆等闸门发本机通知；「立即运行」可当场验证一轮。
+  运行历史、失败源都写在自动化中心里，纯本机、不上传。
+- **价保助手**：买了东西后录入（平台/商品名/实付价/购买日期），后台每 6 小时用同款搜索查现价，
+  按平台档位（京东自营 7/15/30/90/180/365 天、京东第三方 168/360/720h、天猫 15/30 天、
+  拼多多 7/30/72h、唯品会 10 天、其他 7 天，**以平台规则为准**）算「名义可申请金额」与截止日，
+  可一键复制申请文案、打开平台入口、标记已申请。多次降价可多次申请；提醒幂等、不会刷屏。
+- **信息源准确性**：结果卡上的「高/中/低置信」徽标点开就是证据面板——每条来源的价格、口径
+  （页面价/券后价/到手价/参考值）、数据年龄、是否陈旧、冲突项、各源可达状态。觉得哪条不对，
+  点「这条不对」选类型，记录只写本机（`filesDir/accuracy_feedback.jsonl`），不上传。
+- 设计与依据见研究文档：
+  [信息源准确性方法论](docs/research/2026-11-信息源准确性-方法论.md) ·
+  [价保与防套规则](docs/research/2026-11-价保与防套-规则.md)。
 
 ---
 
@@ -556,6 +610,9 @@ A:
 | **隐私声明** | 数据收集/使用/存储说明 | [PRIVACY.md](PRIVACY.md) |
 | **API 文档** | 爬虫接口、缓存层、IPC 通信 | [docs/API.md](docs/API.md)  |
 | **开发指南** | 环境搭建、调试技巧、发布流程 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)  |
+| **准确性方法论**（v2.9.0） | 信息源不准确的成因、8+ 源实测矩阵、M1–M14 方法与 18 条规则 | [docs/research/2026-11-信息源准确性-方法论.md](docs/research/2026-11-信息源准确性-方法论.md) |
+| **价保与防套规则**（v2.9.0） | 各平台价保窗口/起算/例外/入口、算法与单测矩阵 | [docs/research/2026-11-价保与防套-规则.md](docs/research/2026-11-价保与防套-规则.md) |
+| **2.9.0 真机验证** | 设备/权限/演示数据/截图/DB/通知证据与问题修复表 | [docs/verification-2.9.0/README.md](docs/verification-2.9.0/README.md) |
 | **GitHub Wiki** | 社区维护的扩展文档 | [Wiki](https://github.com/wuliao00/PriceLens/wiki) |
 
 > 📝 标记 `*(待创建)*` 的文档欢迎社区贡献，请参考 [贡献指南](README.md#-贡献指南)

@@ -1,0 +1,64 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:compileDebugAidl UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateDebugBuildConfig
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:parseDebugLocalResources FROM-CACHE
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest
+> Task :app:mergeDebugResources
+> Task :app:processDebugManifest
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:processDebugManifestForPackage
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:loadKtlintReporters UP-TO-DATE
+> Task :app:runKtlintCheckOverAndroidTestDebugSourceSet NO-SOURCE
+> Task :app:ktlintAndroidTestDebugSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverAndroidTestReleaseSourceSet NO-SOURCE
+> Task :app:ktlintAndroidTestReleaseSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverAndroidTestSourceSet NO-SOURCE
+> Task :app:ktlintAndroidTestSourceSetCheck SKIPPED
+> Task :app:runKtlintCheckOverDebugSourceSet NO-SOURCE
+> Task :app:ktlintDebugSourceSetCheck SKIPPED
+> Task :app:processDebugResources
+> Task :app:runKtlintCheckOverKotlinScripts
+> Task :app:ktlintKotlinScriptCheck UP-TO-DATE
+> Task :app:runKtlintCheckOverMainSourceSet
+
+> Task :app:ktlintMainSourceSetCheck FAILED
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\ui\common\EmptyStateCause.kt:23:13 Unnecessary trailing comma before "}"
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\data\repository\PriceRepository.kt:152:39 Argument should be on a separate line (unless all arguments can fit a single line)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\data\repository\PriceRepository.kt:153:34 Argument should be on a separate line (unless all arguments can fit a single line)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\data\repository\PriceRepository.kt:159:38 Argument should be on a separate line (unless all arguments can fit a single line)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\data\repository\PriceRepository.kt:160:31 Argument should be on a separate line (unless all arguments can fit a single line)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\data\repository\PriceRepository.kt:166:38 Argument should be on a separate line (unless all arguments can fit a single line)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\data\repository\PriceRepository.kt:167:34 Argument should be on a separate line (unless all arguments can fit a single line)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\data\repository\PriceRepository.kt:174:37 Argument should be on a separate line (unless all arguments can fit a single line)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\data\repository\PriceRepository.kt:175:37 Argument should be on a separate line (unless all arguments can fit a single line)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\data\repository\PriceRepository.kt:182:37 Argument should be on a separate line (unless all arguments can fit a single line)
+C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\src\main\java\com\pricelens\data\repository\PriceRepository.kt:183:35 Argument should be on a separate line (unless all arguments can fit a single line)
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:ktlintMainSourceSetCheck'.
+> A failure occurred while executing org.jlleitschuh.gradle.ktlint.worker.ConsoleReportWorkAction
+   > KtLint found code style violations. Please see the following reports:
+     - C:\Users\Administrator\AppData\Local\Temp\pl-verify\app\build\reports\ktlint\ktlintMainSourceSetCheck\ktlintMainSourceSetCheck.txt
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2m 59s
+22 actionable tasks: 13 executed, 1 from cache, 8 up-to-date
+EXIT=1
