@@ -157,3 +157,16 @@ adb reverse tcp:8888 tcp:8888
 adb shell settings put global http_proxy 127.0.0.1:8888
 # 验证结束后清除：adb shell settings put global http_proxy :0
 ```
+
+## 8. 推送与 CI 状态
+
+- 本轮 5 个提交已推送到两个远端 `main`（rebase 到远端 desktop 2.7.0 之上）：
+  `4c2cd53` 准确性 → `b76d699` 自动追价 → `707ecf3` UI → `aefa772` 构建/版本 → `d9b4fde` 文档；
+  GitHub `origin/main` 与 Gitee 镜像 `gitee/main` 均指向 **d9b4fde**。
+- `update.json` **有意未改动**（仍指向 2.8.0.6，避免把清单指到尚不存在的 2.9.0 正式包）。
+- GitHub Actions 首次运行（run 42470130047，d9b4fde）：`Android Build & Test` 在
+  **「验证 Gradle Wrapper」** 步骤失败 —— 该步骤只是 `./gradlew --version`（下载/校验 Gradle 8.11 发行版），
+  发生在编译、单元测试、ktlint 之前，属 runner 侧基础设施网络失败；同一 workflow 在上一个提交
+  `eaf17d9` 上两次成功（completed/success）。本轮随后追加一次文档提交重新触发流水线，
+  最终结果以 Actions 页面为准：https://github.com/wuliao00/PriceLens/actions/workflows/ci-cd.yml
+- 本地等价门禁已全绿：`assembleDebug` 成功、`ktlintCheck` 通过、1071 条单元测试通过（见 §5）。
