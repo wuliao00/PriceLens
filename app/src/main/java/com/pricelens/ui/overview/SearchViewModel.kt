@@ -5,6 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.pricelens.accessibility.PriceEvents
 import com.pricelens.accessibility.PriceNodeMatcher
 import com.pricelens.accessibility.ShopPlatform
+import com.pricelens.accuracy.AccuracyFeedbackStore
+import com.pricelens.accuracy.AccuracyInput
+import com.pricelens.accuracy.AccuracyIssueKind
+import com.pricelens.accuracy.AccuracySnapshot
+import com.pricelens.accuracy.PriceAccuracyEngine
+import com.pricelens.accuracy.RelevanceGuard
+import com.pricelens.accuracy.RemotePrice
+import com.pricelens.accuracy.SourceCell
+import com.pricelens.accuracy.SourceState
 import com.pricelens.data.remote.ApiClient
 import com.pricelens.data.remote.BiliApi
 import com.pricelens.data.remote.CrawlerBlockedException
@@ -28,8 +37,10 @@ import com.pricelens.util.QueryRelevance
 import com.pricelens.util.SearchQueryCleaner
 import com.pricelens.util.judgePrice
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.IOException
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,6 +48,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 搜索编排 ViewModel（阶段2：从上帝 MainViewModel 拆出）。
@@ -52,12 +64,17 @@ import kotlinx.coroutines.launch
  *    关键词经 [SearchQueryCleaner] 清洗（不再 take(30) 盲截断）；候选非同款时展示层门控 +
  *    [staleNotice] 消费 [PriceRepository.staleKeys]（"上一次商品数据/缓存降级"提示）；
  *    历史价 URL 只认本轮候选自己的 SKU（爆料链接须过相关性过滤）
+ *  - 信息源准确性（2026-11 大更新）：新搜索复位 [_accuracy]，并行 jobs 全部 join 后由
+ *    [buildAccuracySnapshot] 组装 [AccuracyInput] 交给 [PriceAccuracyEngine]（多源共识/口径/离群/
+ *    时鲜/来源健康板）；「这条不对」经 [reportAccuracyIssue] 写本机 JSONL（[AccuracyFeedbackStore]，
+ *    不上传），[accuracyFeedbackCount] 同步刷新
  */
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val repository: PriceRepository,
     private val resolver: ProductCandidateResolver,
-    private val apiClient: ApiClient
+    private val apiClient: ApiClient,
+    private val accuracyFeedbackStore: AccuracyFeedbackStore
 ) : ViewModel() {
 
     // ---------- 输入与整体进度 ----------
@@ -175,6 +192,43 @@ class SearchViewModel @Inject constructor(
     /** 某域名最近一次失败结果（成功/未请求过返回 null），供 SourceStatusRow 诊断徽标 */
     fun lastOutcome(domain: String): CrawlerResult<String>? = apiClient.lastOutcomeFor(domain)
 
+    // ---------- 信息源准确性（2026-11 大更新；UI 只消费，不自己算口径） ----------
+
+    /**
+     * 本轮搜索的准确性快照：多源共识/置信度/主口径/冲突/证据/来源健康板。
+     *
+     * 生命周期（与 [product] 同一条纪律）：**新搜索开始时立刻置 null**，避免"上一个商品的准确性"
+     * 挂在新搜索的结果上；在并行 jobs 全部 join 之后由 [buildAccuracySnapshot] 计算并发布。
+     * null = 本轮还没算（搜索进行中/尚未搜索）。
+     */
+    private val _accuracy = MutableStateFlow<AccuracySnapshot?>(null)
+    val accuracy: StateFlow<AccuracySnapshot?> = _accuracy
+
+    /** 本机已记录的纠错条数（「这条不对」；纯本机 JSONL、不上传） */
+    private val _accuracyFeedbackCount = MutableStateFlow(0)
+    val accuracyFeedbackCount: StateFlow<Int> = _accuracyFeedbackCount
+
+    /**
+     * 「这条不对」纠错：把 [kind] + 当前关键词 + [accuracy] 快照摘要 + 可选备注写入本机
+     * `filesDir/accuracy_feedback.jsonl`（[AccuracyFeedbackStore]，不上传），随后刷新
+     * [accuracyFeedbackCount] 供 UI 提示"已记录到本机"。
+     *
+     * 纠错是用户本机资产：记录失败不打断浏览（仓储层吞掉 IO 异常并返回当前可读条数）。
+     */
+    fun reportAccuracyIssue(kind: AccuracyIssueKind, note: String? = null) {
+        val snapshot = _accuracy.value
+        val keyword = _keyword.value
+        viewModelScope.launch {
+            val count = accuracyFeedbackStore.record(
+                kind = kind,
+                keyword = keyword,
+                note = note,
+                snapshot = snapshot
+            )
+            _accuracyFeedbackCount.value = count
+        }
+    }
+
     // ---------- 任务管理 ----------
 
     private var searchJob: Job? = null
@@ -229,6 +283,8 @@ class SearchViewModel @Inject constructor(
         _livePrice.value = null
         _realtimeSource.value = null
         _netPrice.value = null
+        // 准确性快照同一条生命周期纪律：新搜索 = 新商品上下文，旧商品的置信度/口径不许挂到新结果上
+        _accuracy.value = null
         _searchedCacheKeys.value = listOf(
             "gwd:coupon:$keyword",
             "dd:search:$keyword",
@@ -384,6 +440,10 @@ class SearchViewModel @Inject constructor(
             )
             _loading.value = false
             _outcomesVersion.value++
+            // 准确性放在并行任务全部 join 之后算：此时候选/历史/券/识货/实时价都是本轮已完成态，
+            // 不会把上一轮的中途状态当成本轮证据（新搜索开始时已置 null，这里只发布本轮结果）。
+            _accuracy.value = buildAccuracySnapshot(keyword, jdSku)
+            LogT.i("准确性: level=${_accuracy.value?.level} score=${_accuracy.value?.score} headline=${_accuracy.value?.headline}")
         }
     }
 
@@ -393,6 +453,10 @@ class SearchViewModel @Inject constructor(
      * 签名去重 + 节流：3 秒内同签名跳过、同一标题不重复触发 search，防请求风暴。
      */
     init {
+        // 纠错条数初始化：磁盘读文件放 IO，不在主线程读（feedbackCount 只用于 UI 提示）
+        viewModelScope.launch {
+            _accuracyFeedbackCount.value = withContext(Dispatchers.IO) { accuracyFeedbackStore.count() }
+        }
         viewModelScope.launch {
             PriceEvents.detections.collect { detected ->
                 val now = System.currentTimeMillis()
@@ -443,6 +507,201 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    // ---------- 准确性快照（2026-11）：把本轮真实结果翻译成引擎输入 ----------
+
+    /**
+     * 组装本轮准确性输入并交给 [PriceAccuracyEngine]（在并行 jobs 全部 join 后、主线程同步执行）。
+     *
+     * 数据纪律（**只使用本轮真实拿到的东西**，取不到就留 null，绝不补 0/旧价）：
+     *  - 页面价：无障碍检测在 [search] 之后回填的 [_livePrice]（手动搜索本轮为 null）；
+     *  - 候选价：resolver 当前候选；SKU 场景按"相关度 1.0"，纯关键词须过 [RelevanceGuard]
+     *    （关键词相关 + 无资源机/配件/图书等否定词），不过则压到 0.2 让引擎剔除；
+     *  - 历史：只取本轮 [_history] 的 Success（历史 job 在本轮无归属 URL 时会先把状态置 Idle），
+     *    stale 由本轮历史缓存 key 是否命中 [PriceRepository.staleKeys] 决定；
+     *  - 券/到手：券面额 = 候选价 − 到手价（本轮唯一真实可用的券口径，不把券列表面额之和强加给商品）；
+     *  - 额外现价：只收**文本同款 + 与参照价比值在 0.5~2.0 带内**的识货报价；爆料价不进现价集合。
+     */
+    private fun buildAccuracySnapshot(keyword: String, jdSku: String?): AccuracySnapshot {
+        val candidate = when (val candidateState = resolver.candidate.value) {
+            is AsyncValue.Success -> candidateState.data
+            else -> null
+        }
+        val candidatePrice = candidate?.price?.takeIf { it.isFinite() && it > 0.0 }
+        val candidateRelevance = candidate?.let { product ->
+            when {
+                jdSku != null -> 1.0
+                // 真机 round1：识货/值得买列表混入"稳健医疗/资源机"同款，纯 QueryRelevance 挡不住；
+                // 守卫不过就压低相关度（引擎 <0.6 会剔除这条证据），不让它污染多源共识
+                RelevanceGuard.isLikelySameProduct(keyword, product.title, candidatePrice, null) -> 1.0
+                else -> 0.2
+            }
+        }
+        val history = when (val historyState = _history.value) {
+            is AsyncValue.Success -> historyState.data
+            else -> null
+        }
+        val historyStale = _searchedCacheKeys.value.any { key ->
+            key.startsWith(KEY_PREFIX_HISTORY) && key in repository.staleKeys.value
+        }
+        val netPrice = _netPrice.value?.takeIf { it.isFinite() && it > 0.0 }
+        val couponTotal = if (candidatePrice != null && netPrice != null && candidatePrice > netPrice) {
+            candidatePrice - netPrice
+        } else {
+            null
+        }
+        // 远端价的唯一参照：候选价 > 历史当前价 > 页面实时价（都是本轮真实拿到的现价口径）
+        val referencePrice = candidatePrice
+            ?: history?.current?.takeIf { it.isFinite() && it > 0.0 }
+            ?: _livePrice.value?.takeIf { it.isFinite() && it > 0.0 }
+        return PriceAccuracyEngine.evaluate(
+            AccuracyInput(
+                keyword = keyword,
+                pagePrice = _livePrice.value,
+                pageSourceLabel = _realtimeSource.value,
+                candidatePrice = candidatePrice,
+                candidateTitle = candidate?.title,
+                candidateRelevance = candidateRelevance,
+                historyCurrent = history?.current,
+                historyLowest = history?.lowest,
+                historyStale = historyStale,
+                couponTotal = couponTotal,
+                netPrice = netPrice,
+                extraRemotePrices = buildAccuracyRemotePrices(keyword, candidate?.title, referencePrice),
+                sourceCells = buildAccuracySourceCells(),
+                nowMs = System.currentTimeMillis()
+            )
+        )
+    }
+
+    /**
+     * 额外远端现价：**只收"可能同款"的现价**，宁缺毋滥。
+     *
+     * 真机 round1 教训：什么值得买爆料价 ¥2,898 被当成现价喂进共识，引擎据此报
+     * 「候选 ¥5,999 与值得买 ¥2,898 相差 52%」+「候选离群」→ 假冲突、假离群、低置信。
+     * 两条纪律：
+     *  1) **爆料价 ≠ 现价**：`SmzdmApi.SmzdmPost.price` 是爆料发布时的价格/引流价，语义属于参考值，
+     *     本轮不进现价一致性集合（也不进 evidence）——爆料价仍在社区/爆料卡单独展示；
+     *  2) 识货等列表价只有在**文本同款 + 与参照价比值在 [RelevanceGuard.MIN_PRICE_RATIO]..
+     *     [RelevanceGuard.MAX_PRICE_RATIO] 带内**才收（[RelevanceGuard.isLikelySameProduct]）。
+     *     没有任何参照价时**整表返回空**：无法验证的"第二来源"比没有更糟（宁可是单源 MEDIUM）。
+     *
+     * @param referencePrice 本轮可比参照价（候选价 > 历史当前价 > 页面实时价）；null = 不收远端价
+     */
+    private fun buildAccuracyRemotePrices(keyword: String, candidateTitle: String?, referencePrice: Double?): List<RemotePrice> {
+        if (referencePrice == null) return emptyList()
+        val shihuoItems = when (val shihuoState = _shihuo.value) {
+            is AsyncValue.Success -> shihuoState.data
+            else -> emptyList()
+        }
+        val quote = shihuoItems.firstOrNull { item ->
+            item.title != candidateTitle &&
+                RelevanceGuard.isLikelySameProduct(keyword, item.title, item.price, referencePrice)
+        } ?: return emptyList()
+        return listOf(RemotePrice(SOURCE_ID_SHIHUO, "识货", quote.price, 1.0))
+    }
+
+    /**
+     * 来源健康板：与 [com.pricelens.ui.components.SourceStatusRow] 同一组域名键、同一套已知合并口径
+     * （当当与值得买共用 posts 状态——当当做候选主源，成功即进入爆料/候选）；另加一格"页面"，
+     * 因为无障碍实时价也是"本轮够没够着数据"的一部分。
+     */
+    private fun buildAccuracySourceCells(): List<SourceCell> {
+        val livePrice = _livePrice.value
+        return listOf(
+            SourceCell(
+                SOURCE_ID_PAGE,
+                "页面",
+                if (livePrice != null) SourceState.OK else SourceState.UNKNOWN,
+                if (livePrice != null) _realtimeSource.value else "本轮未读取页面实时价"
+            ),
+            sourceCellOf(SOURCE_ID_HISTORY, "历史价", _history.value, "apapia-history.manmanbuy.com"),
+            sourceCellOf(SOURCE_ID_DANGDANG, "当当", _posts.value, "search.dangdang.com"),
+            sourceCellOf(SOURCE_ID_BILI, "B站", _videos.value, "api.bilibili.com"),
+            sourceCellOf(SOURCE_ID_GWDANG, "购物党", _coupons.value, "www.gwdang.com"),
+            sourceCellOf(SOURCE_ID_SMZDM, "什么值得买", _posts.value, "search.smzdm.com"),
+            sourceCellOf(SOURCE_ID_SHIHUO, "识货", _shihuo.value, "m.shihuo.cn")
+        )
+    }
+
+    /**
+     * 单个来源的归一状态：判定与 [com.pricelens.ui.components.sourceChipStateOf] 同口径，
+     * 额外把"本轮缓存 key 命中 [PriceRepository.staleKeys]"收敛成 [SourceState.STALE]（旧数据）。
+     */
+    private fun sourceCellOf(id: String, label: String, value: AsyncValue<*>, domain: String): SourceCell {
+        val outcome = apiClient.lastOutcomeFor(domain)
+        return when (value) {
+            is AsyncValue.Loading -> SourceCell(id, label, SourceState.UNKNOWN, "加载中")
+            is AsyncValue.Success -> if (sourceIsStale(id)) {
+                SourceCell(id, label, SourceState.STALE, "缓存降级，展示旧数据")
+            } else {
+                SourceCell(id, label, SourceState.OK, if (sourceHasNoItems(value)) "无匹配结果" else null)
+            }
+            is AsyncValue.Error -> if (value.cause is CrawlerBlockedException || outcome is CrawlerResult.Blocked) {
+                SourceCell(id, label, SourceState.BLOCKED, blockedNote(value.cause, outcome))
+            } else {
+                SourceCell(id, label, SourceState.DEGRADED, unreachableNote(value.cause))
+            }
+            is AsyncValue.Idle -> SourceCell(id, label, SourceState.UNKNOWN, "本轮未查询")
+        }
+    }
+
+    /** 某来源本轮用到的缓存 key 是否命中 [PriceRepository.staleKeys]（站点降级回吐旧数据） */
+    private fun sourceIsStale(id: String): Boolean {
+        val prefix = sourceKeyPrefix(id)
+        val staleKeys = repository.staleKeys.value
+        return _searchedCacheKeys.value.any { it.startsWith(prefix) && it in staleKeys }
+    }
+
+    /** 来源 ID → 本轮缓存 key 前缀（与 search() 开头的 _searchedCacheKeys、history job 追加的 key 对齐） */
+    private fun sourceKeyPrefix(id: String): String = when (id) {
+        SOURCE_ID_HISTORY -> KEY_PREFIX_HISTORY
+        SOURCE_ID_DANGDANG -> "dd:search:"
+        SOURCE_ID_BILI -> "bili:search:"
+        SOURCE_ID_GWDANG -> "gwd:coupon:"
+        SOURCE_ID_SMZDM -> "smz:search:"
+        SOURCE_ID_SHIHUO -> "sh:search:"
+        else -> id
+    }
+
+    /** 成功态但载荷是空集合（"够着了但 0 条"，与"没够着"是两件事） */
+    private fun sourceHasNoItems(value: AsyncValue<*>): Boolean {
+        val data = (value as? AsyncValue.Success)?.data ?: return false
+        return data is Collection<*> && data.isEmpty()
+    }
+
+    /**
+     * BLOCKED 的一句话中文原因（用户可见，**不暴露异常类名**）。
+     *
+     * 真机 round1 教训：旧写法把 `cause.javaClass.simpleName` 拼进 note，健康板上出现
+     * 「B站 · 降级 · 网络失败: SourceUnreacha…」——截断且用户读不懂。这里只保留能指导
+     * 用户动作的中文分类，技术原因看日志（[LogT]）。
+     */
+    private fun blockedNote(cause: Throwable?, outcome: CrawlerResult<String>?): String {
+        val reason = (
+            (cause as? CrawlerBlockedException)?.reason
+                ?: (outcome as? CrawlerResult.Blocked)?.reason
+            )?.trim().orEmpty()
+        return when {
+            reason.contains("403") || reason.contains("412") -> "反爬拦截（HTTP 403/412）"
+            reason.contains("熔断") -> "反爬拦截（本站暂时熔断）"
+            reason.contains("挑战") -> "反爬拦截（验证页）"
+            else -> "反爬拦截"
+        }
+    }
+
+    /**
+     * DEGRADED 的一句话中文原因（用户可见，**不暴露异常类名**）。
+     *
+     * 网络类失败分三档：源不可达（超时/DNS/连接被拒）、网络异常（IO）、取数失败（其它）。
+     * 具体异常类型只写日志，不上健康板。
+     */
+    private fun unreachableNote(cause: Throwable): String = when (cause) {
+        is SourceUnreachableException -> "源不可达"
+        is IOException -> "网络异常"
+        is CrawlerBlockedException -> "反爬拦截"
+        else -> "取数失败"
+    }
+
     // ---------- 内部工具 ----------
 
     /**
@@ -490,5 +749,17 @@ class SearchViewModel @Inject constructor(
         val JD_URL_SKU = Regex("item(?:\\.m)?\\.jd\\.com/(?:product/)?(\\d{6,})")
         val ID_PARAM = Regex("[?&](?:sku|goods_id|product_id)=(\\d{6,})")
         val PURE_SKU = Regex("\\d{6,}")
+
+        /** 来源健康板 sourceId（与 SourceCell / 缓存 key 前缀一一对应；页面/历史与引擎常量同值） */
+        const val SOURCE_ID_PAGE = "page"
+        const val SOURCE_ID_HISTORY = "history"
+        const val SOURCE_ID_DANGDANG = "dangdang"
+        const val SOURCE_ID_BILI = "bilibili"
+        const val SOURCE_ID_GWDANG = "gwdang"
+        const val SOURCE_ID_SMZDM = "smzdm"
+        const val SOURCE_ID_SHIHUO = "shihuo"
+
+        /** 历史价缓存 key 前缀（search() 启动时登记，history job 拿到归属 URL 后追加） */
+        const val KEY_PREFIX_HISTORY = "mmb:history:"
     }
 }
