@@ -37,7 +37,27 @@ enum class PriceSource(val label: String, val referenceOnly: Boolean) {
     MANMANBUY("慢慢买", false),
 
     /** 本机盯价轮次自采的每日点：没有慢慢买 Cookie 时曲线靠它自己长出来 */
-    SELF_WATCH("本机盯价自采", false);
+    SELF_WATCH("本机盯价自采", false),
+
+    /**
+     * 关键词自动搜索选出的「同款搜索价」（2026-11 自动追价落地）。
+     *
+     * 背景：京东 p.3.cn 域名 2026-09 起公网不可达，淘宝/拼多多/当当/识货目标也从来没有直查通道，
+     * 于是 `searchDangdang/searchShihuo/searchSmzdm` 的关键词候选成为这些目标**唯一**的自动取数方式。
+     * 候选只有在同时满足以下条件时才配带上本来源（判定收口在
+     * [AutoTrackPolicy.matchOffer] + [AutoTrackPolicy.isPriceRatioReasonable]）：
+     *  - 标题过 `QueryRelevance.isRelevant`（配件/图书/其它品牌/顺序颠倒一律挡下）；
+     *  - 价格是正数，且与该商品历史价/目标价的比值在 [AutoTrackPolicy.MIN_PRICE_RATIO]..
+     *    [AutoTrackPolicy.MAX_PRICE_RATIO] 内（挡住不同规格/套餐的错价）；
+     *  - 与直查样本（p.3.cn / 星罗在售价）同时存在时**直查优先**，搜索价只补缺口。
+     *
+     * `referenceOnly = false` 的理由：它是一个**刚刚被搜索到的在售报价**（不是历史低位），
+     * 所以够格触发降价通知、够格作为今日曲线点；但通知文案必须写明「同款搜索价」，
+     * 让用户知道这不是目标平台自己给出的实时价（见 `worker/WatchCheckRunner` 的通知分支）。
+     * 曲线落点仍沿用 [com.pricelens.data.local.DayCurve.upsertFor] 的写入通道口径
+     * （`price_history.source` 记 `SELF_WATCH`，因为这条点由本机盯价轮次自采写入）。
+     */
+    KEYWORD_SEARCH("同款搜索价", false);
 
     /** 只有真现价才够格触发降价通知、计入"本轮查到价格" */
     val isLivePrice: Boolean get() = !referenceOnly

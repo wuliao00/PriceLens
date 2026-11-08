@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  2026-11 大更新：自动追价 / 价保助手 —— 仅后台与通知用文案。
+
+  约定：
+  - 本文件不承载任何 UI 页面文案（页面文案归 ui agent，见 strings_redesign.xml 等）；
+  - 所有通知文案必须写「以平台审核为准 / 预计」而不是"一定能退/已省"；
+  - 金额/价格参数一律由调用方格式化后传入（不要在这里做数字格式化）。
+-->
+<resources>
+    <!-- 自动追价：关键词同款搜索价达到目标价时的降价通知 -->
+    <string name="auto_track_notify_title">%1$s 已到目标价</string>
+    <string name="auto_track_notify_text">同款搜索价 ¥%1$s ≤ 目标价 ¥%2$s，点按核对商品页</string>
+
+    <!-- 价保助手：独立通知渠道（用户可在系统设置里单独关闭，不影响降价提醒） -->
+    <string name="protection_channel_name">价保提醒</string>
+    <string name="protection_notify_title">%1$s · 可申请价保</string>
+    <string name="protection_notify_text">买入价 %1$s，预计可退 %2$s（以平台审核为准）</string>
+    <string name="protection_notify_last_day_title">%1$s · 价保最后一天</string>
+    <string name="protection_notify_last_day_text">买入价 %1$s，预计可退 %2$s，今天截止（以平台审核为准）</string>
+</resources>

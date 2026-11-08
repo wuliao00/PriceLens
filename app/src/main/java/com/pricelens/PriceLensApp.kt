@@ -31,6 +31,9 @@ class PriceLensApp : Application(), Configuration.Provider {
 
     @Inject lateinit var ruleSyncRepository: com.pricelens.rules.RuleSyncRepository
 
+    /** 自动追价：启动时补登记自适应链 + 价保周期任务（幂等；开关关闭时链会被取消） */
+    @Inject lateinit var autoTrackRepository: com.pricelens.data.repository.AutoTrackRepository
+
     private val appScope = kotlinx.coroutines.CoroutineScope(
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main
     )
@@ -52,8 +55,11 @@ class PriceLensApp : Application(), Configuration.Provider {
         // §4.7 启动轻量清理 + 每日全面清理
         CacheCleanupWorker.enqueueLight(this)
         CacheCleanupWorker.scheduleDaily(this)
-        // §8 后台盯价：每 30 分钟
+        // §8 后台盯价：每 30 分钟（自动追价开启时降级为兜底，避免与自适应链双轮次）
         PriceCheckWorker.schedule(this)
+        // 2026-11 自动追价：自适应链 + 价保周期任务补登记（WorkManager 会跨重启保留，这里兜底；
+        // 用户关闭自动追价时 ensureScheduled 内部会取消链并清预计时刻）
+        autoTrackRepository.ensureScheduled()
         // §五 每周自动备份（仅已配置 WebDAV 时真正执行；未配置空转）
         com.pricelens.worker.WebDavBackupWorker.schedule(this)
         // 选择器规则（v2.8.0）：先本地装载（磁盘已校验 > 内置 assets，只读几 KB），
@@ -81,5 +87,12 @@ class PriceLensApp : Application(), Configuration.Provider {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(alert)
         manager.createNotificationChannel(status)
+        // 2026-11 价保助手：独立渠道（用户可单独关闭价保提醒而不影响降价提醒）
+        val protection = NotificationChannel(
+            com.pricelens.data.repository.PriceProtectionRepository.CHANNEL_PRICE_PROTECTION,
+            getString(R.string.protection_channel_name),
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        manager.createNotificationChannel(protection)
     }
 }

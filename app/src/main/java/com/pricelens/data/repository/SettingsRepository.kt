@@ -26,8 +26,12 @@ class SettingsRepository @Inject constructor(
         context.getSharedPreferences("pricelens", Context.MODE_PRIVATE)
     }
 
-    /** Material You 动态取色开关（低版本自动回退品牌蓝） */
-    private val _dynamicColor = MutableStateFlow(prefs.getBoolean("dynamic_color", true))
+    /**
+     * Material You 动态取色开关。
+     * 2026-11 大改造：默认 **关**——「熔金行情」品牌色板成为默认体验，
+     * 不再被壁纸取色覆盖（用户仍可在 设置·外观 打开动态取色）。低版本恒走品牌色。
+     */
+    private val _dynamicColor = MutableStateFlow(prefs.getBoolean("dynamic_color", false))
     val dynamicColor: StateFlow<Boolean> = _dynamicColor
 
     fun setDynamicColor(enabled: Boolean) {
@@ -253,5 +257,78 @@ class SettingsRepository @Inject constructor(
 
     fun resetUpdateFailCount() {
         if (updateFailCount != 0) prefs.edit().putInt("update_fail_count", 0).apply()
+    }
+
+    // ---------- 2026-11 大更新：自动追价 / 价保助手设置（全部 auto_ 前缀，纯本机、不上传） ----------
+
+    /** 自动追价总开关（默认关：开启后才会登记 WorkManager 自适应链） */
+    var autoTrackEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_ENABLED, value).apply()
+
+    /** 用户选择的巡检间隔档位（分钟）：30/60/120/180/360；非法值夹到 [30,360] */
+    var autoTrackIntervalMinutes: Int
+        get() = prefs.getInt(KEY_AUTO_INTERVAL, DEFAULT_AUTO_INTERVAL).coerceIn(30, 360)
+        set(value) = prefs.edit().putInt(KEY_AUTO_INTERVAL, value.coerceIn(30, 360)).apply()
+
+    /** 仅在 WiFi 下自动追价（省流量；非 WiFi 时链会等 WiFi） */
+    var autoTrackWifiOnly: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_WIFI_ONLY, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_WIFI_ONLY, value).apply()
+
+    /** 夜间（免打扰时段）暂停自动追价；关掉则夜间只是降频，不暂停 */
+    var autoTrackQuietPause: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_QUIET_PAUSE, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_QUIET_PAUSE, value).apply()
+
+    /** 价保助手总开关（默认开：纯本机通知，可随时关闭） */
+    var autoProtectionEnabled: Boolean
+        get() = prefs.getBoolean(KEY_PROTECTION_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_PROTECTION_ENABLED, value).apply()
+
+    /** 最近一轮自动追价完成时刻（0 = 从没跑过） */
+    var autoTrackLastRunAtMs: Long
+        get() = prefs.getLong(KEY_AUTO_LAST_RUN_AT, 0L)
+        set(value) = prefs.edit().putLong(KEY_AUTO_LAST_RUN_AT, value).apply()
+
+    /** 下一轮自动追价的预计时刻（链登记时写入；0 = 链未登记/已暂停） */
+    var autoTrackNextRunAtMs: Long
+        get() = prefs.getLong(KEY_AUTO_NEXT_RUN_AT, 0L)
+        set(value) = prefs.edit().putLong(KEY_AUTO_NEXT_RUN_AT, value).apply()
+
+    /** 最近一轮拿到真现价的目标数（自动追价中心展示） */
+    var autoTrackLastChecked: Int
+        get() = prefs.getInt(KEY_AUTO_LAST_CHECKED, 0)
+        set(value) = prefs.edit().putInt(KEY_AUTO_LAST_CHECKED, value).apply()
+
+    /** 最近一轮现价 ≤ 目标价的目标数（"命中"） */
+    var autoTrackLastHits: Int
+        get() = prefs.getInt(KEY_AUTO_LAST_HITS, 0)
+        set(value) = prefs.edit().putInt(KEY_AUTO_LAST_HITS, value).apply()
+
+    /** 最近一轮的一句话说明（失败源/暂停原因；空 = 没有） */
+    var autoTrackLastNote: String
+        get() = prefs.getString(KEY_AUTO_LAST_NOTE, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_AUTO_LAST_NOTE, value).apply()
+
+    /** 最近一次价保检查完成时刻（0 = 从没查过） */
+    var autoProtectionLastCheckAtMs: Long
+        get() = prefs.getLong(KEY_PROTECTION_LAST_CHECK_AT, 0L)
+        set(value) = prefs.edit().putLong(KEY_PROTECTION_LAST_CHECK_AT, value).apply()
+
+    private companion object {
+        const val DEFAULT_AUTO_INTERVAL = 60
+
+        const val KEY_AUTO_ENABLED = "auto_enabled"
+        const val KEY_AUTO_INTERVAL = "auto_interval_minutes"
+        const val KEY_AUTO_WIFI_ONLY = "auto_wifi_only"
+        const val KEY_AUTO_QUIET_PAUSE = "auto_quiet_pause"
+        const val KEY_PROTECTION_ENABLED = "auto_protection_enabled"
+        const val KEY_AUTO_LAST_RUN_AT = "auto_last_run_at_ms"
+        const val KEY_AUTO_NEXT_RUN_AT = "auto_next_run_at_ms"
+        const val KEY_AUTO_LAST_CHECKED = "auto_last_checked"
+        const val KEY_AUTO_LAST_HITS = "auto_last_hits"
+        const val KEY_AUTO_LAST_NOTE = "auto_last_note"
+        const val KEY_PROTECTION_LAST_CHECK_AT = "auto_protection_last_check_at_ms"
     }
 }

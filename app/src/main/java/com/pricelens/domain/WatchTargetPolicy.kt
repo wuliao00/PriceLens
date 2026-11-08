@@ -14,8 +14,12 @@ package com.pricelens.domain
  *  3. 京东公开查价域名 p.3.cn 公网 DNS 已不返回可达地址、`item.m.jd.com` 价格被掩码
  *     → 匿名京东现价事实上拿不到；旧实现把"拿不到价"与"没在盯"混成同一种静默跳过。
  *
- * 这里不提供任何"看起来能盯"的假通道：没有查价能力的平台明确拒绝并给出原因，
- * 由 UI 把原因如实显示给用户（可改用本机无障碍实时价）。
+ * 2026-11 自动追价大更新：京东 p.3.cn 域名 2026-09 起公网不可达后，只靠直查会让绝大多数目标
+ * 永远查不到价。现在非京东平台**可以**入库盯价，通道是 [WatchChannel.KEYWORD_SEARCH]
+ * （关键词自动搜索同款），但它比直查多一道严格条件：候选必须过 `QueryRelevance` 相关性、
+ * 价格为正且与该商品历史价/目标价的比值合理（见 [com.pricelens.domain.AutoTrackPolicy.matchOffer]
+ * 与 [com.pricelens.domain.AutoTrackPolicy.isPriceRatioReasonable]），否则宁可"本轮无价"也不通知。
+ * 仍然没有通道的只有认不出平台的链接；这类候选明确拒绝并给出原因，由 UI 如实显示。
  */
 
 /** 平台查价通道 */
@@ -23,7 +27,14 @@ enum class WatchChannel {
     /** 京东：p.3.cn 公开批量查价 + 星罗好货 API Key 兜底（公开域名 2026-09 起已不可达） */
     JD_LOOKUP,
 
-    /** 无服务端查价通道：入库后每轮只会被跳过，因此拒绝入库 */
+    /**
+     * 关键词自动搜索同款：用商品标题清洗出的关键词去当当/识货/值得买等既有搜索源找候选，
+     * 严格相关性 + 价格比值合理才当"本轮现价"（样本来源标 `PriceSource.KEYWORD_SEARCH`）。
+     * 淘宝/拼多多/当当/识货/值得买这些没有直查接口的平台走这条通道。
+     */
+    KEYWORD_SEARCH,
+
+    /** 无服务端/搜索查价通道（认不出平台的链接）：入库后每轮只会被跳过，因此拒绝入库 */
     NONE
 }
 
@@ -35,7 +46,7 @@ enum class RejectReason {
     /** 有 ID 但形态非法（京东要求 6 位以上纯数字） */
     MALFORMED_ID,
 
-    /** 平台合法但暂无查价通道（淘宝/拼多多/当当/识货/值得买） */
+    /** 平台合法但暂无任何查价通道（目前只剩认不出平台的链接会走到这里） */
     NO_PRICE_CHANNEL,
 
     /** SKU 说是京东、链接却指向别的平台：跨平台冒用的直接证据，拒绝入库 */
@@ -44,7 +55,7 @@ enum class RejectReason {
 
 /** 已入库目标在检查轮次里"没有进展"的原因 */
 enum class SkipReason {
-    /** 平台无查价通道（历史遗留行或被其它入口写入的行） */
+    /** 平台无任何查价通道（历史遗留行或认不出平台的坏行） */
     NO_PRICE_CHANNEL,
 
     /** productId 形态非法（如空 SKU 造成的 "jd:"），无法定位商品 */
@@ -245,7 +256,7 @@ object WatchTargetPolicy {
         }
     }
 
-    /** 平台内的商品号（仅用于文案展示，非京东平台目前一律不可盯） */
+    /** 平台内的商品号（非京东平台的商品号用于拼主键；smzdm 是爆料文章号，不当作商品主键） */
     fun externalIdFor(url: String?, platform: String): String? {
         if (url.isNullOrBlank()) return null
         return when (platform) {
@@ -257,7 +268,15 @@ object WatchTargetPolicy {
         }
     }
 
-    fun channelOf(platform: String): WatchChannel = if (platform == PLATFORM_JD) WatchChannel.JD_LOOKUP else WatchChannel.NONE
+    /** 平台 → 查价通道：京东直查；淘宝/拼多多/当当/识货/值得买走关键词自动搜索；其余无通道 */
+    fun channelOf(platform: String): WatchChannel = when (platform) {
+        PLATFORM_JD -> WatchChannel.JD_LOOKUP
+        PLATFORM_TAOBAO, PLATFORM_PDD, PLATFORM_DANGDANG, PLATFORM_SHIHUO, PLATFORM_SMZDM -> WatchChannel.KEYWORD_SEARCH
+        else -> WatchChannel.NONE
+    }
+
+    /** true = 该平台靠关键词自动搜索取数（非京东平台；直查样本优先的合并逻辑见 WatchCheckRunner） */
+    fun supportsKeywordSearch(platform: String): Boolean = channelOf(platform) == WatchChannel.KEYWORD_SEARCH
 
     fun isTrackablePlatform(platform: String): Boolean = channelOf(platform) != WatchChannel.NONE
 
@@ -308,10 +327,16 @@ object WatchTargetPolicy {
         if (platform == PLATFORM_UNKNOWN) {
             return WatchDecision.Rejected(PLATFORM_UNKNOWN, RejectReason.MISSING_ID, "")
         }
+        val externalId = externalIdFor(url, platform)
+        // 2026-11：非京东平台改为可盯（KEYWORD_SEARCH 通道）。前提仍是能解析出平台内商品号 ——
+        // 主键必须是 `<platform>:<id>`，没有 ID 就无法防止两个目标互相 REPLACE（A3 的老缺陷）。
+        if (isTrackablePlatform(platform) && !externalId.isNullOrBlank()) {
+            return WatchDecision.Watchable(platform, externalId)
+        }
         return WatchDecision.Rejected(
             platform = platform,
             reason = if (isTrackablePlatform(platform)) RejectReason.MISSING_ID else RejectReason.NO_PRICE_CHANNEL,
-            displayId = externalIdFor(url, platform).orEmpty()
+            displayId = externalId.orEmpty()
         )
     }
 

@@ -12,6 +12,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.pricelens.R
 import com.pricelens.ui.main.MainActivity
 import com.pricelens.util.LogT
+import com.pricelens.worker.AutoTrackScheduler
 import com.pricelens.worker.WatchCheckRunner
 import dagger.hilt.android.AndroidEntryPoint
 import java.text.SimpleDateFormat
@@ -35,6 +36,12 @@ import kotlinx.coroutines.launch
  * WorkManager 周期会被大幅推迟，常驻通知显著提升进程存活率；
  * Worker 仍保留作为服务未运行时的兜底。
  *
+ * 2026-11 自动追价（自适应链）：链在队列里/正在跑时，本服务**只负责保活与通知栏可见性，
+ * 不再自己跑轮次**——轮次由 [com.pricelens.worker.AutoTrackWorker] 按自适应间隔驱动。
+ * 两条路同时跑就是"双轮次 + 双通知"；服务每 [CHAIN_POLL_INTERVAL_MS] 分钟看一次链状态，
+ * 链消失（用户关闭自动追价）后自动回到原来的 30 分钟循环。
+ * 进程内的最后一道防线是 [WatchCheckRunner] 的 Mutex + 60 秒合并（同一轮数据不会重复写）。
+ *
  * targetSdk 35 要求声明 FGS 类型；本服务不属于系统列出的具体类型，
  * 按 specialUse 申报（子类型 price_watch_keepalive）。
  */
@@ -43,11 +50,16 @@ class WatchForegroundService : Service() {
 
     @Inject lateinit var runner: WatchCheckRunner
 
+    @Inject lateinit var settings: com.pricelens.data.repository.SettingsRepository
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     /** 30 分钟检查循环的唯一句柄（A4：服务被反复 start 也只跑一条循环） */
     private var loopJob: Job? = null
+
+    /** 最近一次已知的目标数：链接管期间不跑轮次，通知栏保持上次的数而不是跳成 0 */
+    private var lastKnownTargets = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -59,6 +71,11 @@ class WatchForegroundService : Service() {
         if (loopJob?.isActive != true) {
             loopJob = serviceScope.launch {
                 while (isActive) {
+                    // 2026-11：自动追价链接管时只保活，不跑轮次（避免双轮次/双通知）
+                    if (AutoTrackScheduler.isChainActive(this@WatchForegroundService, settings)) {
+                        delay(CHAIN_POLL_INTERVAL_MS)
+                        continue
+                    }
                     val outcome = runCatching { runner.runOnce(this@WatchForegroundService) }
                         .onFailure { com.pricelens.util.LogT.w("盯价循环失败：${it.message}") }
                         .getOrNull()
@@ -67,7 +84,8 @@ class WatchForegroundService : Service() {
                         stopSelf()
                         return@launch
                     }
-                    updateNotification(outcome?.total ?: 0)
+                    if (outcome != null) lastKnownTargets = outcome.total
+                    updateNotification(lastKnownTargets)
                     delay(CHECK_INTERVAL_MS)
                 }
             }
@@ -115,6 +133,12 @@ class WatchForegroundService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 1001
         private const val CHECK_INTERVAL_MS = 30 * 60 * 1000L
+
+        /**
+         * 自动追价链状态的轮询间隔（毫秒）：链在跑时服务不跑轮次，只每 5 分钟确认一次链是否还在。
+         * 用户关闭自动追价后最迟 5 分钟回到原来的 30 分钟自跑循环。
+         */
+        private const val CHAIN_POLL_INTERVAL_MS = 5 * 60 * 1000L
 
         fun start(context: Context) {
             val intent = Intent(context, WatchForegroundService::class.java)

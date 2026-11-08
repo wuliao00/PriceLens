@@ -3,6 +3,7 @@ package com.pricelens.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,11 +14,13 @@ import org.junit.Test
  * 覆盖用户反馈链路上的每个真实缺陷：
  *  1. 空 SKU / 非数字 SKU / 过短 SKU 不得入库（旧实现会拼出主键恒为 "jd:" 的目标，
  *     第二个目标 REPLACE 掉第一个 → 标题与目标价被偷换）。
- *  2. 淘宝/拼多多/当当/识货/值得买候选绝不再被写成 platform="jd"。
+ *  2. 淘宝/拼多多/当当/识货候选绝不再被写成 platform="jd"；2026-11 起这些平台改为
+ *     KEYWORD_SEARCH 通道（可盯），但平台/主键必须来自链接解析，且认不出平台的链接仍拒绝。
  *  3. 同 ID 不同标题必须走确认，不静默覆盖。
  *  4. p.3.cn 不可达（查价返回空表）时的轮次记账：全部计为"取不到现价"，
  *     本轮判为 stalled（旧实现既不计 checked 也不计失败 → 永远静默）。
  *  5. 目标价预填只认同 SKU 的历史曲线。
+ *  6. 2026-11：关键词同款样本必须过严格相关性 + 价格比值才配当"本轮现价"（否则宁可无价）。
  */
 class WatchTargetPolicyTest {
 
@@ -79,10 +82,10 @@ class WatchTargetPolicyTest {
         assertEquals(sku, decision.externalId)
     }
 
-    // ---------- 2. 禁止跨平台冒用 ----------
+    // ---------- 2. 非京东平台：改为关键词搜索通道（KEYWORD_SEARCH），但仍然绝不冒充京东 ----------
 
     @Test
-    fun `non jd candidates are never labeled as jd`() {
+    fun `non jd candidates are watchable through the keyword channel with their own platform`() {
         val cases = mapOf(
             "https://item.taobao.com/item.htm?id=654321098765" to WatchTargetPolicy.PLATFORM_TAOBAO,
             "https://detail.tmall.com/item.htm?id=654321098765" to WatchTargetPolicy.PLATFORM_TAOBAO,
@@ -92,13 +95,28 @@ class WatchTargetPolicyTest {
         )
         for ((url, platform) in cases) {
             val decision = WatchTargetPolicy.decide(skuId = null, url = url)
-            decision as WatchDecision.Rejected
+            decision as WatchDecision.Watchable
             assertEquals("链接 $url 应识别为 $platform", platform, decision.platform)
-            assertNotEquals(WatchTargetPolicy.PLATFORM_JD, decision.platform)
-            // 有查价通道的平台才允许入库：这些平台一律拒绝
-            assertEquals(RejectReason.NO_PRICE_CHANNEL, decision.reason)
-            assertFalse(WatchTargetPolicy.isTrackablePlatform(decision.platform))
+            assertNotEquals("绝不把非京东候选写成京东", WatchTargetPolicy.PLATFORM_JD, decision.platform)
+            assertEquals(
+                "非京东平台走关键词自动搜索通道",
+                WatchChannel.KEYWORD_SEARCH,
+                WatchTargetPolicy.channelOf(decision.platform)
+            )
+            assertTrue("非京东平台现在可盯", WatchTargetPolicy.isTrackablePlatform(decision.platform))
+            assertTrue("主键必须是 <platform>:<id>", decision.productId.startsWith("$platform:"))
+            assertTrue("主键必须合法（防 REPLACE 静默覆盖）", WatchTargetPolicy.isValidTargetId(decision.productId))
         }
+    }
+
+    @Test
+    fun `unknown platform still has no channel and is rejected`() {
+        // 认不出平台的链接没有任何通道：不能被"关键词可盯"顺手放进来
+        val decision = WatchTargetPolicy.decide(null, "https://example.com/goods/123456")
+        decision as WatchDecision.Rejected
+        assertEquals(RejectReason.MISSING_ID, decision.reason)
+        assertEquals(WatchChannel.NONE, WatchTargetPolicy.channelOf(WatchTargetPolicy.PLATFORM_UNKNOWN))
+        assertFalse(WatchTargetPolicy.isTrackablePlatform(WatchTargetPolicy.PLATFORM_UNKNOWN))
     }
 
     @Test
@@ -112,10 +130,13 @@ class WatchTargetPolicyTest {
     }
 
     @Test
-    fun `recognized external id is reported in the rejection for transparency`() {
+    fun `recognized external id is carried in the watchable decision for transparency`() {
+        // 2026-11：当当链接现在可盯（KEYWORD_SEARCH 通道），商品号如实进主键
         val decision = WatchTargetPolicy.decide(null, "https://product.dangdang.com/29704890.html")
-        decision as WatchDecision.Rejected
-        assertEquals("29704890", decision.displayId)
+        decision as WatchDecision.Watchable
+        assertEquals(WatchTargetPolicy.PLATFORM_DANGDANG, decision.platform)
+        assertEquals("29704890", decision.externalId)
+        assertEquals("dangdang:29704890", decision.productId)
     }
 
     @Test
@@ -138,18 +159,20 @@ class WatchTargetPolicyTest {
         val decision = WatchTargetPolicy.decide(null, "https://item.m.jd.com/product/detail?sku=$sku&other=1")
         decision as WatchDecision.Watchable
         assertEquals(sku, decision.externalId)
-        // 非京东域名上的 sku= 参数不得被当成京东商品号
-        val fake = WatchTargetPolicy.decide(null, "https://mobile.yangkeduo.com/goods.html?sku=$sku")
-        fake as WatchDecision.Rejected
-        assertEquals(WatchTargetPolicy.PLATFORM_PDD, fake.platform)
+        // 非京东域名上的 sku= 参数不得被当成京东商品号（现在会按该平台自己的关键词通道可盯）
+        val pdd = WatchTargetPolicy.decide(null, "https://mobile.yangkeduo.com/goods.html?sku=$sku")
+        pdd as WatchDecision.Watchable
+        assertEquals(WatchTargetPolicy.PLATFORM_PDD, pdd.platform)
+        assertEquals(WatchChannel.KEYWORD_SEARCH, WatchTargetPolicy.channelOf(pdd.platform))
     }
 
     @Test
-    fun `smzdm article url without a jd product link cannot be watched`() {
+    fun `smzdm article url without a durable product id is rejected as missing id`() {
+        // 值得买是爆料文章号（/p/98765432/），不是稳定的商品主键：只能找同款，不能建盯价目标
         val decision = WatchTargetPolicy.decide(null, "https://www.smzdm.com/p/98765432/")
         decision as WatchDecision.Rejected
         assertEquals(WatchTargetPolicy.PLATFORM_SMZDM, decision.platform)
-        assertEquals(RejectReason.NO_PRICE_CHANNEL, decision.reason)
+        assertEquals(RejectReason.MISSING_ID, decision.reason)
     }
 
     @Test
@@ -171,7 +194,10 @@ class WatchTargetPolicyTest {
         assertNull(WatchTargetPolicy.externalIdOf("taobao:654321098765", "jd"))
         assertFalse(WatchTargetPolicy.isTrackableTarget("jd:", "jd"))
         assertTrue(WatchTargetPolicy.isTrackableTarget("jd:$sku", "jd"))
-        assertFalse(WatchTargetPolicy.isTrackableTarget("taobao:654321098765", "taobao"))
+        // 2026-11：非京东平台现在可盯（关键词搜索通道），但主键前缀必须与平台一致
+        assertTrue(WatchTargetPolicy.isTrackableTarget("taobao:654321098765", "taobao"))
+        assertFalse(WatchTargetPolicy.isTrackableTarget("jd:654321098765", "taobao"))
+        assertFalse(WatchTargetPolicy.isTrackableTarget("unknown:654321098765", "unknown"))
     }
 
     @Test
@@ -272,8 +298,9 @@ class WatchTargetPolicyTest {
         assertEquals(3, report.total)
         assertEquals(1, report.checked)
         assertEquals(1, report.skipped.badTargetId)
-        assertEquals(1, report.skipped.noChannel)
-        assertEquals(0, report.skipped.noPrice)
+        // 2026-11：淘宝目标不再是"无通道"，本轮没拿到关键词样本 → 计入"取不到现价"
+        assertEquals(0, report.skipped.noChannel)
+        assertEquals(1, report.skipped.noPrice)
         assertEquals(2, report.skipped.total)
         assertEquals(listOf("jd:$sku"), report.triggeredProductIds)
         assertFalse(report.stalled)
@@ -329,9 +356,15 @@ class WatchTargetPolicyTest {
             SkipReason.INVALID_TARGET_ID,
             WatchTargetPolicy.skipReasonFor(WatchTargetRef("jd:", "jd", 3999.0), prices, false)
         )
+        // 非京东平台现在有通道，但拿不到样本时如实判"取不到现价"（不是"没通道"）
+        assertEquals(
+            SkipReason.PRICE_UNAVAILABLE,
+            WatchTargetPolicy.skipReasonFor(WatchTargetRef("taobao:654321098765", "taobao", 99.0), prices, false)
+        )
+        // 认不出平台的坏行才是真正的"无通道"
         assertEquals(
             SkipReason.NO_PRICE_CHANNEL,
-            WatchTargetPolicy.skipReasonFor(WatchTargetRef("taobao:654321098765", "taobao", 99.0), prices, false)
+            WatchTargetPolicy.skipReasonFor(WatchTargetRef("unknown:654321098765", "unknown", 99.0), prices, false)
         )
         assertEquals(
             SkipReason.PRICE_UNAVAILABLE,
@@ -409,14 +442,51 @@ class WatchTargetPolicyTest {
     // ---------- 平台通道判定 ----------
 
     @Test
-    fun `only jd has a server side lookup channel`() {
+    fun `jd keeps direct lookup while other known platforms use the keyword channel`() {
         assertEquals(WatchChannel.JD_LOOKUP, WatchTargetPolicy.channelOf("jd"))
-        assertEquals(WatchChannel.NONE, WatchTargetPolicy.channelOf("taobao"))
-        assertEquals(WatchChannel.NONE, WatchTargetPolicy.channelOf("pdd"))
-        assertEquals(WatchChannel.NONE, WatchTargetPolicy.channelOf("dangdang"))
-        assertEquals(WatchChannel.NONE, WatchTargetPolicy.channelOf("shihuo"))
+        for (platform in listOf("taobao", "pdd", "dangdang", "shihuo", "smzdm")) {
+            assertEquals("$platform 应走关键词自动搜索", WatchChannel.KEYWORD_SEARCH, WatchTargetPolicy.channelOf(platform))
+            assertTrue("$platform 的旧行必须可被追踪", WatchTargetPolicy.isTrackablePlatform(platform))
+            assertTrue(WatchTargetPolicy.supportsKeywordSearch(platform))
+        }
         assertEquals(WatchChannel.NONE, WatchTargetPolicy.channelOf("unknown"))
-        assertFalse(WatchTargetPolicy.isTrackablePlatform(WatchTargetPolicy.PLATFORM_TAOBAO))
+        assertFalse(WatchTargetPolicy.isTrackablePlatform("unknown"))
+        assertFalse(WatchTargetPolicy.supportsKeywordSearch("jd"))
+    }
+
+    // ---------- 关键词同款样本：必须过严格相关性才配当"本轮现价" ----------
+
+    @Test
+    fun `keyword search sample is live only after strict relevance and ratio checks`() {
+        // 相关候选 → 过 matchOffer + 比值检查 → 才能当现价、进曲线
+        val keyword = "iPhone 15 128GB"
+        val good = AutoTrackPolicy.matchOffer(keyword, "Apple iPhone 15 128GB 黑色 手机", 4999.0)
+        assertTrue("同款标题应通过", good.accepted)
+        assertTrue("与历史参考价的比值应合理", AutoTrackPolicy.isPriceRatioReasonable(4999.0, 5200.0))
+        val sample = PriceSample(4999.0, PriceSource.KEYWORD_SEARCH)
+        assertTrue("同款搜索价是真现价（isLive）", sample.isLive)
+        assertNotNull("同款搜索价够格写曲线", PriceSampling.curveWorthy(sample))
+
+        // 配件/不相关候选 → 直接挡下，哪怕价格更低也不得冒充现价
+        assertFalse(AutoTrackPolicy.matchOffer(keyword, "适用 iPhone 15 手机壳 保护套", 9.9).accepted)
+        assertFalse(AutoTrackPolicy.matchOffer(keyword, "iPhone 15 128GB", 0.0).accepted)
+        // 价位完全不在同一档（错规格/错商品）→ 比值检查挡下
+        assertFalse(AutoTrackPolicy.isPriceRatioReasonable(99.0, 5200.0))
+
+        // 记账层：淘宝目标拿到同款搜索样本、且价格 ≤ 目标价 → 才计入 checked / hits 名单
+        val target = WatchTargetRef("taobao:654321098765", "taobao", 5000.0)
+        val hit = WatchTargetPolicy.classifyRound(
+            listOf(target),
+            mapOf("taobao" to mapOf("654321098765" to PriceSample(4999.0, PriceSource.KEYWORD_SEARCH)))
+        )
+        assertEquals(1, hit.checked)
+        assertEquals(listOf("taobao:654321098765"), hit.triggeredProductIds)
+        val miss = WatchTargetPolicy.classifyRound(
+            listOf(target),
+            mapOf("taobao" to mapOf("654321098765" to PriceSample(5399.0, PriceSource.KEYWORD_SEARCH)))
+        )
+        assertEquals(1, miss.checked)
+        assertTrue("高于目标价不得进通知名单", miss.triggeredProductIds.isEmpty())
     }
 
     private fun watchable() = WatchDecision.Watchable(WatchTargetPolicy.PLATFORM_JD, sku)

@@ -2,6 +2,7 @@ package com.pricelens.data.backup
 
 import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.data.local.entity.ProductEntity
+import com.pricelens.data.local.entity.PurchaseRecordEntity
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -12,7 +13,12 @@ import org.json.JSONObject
 /**
  * §五 备份格式常量（WebDAV 与 SAF 兜底共用同一份 payload 格式）。
  *
- * payload 结构：`{app, schema, exportedAt, favorites[], targets[]}`。
+ * payload 结构：`{app, schema, exportedAt, favorites[], targets[], purchases[]?}`。
+ * `purchases` 是 2026-11 大更新加入的**可选字段**（购买记录，价保助手数据）：
+ *  - 只有真的存在购买记录时才写这个键，旧测试/旧备份的白色名单断言不受影响；
+ *  - schema 保持 1：旧版本 App 读新备份会忽略不认识的键（向后兼容），
+ *    新版本 App 读旧备份时 `purchases` 缺省为空（向前兼容），双向都不会炸。
+ *
  * **红线**：payload 里没有、也永远不会有 Cookie / apikey / WebDAV 凭证的位置 ——
  * 凭证全在 [com.pricelens.util.SecretStore]，本文件的编码函数连读它的入口都没有。
  */
@@ -179,13 +185,110 @@ data class TargetDto(
     }
 }
 
+/**
+ * 购买记录 DTO（2026-11 价保助手；与 Room 实体 [PurchaseRecordEntity] **刻意分离**，理由同 [FavoriteDto]）。
+ *
+ * 为什么必须进备份：买了的东西换机不能丢——价保窗口/已申请标记/提醒档位都在本机，
+ * 丢一次备份等于价保助手从零开始。字段与实体一一对应（显式白名单，不是反射整对象）。
+ */
+data class PurchaseDto(
+    val platform: String,
+    val productId: String?,
+    val title: String,
+    val price: Double,
+    val purchasedAtMs: Long,
+    val url: String?,
+    val lastSeenPrice: Double,
+    val lastCheckedAtMs: Long,
+    val claimableYuan: Double,
+    val claimDeadlineMs: Long,
+    val claimedAtMs: Long,
+    val notifiedAtMs: Long,
+    val windowDaysOverride: Int,
+    val notifiedYuan: Double
+) {
+    fun toEntity(): PurchaseRecordEntity = PurchaseRecordEntity(
+        platform = platform,
+        productId = productId,
+        title = title,
+        price = price,
+        purchasedAtMs = purchasedAtMs,
+        url = url,
+        lastSeenPrice = lastSeenPrice,
+        lastCheckedAtMs = lastCheckedAtMs,
+        claimableYuan = claimableYuan,
+        claimDeadlineMs = claimDeadlineMs,
+        claimedAtMs = claimedAtMs,
+        notifiedAtMs = notifiedAtMs,
+        windowDaysOverride = windowDaysOverride,
+        notifiedYuan = notifiedYuan
+    )
+
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("platform", platform)
+        put("productId", productId ?: JSONObject.NULL)
+        put("title", title)
+        put("price", price)
+        put("purchasedAtMs", purchasedAtMs)
+        put("url", url ?: JSONObject.NULL)
+        put("lastSeenPrice", lastSeenPrice)
+        put("lastCheckedAtMs", lastCheckedAtMs)
+        put("claimableYuan", claimableYuan)
+        put("claimDeadlineMs", claimDeadlineMs)
+        put("claimedAtMs", claimedAtMs)
+        put("notifiedAtMs", notifiedAtMs)
+        put("windowDaysOverride", windowDaysOverride)
+        put("notifiedYuan", notifiedYuan)
+    }
+
+    companion object {
+        /** 备份编码：只搬实体字段（主键 id 不搬，跨机自增主键没有意义） */
+        fun from(entity: PurchaseRecordEntity): PurchaseDto = PurchaseDto(
+            platform = entity.platform,
+            productId = entity.productId,
+            title = entity.title,
+            price = entity.price,
+            purchasedAtMs = entity.purchasedAtMs,
+            url = entity.url,
+            lastSeenPrice = entity.lastSeenPrice,
+            lastCheckedAtMs = entity.lastCheckedAtMs,
+            claimableYuan = entity.claimableYuan,
+            claimDeadlineMs = entity.claimDeadlineMs,
+            claimedAtMs = entity.claimedAtMs,
+            notifiedAtMs = entity.notifiedAtMs,
+            windowDaysOverride = entity.windowDaysOverride,
+            notifiedYuan = entity.notifiedYuan
+        )
+
+        /** 解码：缺字段一律取默认（旧备份没有新字段也能读） */
+        fun fromJson(json: JSONObject): PurchaseDto = PurchaseDto(
+            platform = json.optString("platform"),
+            productId = if (json.isNull("productId")) null else json.optString("productId").ifEmpty { null },
+            title = json.optString("title"),
+            price = json.optDouble("price", 0.0),
+            purchasedAtMs = json.optLong("purchasedAtMs"),
+            url = if (json.isNull("url")) null else json.optString("url").ifEmpty { null },
+            lastSeenPrice = json.optDouble("lastSeenPrice", 0.0),
+            lastCheckedAtMs = json.optLong("lastCheckedAtMs"),
+            claimableYuan = json.optDouble("claimableYuan", 0.0),
+            claimDeadlineMs = json.optLong("claimDeadlineMs"),
+            claimedAtMs = json.optLong("claimedAtMs"),
+            notifiedAtMs = json.optLong("notifiedAtMs"),
+            windowDaysOverride = json.optInt("windowDaysOverride"),
+            notifiedYuan = json.optDouble("notifiedYuan", 0.0)
+        )
+    }
+}
+
 /** 备份 payload（WebDAV 与 SAF 导出/导入同一份格式） */
 data class BackupPayload(
     val app: String,
     val schema: Int,
     val exportedAt: Long,
     val favorites: List<FavoriteDto>,
-    val targets: List<TargetDto>
+    val targets: List<TargetDto>,
+    /** 购买记录（2026-11 新增可选段；空 = 旧备份/没有购买记录，编码时不写这个键） */
+    val purchases: List<PurchaseDto> = emptyList()
 )
 
 /**
@@ -197,12 +300,18 @@ data class BackupPayload(
 object BackupCodec {
 
     /** 由实体快照构造 payload（唯一的编码入口；参数里没有、也不会加凭证） */
-    fun capture(favorites: List<ProductEntity>, targets: List<PriceTargetEntity>, exportedAt: Long): BackupPayload = BackupPayload(
+    fun capture(
+        favorites: List<ProductEntity>,
+        targets: List<PriceTargetEntity>,
+        exportedAt: Long,
+        purchases: List<PurchaseRecordEntity> = emptyList()
+    ): BackupPayload = BackupPayload(
         app = BackupFormat.APP,
         schema = BackupFormat.SCHEMA,
         exportedAt = exportedAt,
         favorites = favorites.map { FavoriteDto.from(it) },
-        targets = targets.map { TargetDto.from(it) }
+        targets = targets.map { TargetDto.from(it) },
+        purchases = purchases.map { PurchaseDto.from(it) }
     )
 
     fun encode(payload: BackupPayload): String {
@@ -216,6 +325,12 @@ object BackupCodec {
             put("exportedAt", payload.exportedAt)
             put("favorites", favorites)
             put("targets", targets)
+            // 可选段：没有购买记录时不写键，旧版本的白色名单/旧测试保持不动
+            if (payload.purchases.isNotEmpty()) {
+                val purchases = JSONArray()
+                payload.purchases.forEach { purchases.put(it.toJson()) }
+                put("purchases", purchases)
+            }
         }.toString()
     }
 
@@ -241,12 +356,16 @@ object BackupCodec {
         // 主键为空的条目无法落库：静默丢弃比写一条坏数据诚实（备份文件本身仍可用）
         val favorites = mapObjects(root.optJSONArray("favorites")) { FavoriteDto.fromJson(it) }.filter { it.id.isNotBlank() }
         val targets = mapObjects(root.optJSONArray("targets")) { TargetDto.fromJson(it) }.filter { it.productId.isNotBlank() }
+        // 购买记录的"主键"是自然键（平台+商品号+购买时刻+实付价）；标题空的条目没有搜索依据，丢掉
+        val purchases = mapObjects(root.optJSONArray("purchases")) { PurchaseDto.fromJson(it) }
+            .filter { it.title.isNotBlank() && it.price.isFinite() && it.price > 0.0 }
         return BackupPayload(
             app = app,
             schema = schema,
             exportedAt = root.optLong("exportedAt"),
             favorites = favorites,
-            targets = targets
+            targets = targets,
+            purchases = purchases
         )
     }
 

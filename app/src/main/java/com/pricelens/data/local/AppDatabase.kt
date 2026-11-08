@@ -4,18 +4,23 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.pricelens.data.local.dao.AutoTrackRunDao
 import com.pricelens.data.local.dao.CacheEntryDao
 import com.pricelens.data.local.dao.DomainPenaltyDao
 import com.pricelens.data.local.dao.PriceHistoryDao
 import com.pricelens.data.local.dao.PriceTargetDao
 import com.pricelens.data.local.dao.ProductDao
+import com.pricelens.data.local.dao.PurchaseRecordDao
 import com.pricelens.data.local.dao.SearchRecordDao
+import com.pricelens.data.local.dao.TargetPlanDao
 import com.pricelens.data.local.dao.WatchIdentityDao
+import com.pricelens.data.local.entity.AutoTrackRunEntity
 import com.pricelens.data.local.entity.CacheEntryEntity
 import com.pricelens.data.local.entity.DomainPenaltyEntity
 import com.pricelens.data.local.entity.PriceHistoryEntity
 import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.data.local.entity.ProductEntity
+import com.pricelens.data.local.entity.PurchaseRecordEntity
 import com.pricelens.data.local.entity.SearchRecordEntity
 import com.pricelens.data.local.entity.WatchIdentityEntity
 
@@ -28,9 +33,11 @@ import com.pricelens.data.local.entity.WatchIdentityEntity
         SearchRecordEntity::class,
         CacheEntryEntity::class,
         DomainPenaltyEntity::class,
-        WatchIdentityEntity::class
+        WatchIdentityEntity::class,
+        AutoTrackRunEntity::class,
+        PurchaseRecordEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -41,6 +48,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun cacheEntryDao(): CacheEntryDao
     abstract fun domainPenaltyDao(): DomainPenaltyDao
     abstract fun watchIdentityDao(): WatchIdentityDao
+    abstract fun autoTrackRunDao(): AutoTrackRunDao
+    abstract fun purchaseRecordDao(): PurchaseRecordDao
+    abstract fun targetPlanDao(): TargetPlanDao
 
     companion object {
         /**
@@ -128,6 +138,44 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
+         * 2026-11 自动追价 v4→v5：新增两张表
+         *  - `auto_track_runs`：自动追价的轮次历史（自动追价中心的「运行历史」）；
+         *  - `purchase_records`：购买记录（价保助手的数据源；随备份 payload 迁移）。
+         *
+         * 同一条纪律：SQL 抽成常量清单，`DatabaseMigrationWiringTest` 验的就是真要执行的语句。
+         * 列序 / NOT NULL / DEFAULT 必须与 [AutoTrackRunEntity] / [PurchaseRecordEntity] 推导出的
+         * schema 逐字对上（Room 的 TableInfo 校验比的就是这些；`@ColumnInfo(defaultValue=…)` 是
+         * 半边，另一半在下面的 CREATE TABLE 里）。两张都是**新表**，所以没有 ALTER 追加列的顺序问题。
+         * 索引名沿用 Room 的 `index_<表>_<列>` 约定，漏建索引同样会被 TableInfo 判为"迁移没做对"。
+         */
+        val MIGRATION_4_5_SQL: List<String> = listOf(
+            "CREATE TABLE IF NOT EXISTS `auto_track_runs` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `atMs` INTEGER NOT NULL, " +
+                "`targets` INTEGER NOT NULL, `checked` INTEGER NOT NULL, `hits` INTEGER NOT NULL, " +
+                "`note` TEXT NOT NULL)",
+            "CREATE INDEX IF NOT EXISTS `index_auto_track_runs_atMs` " +
+                "ON `auto_track_runs` (`atMs`)",
+            "CREATE TABLE IF NOT EXISTS `purchase_records` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `platform` TEXT NOT NULL, " +
+                "`productId` TEXT, `title` TEXT NOT NULL, `price` REAL NOT NULL, " +
+                "`purchasedAtMs` INTEGER NOT NULL, `url` TEXT, " +
+                "`lastSeenPrice` REAL NOT NULL DEFAULT 0.0, `lastCheckedAtMs` INTEGER NOT NULL DEFAULT 0, " +
+                "`claimableYuan` REAL NOT NULL DEFAULT 0.0, `claimDeadlineMs` INTEGER NOT NULL DEFAULT 0, " +
+                "`claimedAtMs` INTEGER NOT NULL DEFAULT 0, `notifiedAtMs` INTEGER NOT NULL DEFAULT 0, " +
+                "`windowDaysOverride` INTEGER NOT NULL DEFAULT 0, `notifiedYuan` REAL NOT NULL DEFAULT 0.0)",
+            "CREATE INDEX IF NOT EXISTS `index_purchase_records_platform` " +
+                "ON `purchase_records` (`platform`)",
+            "CREATE INDEX IF NOT EXISTS `index_purchase_records_purchasedAtMs` " +
+                "ON `purchase_records` (`purchasedAtMs`)"
+        )
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_4_5_SQL.forEach { db.execSQL(it) }
+            }
+        }
+
+        /**
          * 全部显式迁移的**唯一清单**：DI 里的 `Room.databaseBuilder` 只认这一个列表。
          *
          * 为什么要有这条纪律：v2.6.5 的 2→3 迁移最初只登记在 `AppDatabase.getInstance()` 里，
@@ -137,7 +185,7 @@ abstract class AppDatabase : RoomDatabase() {
          * 现在两处都从本清单取，`getInstance()` 那份重复的 builder 已删除（它没有任何调用方）。
          * 守卫见 `DatabaseMigrationWiringTest`。
          */
-        val MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        val MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
     }
 }
 

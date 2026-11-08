@@ -14,11 +14,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 
-/** 备份/恢复影响的条目数（「恢复 N 个收藏 / M 个盯价目标」的 N/M 出处） */
-data class BackupCounts(val favorites: Int, val targets: Int)
+/**
+ * 备份/恢复影响的条目数（「恢复 N 个收藏 / M 个盯价目标 / K 条购买记录」的 N/M/K 出处）。
+ * [purchases] 有默认值 0：旧调用方（只关心收藏/目标）不用改。
+ */
+data class BackupCounts(val favorites: Int, val targets: Int, val purchases: Int = 0)
 
 /**
  * §五 备份仓储：WebDAV（主路径）与 SAF 本地文件（兜底路径）共享同一份 payload 编解码与合并规则。
+ *
+ * 合并口径（2026-11 起含购买记录）：
+ *  - 收藏 / 盯价目标：沿用「新者胜」（[BackupMerge]）；
+ *  - 购买记录：按**自然键**（platform + productId + purchasedAtMs + price）判重 ——
+ *    已存在则**保留本机进度**（最近现价/可申请金额/已申请标记/提醒档位都是本机观测结果，
+ *    不能被旧备份覆盖）；不存在则插入。跨机自增主键 id 不参与合并。
  *
  * WebDAV 约定（见 [WebDavClient] 注释）：
  *  - 目录 `/pricelens/`；文件 `pricelens-<yyyyMMdd-HHmmss>.json`；
@@ -73,7 +82,12 @@ class BackupRepository @Inject constructor(
         if (!dav.mkcol(BackupFormat.DIR)) throw IOException("远端创建目录 ${BackupFormat.DIR}/ 失败（权限或路径不对）")
         val now = System.currentTimeMillis()
         val name = BackupFormat.fileName(now)
-        val payload = BackupCodec.capture(db.productDao().getPinnedOnce(), db.priceTargetDao().getAllActive(), now)
+        val payload = BackupCodec.capture(
+            db.productDao().getPinnedOnce(),
+            db.priceTargetDao().getAllActive(),
+            now,
+            db.purchaseRecordDao().getAllOnce()
+        )
         dav.put("${BackupFormat.DIR}/$name", BackupCodec.encode(payload))
         // 保留策略：删除失败不算备份失败（备份已在远端，清理是尽力而为）
         runCatching {
@@ -99,12 +113,17 @@ class BackupRepository @Inject constructor(
 
     /** SAF 兜底 · 导出：写本机文件（content URI），payload 与 WebDAV 完全同源 */
     suspend fun exportTo(uri: Uri): Result<BackupCounts> = runCatching {
-        val payload = BackupCodec.capture(db.productDao().getPinnedOnce(), db.priceTargetDao().getAllActive(), System.currentTimeMillis())
+        val payload = BackupCodec.capture(
+            db.productDao().getPinnedOnce(),
+            db.priceTargetDao().getAllActive(),
+            System.currentTimeMillis(),
+            db.purchaseRecordDao().getAllOnce()
+        )
         withContext(Dispatchers.IO) {
             context.contentResolver.openOutputStream(uri)?.use { it.write(BackupCodec.encode(payload).toByteArray(Charsets.UTF_8)) }
                 ?: throw IOException("无法写入所选文件")
         }
-        BackupCounts(payload.favorites.size, payload.targets.size)
+        BackupCounts(payload.favorites.size, payload.targets.size, payload.purchases.size)
     }
 
     /** SAF 兜底 · 导入：读本机文件 → 同一套解码/校验/合并（schema 不认识同样拒绝） */
@@ -116,7 +135,7 @@ class BackupRepository @Inject constructor(
         applyPayload(BackupCodec.decode(text))
     }
 
-    /** 合并落库：逐条「新者胜」（[BackupMerge]），返回实际写入的条数 */
+    /** 合并落库：收藏/目标逐条「新者胜」（[BackupMerge]）；购买记录按自然键判重后补插 */
     private suspend fun applyPayload(payload: BackupPayload): BackupCounts {
         var favorites = 0
         for (dto in payload.favorites) {
@@ -134,6 +153,20 @@ class BackupRepository @Inject constructor(
                 targets++
             }
         }
-        return BackupCounts(favorites, targets)
+        var purchases = 0
+        for (dto in payload.purchases) {
+            val local = db.purchaseRecordDao().findByNaturalKey(
+                platform = dto.platform,
+                productId = dto.productId,
+                purchasedAtMs = dto.purchasedAtMs,
+                price = dto.price
+            )
+            // 已存在 → 保留本机进度（现价/可申请金额/已申请标记/提醒档位都是本机观测结果）
+            if (local == null) {
+                db.purchaseRecordDao().insert(dto.toEntity())
+                purchases++
+            }
+        }
+        return BackupCounts(favorites, targets, purchases)
     }
 }
