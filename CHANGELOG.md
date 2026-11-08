@@ -37,7 +37,16 @@
 - `npm run lint`：47 个 JS 文件 `node --check` 通过；`npm test`：78/78 断言通过。
 - 合成数据 Electron 冒烟走查：亮/暗双主题 + 900px 窄窗共约 20 张截图逐屏目视，
   仪表盘/图表区间/盯价筛选/右键暂停/B站筛选排序/帮助弹窗/主题持久化均实测，console 0 错误。
-- 未重新构建安装器、未做真实网络抓取实测；冒烟截图为合成数据，不作实机实况截图入库。
+- 未做真实网络抓取实测；冒烟截图为合成数据，不作实机实况截图入库。
+
+### 产物（已构建并随 GitHub Release 分发）
+
+- `PriceLens-2.7.0-x64.exe` — 114,267,915 字节
+  sha256 `5ed0fa832e0d3431c8774a4e827d08243edbc58fef3611dfb6c26020631f4d22`
+- `PriceLens-2.7.0-x64.zip` — 157,039,242 字节
+  sha256 `b5c5f95a92aee596868b2e04917c4badc058eeca078fbab71a785c6c4a4794bd`
+- 构建环境备注：本机火绒拦截 electron 缓存 zip 读取与 F:\node.exe 执行，
+  构建走 `--config.electronDist=node_modules/electron/dist` + 本地 npm shim + TMP 迁出 C:\Windows\Temp。
 
 ## [2.8.0.6] - 2026-10-23
 

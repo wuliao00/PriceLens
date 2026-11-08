@@ -19,3 +19,7 @@ _extract*
 _check_*
 build-output.log
 
+# 本机构建辅助（火绒拦截 F:\node.exe 时的 npm shim）与产物验证截图
+_build-shim/
+_verify_shots/
+

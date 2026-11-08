@@ -6,7 +6,7 @@
 >
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）+ Chrome/Edge 浏览器扩展
 >
-> 作者：**莫** | 版本：Android v2.8.0.6 / Desktop v2.6.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
+> 作者：**莫** | 版本：Android v2.8.0.6 / Desktop v2.7.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
 
 [![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -85,7 +85,8 @@
 | 平台 | Gitee（国内直链，免登录） | GitHub Release |
 |------|--------|----------|
 | **Android v2.8.0.6** | [PriceLens-2.8.0.6.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.6.apk) | [Release v2.8.0.6](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.6) |
-| **Windows v2.6.0** + **扩展 v1.0.0** | [Gitee 分卷签名包（13×9MiB，免登录）](https://gitee.com/wuliao11541/PriceLens/raw/dist/README-desktop-2.6.0.md) | [GitHub Release v2.6.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)（安装器/便携 zip/扩展） |
+| **Windows v2.7.0** | 本版未制分卷；可直连 GitHub 时用右栏 | [GitHub Release v2.7.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.7.0-desktop)（安装器/便携 zip） |
+| Windows v2.6.0 + **扩展 v1.0.0**（旧版） | [Gitee 分卷签名包（13×9MiB，免登录）](https://gitee.com/wuliao11541/PriceLens/raw/dist/README-desktop-2.6.0.md) | [GitHub Release v2.6.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)（安装器/便携 zip/扩展） |
 
 **网盘镜像（2026-10-23 更新）**
 
@@ -172,7 +173,8 @@ echo "sdk.dir=<你的 Android SDK 路径>" > local.properties
 
 **下载**：见上方 [国内加速下载](#国内加速下载推荐) 表格，或 [Releases](https://github.com/wuliao00/PriceLens/releases) 中的 NSIS 安装器 / ZIP 便携版
 
-> v2.6.0 桌面端与 v1.0.0 扩展已发布：[GitHub Release](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)。
+> v2.7.0 桌面端（行情观测站 UI 重塑 + 功能完善）已发布：[GitHub Release](https://github.com/wuliao00/PriceLens/releases/tag/v2.7.0-desktop)；浏览器扩展仍为 v1.0.0，随 2.6.0 Release 分发。
+> 旧版 v2.6.0 桌面端与 v1.0.0 扩展：[GitHub Release](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)。
 > Gitee 的桌面包已按 **9MiB × 13 卷**重压缩（自签名便携版；Gitee raw >10MB 需登录，9MiB 才能免登录直链）：
 > [分卷包说明与校验](https://gitee.com/wuliao11541/PriceLens/raw/dist/README-desktop-2.6.0.md)；
 > 下载 `download-desktop-2.6.0.ps1` 可一键下载+校验+解压，或手动下全 13 卷后用 7-Zip 解 `.001`。
