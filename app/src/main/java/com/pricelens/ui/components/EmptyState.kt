@@ -1,5 +1,6 @@
 package com.pricelens.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import com.pricelens.ui.theme.Dims
 
 /**
@@ -33,19 +35,29 @@ fun EmptyState(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
     ) {
         Column(
             modifier = Modifier.padding(Dims.SpacingL),
             horizontalAlignment = Alignment.Start
         ) {
             icon?.let {
-                Icon(
-                    it,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(Dims.SpacingXXL)
-                )
+                // 大改造：图标收进一枚 tonal 圆角方块（像一枚小 App 图标），
+                // 空态/引导卡从"裸图标飘在灰板上"变成有锚点的视觉块。
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Icon(
+                        it,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier
+                            .padding(Dims.SpacingS)
+                            .size(Dims.SpacingXXL)
+                    )
+                }
                 Spacer(Modifier.height(Dims.SpacingM))
             }
             Text(title, style = MaterialTheme.typography.titleMedium)

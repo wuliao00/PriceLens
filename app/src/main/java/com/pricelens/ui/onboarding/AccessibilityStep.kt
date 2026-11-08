@@ -3,14 +3,18 @@ package com.pricelens.ui.onboarding
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.pricelens.R
+import com.pricelens.ui.theme.Dims
 import com.pricelens.util.ShizukuHelper
 
 /**
@@ -59,7 +63,10 @@ class AccessibilityStep : OnboardingStep {
                                 else -> ShizukuHelper.oneClickSetup(context) { states.refresh() }
                             }
                         },
-                        shape = MaterialTheme.shapes.small
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = Dims.TouchMin)
                     ) {
                         // 按钮文案复用设置页既有三态字符串，不新造说法
                         Text(
@@ -93,7 +100,10 @@ class AccessibilityStep : OnboardingStep {
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     )
                 },
-                shape = MaterialTheme.shapes.small
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = Dims.TouchMin)
             ) {
                 Text(stringResource(R.string.onboarding_acc_action))
             }

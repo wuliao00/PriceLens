@@ -18,11 +18,14 @@ import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -30,14 +33,17 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
+import com.pricelens.accuracy.RelevanceGuard
 import com.pricelens.data.remote.ShihuoApi
 import com.pricelens.data.remote.SmzdmApi
 import com.pricelens.ui.common.AsyncValue
 import com.pricelens.ui.common.EmptyStateCause
 import com.pricelens.ui.common.EmptyStateCauseOf
 import com.pricelens.ui.common.valueOrDefault
+import com.pricelens.ui.common.valueOrNull
 import com.pricelens.ui.components.AppImage
 import com.pricelens.ui.components.EmptyState
 import com.pricelens.ui.components.PriceCard
@@ -46,6 +52,7 @@ import com.pricelens.ui.components.ShimmerList
 import com.pricelens.ui.overview.SearchViewModel
 import com.pricelens.ui.theme.Dims
 import com.pricelens.ui.theme.LocalSemanticColors
+import com.pricelens.ui.theme.PillShape
 import com.pricelens.ui.theme.PriceType
 import com.pricelens.ui.theme.SemanticPalette
 import com.pricelens.util.PriceFormatter
@@ -63,8 +70,43 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
     val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
     val postsAsync by searchViewModel.posts.collectAsStateWithLifecycle()
     val shihuoAsync by searchViewModel.shihuo.collectAsStateWithLifecycle()
+    // 参照价（候选价 / 到手价 / 本机实时价，拿不到就 null）：RelevanceGuard 的比值带要用它，
+    // 拿不到参照价时守卫只做文本判定，不会把"看起来像同款"的条目误判成第二来源。
+    val productAsync by searchViewModel.product.collectAsStateWithLifecycle()
+    val netPrice by searchViewModel.netPrice.collectAsStateWithLifecycle()
+    val livePrice by searchViewModel.livePrice.collectAsStateWithLifecycle()
+    val referencePrice = remember(productAsync, netPrice, livePrice) {
+        netPrice?.takeIf { it > 0.0 }
+            ?: livePrice?.takeIf { it > 0.0 }
+            ?: productAsync.valueOrNull()?.price?.takeIf { it > 0.0 }
+    }
     val posts = postsAsync.valueOrDefault(emptyList())
     val shihuoItems = shihuoAsync.valueOrDefault(emptyList())
+    // 同款过滤（2026-11 真机首轮修复，接 com.pricelens.accuracy.RelevanceGuard）：
+    // 之前关键词「苹果 iPhone 15 5G手机」下会硬塞「稳健医疗 Apple 苹果 iPhone ¥13.4」这类同品牌废条目、
+    // 「资源机 … ¥4,737」这种非全新机，以及和候选价差 52% 的引流爆料。
+    // 守卫在输入侧就挡掉（QueryRelevance + 否定词 + 价格比值带），宁可给空态也不硬塞。
+    val visiblePosts = remember(posts, keyword, referencePrice) {
+        if (keyword.isBlank()) {
+            posts
+        } else {
+            posts.filter {
+                RelevanceGuard.isLikelySameProduct(keyword, it.title, it.price, referencePrice)
+            }
+        }
+    }
+    val visibleShihuoItems = remember(shihuoItems, keyword, referencePrice) {
+        if (keyword.isBlank()) {
+            shihuoItems
+        } else {
+            shihuoItems.filter {
+                RelevanceGuard.isLikelySameProduct(keyword, it.title, it.price, referencePrice)
+            }
+        }
+    }
+    // 原始结果非空、但全被相关性过滤掉：空态要专门说明"是过滤不是没搜到"
+    val filteredAway = visiblePosts.isEmpty() && visibleShihuoItems.isEmpty() &&
+        (posts.isNotEmpty() || shihuoItems.isNotEmpty())
 
     val anyLoading = postsAsync is AsyncValue.Loading<*> || shihuoAsync is AsyncValue.Loading<*>
     if (anyLoading || (loading && posts.isEmpty() && shihuoItems.isEmpty())) {
@@ -72,7 +114,7 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
         return
     }
     val anyError = postsAsync is AsyncValue.Error<*> || shihuoAsync is AsyncValue.Error<*>
-    if (posts.isEmpty() && shihuoItems.isEmpty()) {
+    if (visiblePosts.isEmpty() && visibleShihuoItems.isEmpty()) {
         // F4（2026-09-29）：三种成因分开说（判定见 EmptyStateCauseOf，有 JVM 单测）。
         // 修复前这里只有两分支，"识货/值得买都被拦或全机断网"会落到 else 上，
         // 对刚搜过的人讲「请先搜索商品」——一句没发生过的原因。
@@ -88,7 +130,8 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
                 .padding(Dims.SpacingXL)
         ) {
             CommunityFeedSection()
-            Spacer(Modifier.height(Dims.SpacingXL))
+            Spacer(Modifier.height(Dims.SpacingL))
+            CommunityContextRow(keyword)
             // F3（2026-10-07 真机截图复核）：这段原来直接续在社区动态下面。社区没帖子时
             // 上面刚说「社区还没有帖子」，下面又是一张「请先搜索商品」的大卡——两段都读作
             // "这里没东西"，但讲的是两个完全不同的来源，用户分不清哪句针对哪块。
@@ -96,20 +139,29 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
             SectionHeader(stringResource(R.string.community_section_sources))
             EmptyState(
                 icon = if (emptyCause == EmptyStateCause.UNREACHABLE) Icons.Filled.Warning else Icons.Filled.ChatBubble,
-                title = stringResource(
-                    when (emptyCause) {
-                        EmptyStateCause.NOT_SEARCHED -> R.string.empty_search_first
-                        EmptyStateCause.UNREACHABLE -> R.string.error_load_failed
-                        EmptyStateCause.NO_MATCH -> R.string.community_no_result
-                    }
-                ),
-                desc = stringResource(
-                    when (emptyCause) {
-                        EmptyStateCause.NOT_SEARCHED -> R.string.community_empty_hint
-                        EmptyStateCause.UNREACHABLE -> R.string.error_retry_hint
-                        EmptyStateCause.NO_MATCH -> R.string.community_no_result_desc
-                    }
-                )
+                title = if (filteredAway) {
+                    // 原始结果有、但全被相关性过滤：必须说明"是过滤不是没搜到"
+                    stringResource(R.string.rd_community_filtered_title)
+                } else {
+                    stringResource(
+                        when (emptyCause) {
+                            EmptyStateCause.NOT_SEARCHED -> R.string.empty_search_first
+                            EmptyStateCause.UNREACHABLE -> R.string.error_load_failed
+                            EmptyStateCause.NO_MATCH -> R.string.community_no_result
+                        }
+                    )
+                },
+                desc = if (filteredAway) {
+                    stringResource(R.string.rd_community_filtered_desc)
+                } else {
+                    stringResource(
+                        when (emptyCause) {
+                            EmptyStateCause.NOT_SEARCHED -> R.string.community_empty_hint
+                            EmptyStateCause.UNREACHABLE -> R.string.error_retry_hint
+                            EmptyStateCause.NO_MATCH -> R.string.community_no_result_desc
+                        }
+                    )
+                }
             )
         }
         return
@@ -125,6 +177,10 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
             CommunityFeedSection()
             Spacer(Modifier.height(Dims.SpacingL))
         }
+        item(key = "context") {
+            CommunityContextRow(keyword)
+            Spacer(Modifier.height(Dims.SpacingS))
+        }
         if (anyError) {
             // 失败但持有旧数据：顶部提示，列表照常展示
             item(key = "error_hint") {
@@ -135,23 +191,23 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
                 )
             }
         }
-        if (shihuoItems.isNotEmpty()) {
+        if (visibleShihuoItems.isNotEmpty()) {
             item(key = "shihuo_header") {
                 SectionHeader(stringResource(R.string.community_shihuo))
             }
-            itemsIndexed(shihuoItems, key = { index, item -> "sh:${index}_${item.goodsId}" }) { _, item ->
+            itemsIndexed(visibleShihuoItems, key = { index, item -> "sh:${index}_${item.goodsId}" }) { _, item ->
                 ShihuoCard(item) {
                     if (item.url.isNotEmpty()) UrlOpener.open(context, item.url)
                 }
                 Spacer(Modifier.height(Dims.SpacingM))
             }
-            if (posts.isNotEmpty()) {
+            if (visiblePosts.isNotEmpty()) {
                 item(key = "smzdm_header") {
                     SectionHeader(stringResource(R.string.community_smzdm))
                 }
             }
         }
-        itemsIndexed(posts, key = { index, post -> "smzdm:${index}_${post.url.ifEmpty { post.title }}" }) { _, post ->
+        itemsIndexed(visiblePosts, key = { index, post -> "smzdm:${index}_${post.url.ifEmpty { post.title }}" }) { _, post ->
             PostCard(post) {
                 // 唤起值得买/京东/淘宝 App，未安装回退浏览器
                 if (post.url.isNotEmpty()) {
@@ -160,6 +216,32 @@ fun CommunityScreen(searchViewModel: SearchViewModel) {
             }
             Spacer(Modifier.height(Dims.SpacingM))
         }
+    }
+}
+
+/**
+ * 社区上下文横条：把「这一屏是按哪个关键词聚合的」钉在首屏。
+ * 空态与非空态共用同一口径——用户切到社区页时，第一眼要知道现在看的是哪件商品的内容。
+ */
+@Composable
+private fun CommunityContextRow(keyword: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer
+    ) {
+        Text(
+            if (keyword.isBlank()) {
+                stringResource(R.string.rd_community_context_blank)
+            } else {
+                stringResource(R.string.rd_community_context, keyword)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = Dims.SpacingM, vertical = Dims.SpacingS)
+        )
     }
 }
 
@@ -279,7 +361,8 @@ private fun PostCard(post: SmzdmApi.SmzdmPost, onClick: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = Dims.SpacingXS)
-                    .height(Dims.SpacingXS)
+                    .height(6.dp)
+                    .clip(PillShape)
             )
         }
     }

@@ -1,8 +1,11 @@
 package com.pricelens.ui.main
 
 import android.Manifest
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -68,6 +71,11 @@ import com.pricelens.BuildConfig
 import com.pricelens.R
 import com.pricelens.accessibility.OverlayManager
 import com.pricelens.data.repository.SettingsRepository
+import com.pricelens.ui.accuracy.accuracyViewOf
+import com.pricelens.ui.accuracy.toEngineKind
+import com.pricelens.ui.autotrack.AutoTrackViewModel
+import com.pricelens.ui.autotrack.toCardState
+import com.pricelens.ui.autotrack.toRunView
 import com.pricelens.ui.components.AppTopBar
 import com.pricelens.ui.components.PageTransition
 import com.pricelens.ui.components.StripReveal
@@ -96,6 +104,12 @@ import kotlinx.coroutines.delay
  * 而"同一段文本再来一次"（比如用户又分享了一次同一个链接）必须能再次触发搜索。
  */
 data class IncomingSearch(val text: String, val nonce: Long, val signature: String? = null)
+
+/**
+ * 从商品详情页「我买了 → 加入价保」带进价保页的预填信息。
+ * 只带商品名/平台键/现价，不预填实付价（用户自己知道花了多少，界面不替他猜）。
+ */
+data class ProtectionPrefill(val title: String, val platform: String, val price: Double)
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -189,6 +203,22 @@ fun MainScreen(
     // 阶段2：搜索编排集中在 SearchViewModel（Activity 作用域单例，跨标签共享）
     val searchViewModel: SearchViewModel = hiltViewModel()
     val priceWatchViewModel: com.pricelens.ui.price.PriceWatchViewModel = hiltViewModel()
+    // 自动追价 / 价保（2026-11 新增）：同一 Activity 作用域，盯价 tab、自动化中心、价保页共享一份状态
+    val autoTrackViewModel: AutoTrackViewModel = hiltViewModel()
+    val accuracySnapshot by searchViewModel.accuracy.collectAsStateWithLifecycle()
+    val accuracy = accuracyViewOf(accuracySnapshot)
+    val autoTrackState by autoTrackViewModel.autoTrack.collectAsStateWithLifecycle()
+    val protectionState by autoTrackViewModel.protection.collectAsStateWithLifecycle()
+    val autoTrackRuns by autoTrackViewModel.runs.collectAsStateWithLifecycle()
+    val autoTrackWifiOnly by autoTrackViewModel.wifiOnly.collectAsStateWithLifecycle()
+    val autoTrackQuietPause by autoTrackViewModel.quietPause.collectAsStateWithLifecycle()
+    val autoTrackCard = autoTrackState.toCardState(autoTrackWifiOnly, autoTrackQuietPause)
+    val protectionCard = protectionState.toCardState()
+    // 活跃盯价目标数（自动追价状态契约里没有这个字段，由盯价 VM 提供；概览小卡/中心页共用）
+    val watchTargets by priceWatchViewModel.watchTargets.collectAsStateWithLifecycle()
+    val autoTrackCardWithTargets = remember(autoTrackCard, watchTargets) {
+        autoTrackCard.copy(targetCount = watchTargets.count { it.active })
+    }
     val keyword by searchViewModel.keyword.collectAsStateWithLifecycle()
     // 搜索框聚焦时展示的历史 chips（文档 UX）——「我的」页搜索历史同一数据源
     val recentSearches by searchViewModel.recentSearches.collectAsStateWithLifecycle()
@@ -205,6 +235,11 @@ fun MainScreen(
     var searchFocused by rememberSaveable { mutableStateOf(false) }
     var showKeepAlive by rememberSaveable { mutableStateOf(false) }
     var showScripts by rememberSaveable { mutableStateOf(false) }
+    // 2026-11 新增两个全屏页：自动化中心 / 价保助手（沿用 showSettings + PageTransition 的覆盖路由）
+    var showAutoTrack by rememberSaveable { mutableStateOf(false) }
+    var showPriceProtection by rememberSaveable { mutableStateOf(false) }
+    // 从商品详情页「我买了」进入价保页时的预填（null = 直接进价保页，无预填）
+    var protectionPrefill by remember { mutableStateOf<ProtectionPrefill?>(null) }
     // §十一 商品详情页：底部导航 6→4 后，B站/找券都在这一页里；路由沿用 [showSettings] 那种全屏覆盖
     var showProduct by rememberSaveable { mutableStateOf(false) }
     // 「先按这个关键词搜、再把详情页盖上来」。nonce 是为了同一个商品再点一次也能重跑一次搜索
@@ -274,6 +309,26 @@ fun MainScreen(
     }
     // 详情页是"页"不是"弹窗"：返回键必须先关它，不能直接把 App 退掉
     BackHandler(enabled = showProduct) { showProduct = false }
+    // 自动化中心 / 价保助手同样是"页"：返回键先关页，不退出 App
+    BackHandler(enabled = showAutoTrack) { showAutoTrack = false }
+    BackHandler(enabled = showPriceProtection) { showPriceProtection = false }
+
+    // 应用启动补登记自动追价链 + 价保周期任务（幂等；用户没打开过中心页也要按时跑）
+    LaunchedEffect(Unit) { autoTrackViewModel.ensureScheduled() }
+
+    // 「粘贴链接比价」主 CTA：把剪贴板当成搜索输入（与顶栏搜索同一个入口，不另造一条链路）。
+    // 剪贴板为空时明确告诉用户去哪拿链接，而不是点了没反应。
+    val pasteAndSearch: () -> Unit = {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }
+            ?.getItemAt(0)?.coerceToText(context)?.toString()?.trim()
+        if (text.isNullOrBlank()) {
+            Toast.makeText(context, R.string.rd_hero_clipboard_empty, Toast.LENGTH_SHORT).show()
+        } else {
+            tab = Tab.OVERVIEW
+            searchViewModel.search(text)
+        }
+    }
 
     // 剪贴板识别（文档 §4.2）：回前台时读一次，认出商品链接就在概览页顶部给一条横条。
     // Android 10+ 只有前台应用能读剪贴板，所以必须挂在 ON_RESUME 上；同一段内容只提示一次。
@@ -343,7 +398,7 @@ fun MainScreen(
             )
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
                 // §2.1 底部导航选中态（文档"6 tab 收敛后每格要有反应"）：
                 // 未选中 Outlined / 选中 Filled 交叉淡入 + 图标 0.92→1.0 缩放，实现在 NavTabItem
                 Tab.entries.forEach { t ->
@@ -468,12 +523,36 @@ fun MainScreen(
                         // B站不再是独立 tab：引导卡的「查看B站评测」落到详情页的评测段
                         onGoBilibili = { openProduct(keyword, ProductSection.REVIEW) },
                         // 结果区的「看详情」是常规入口，落在价格段
-                        onOpenProduct = { openProduct(it, ProductSection.PRICE) }
+                        onOpenProduct = { openProduct(it, ProductSection.PRICE) },
+                        // 首屏主 CTA：粘贴链接比价 / 打开自动追价
+                        onPasteLink = pasteAndSearch,
+                        onOpenAutoTrack = { showAutoTrack = true },
+                        accuracy = accuracy,
+                        onReportAccuracyIssue = { issue ->
+                            searchViewModel.reportAccuracyIssue(issue.toEngineKind())
+                        },
+                        // 首屏追价状态小卡（点开进自动化中心）
+                        autoTrack = autoTrackCardWithTargets
                     )
                     Tab.PRICE -> com.pricelens.ui.price.PriceScreen(
                         searchViewModel,
                         priceWatchViewModel,
-                        onOpenProduct = { openProduct(it, ProductSection.PRICE) }
+                        onOpenProduct = { openProduct(it, ProductSection.PRICE) },
+                        // 自动追价中心：状态 + 动作全部经 AutoTrackViewModel（与全屏页同一份状态）
+                        autoTrack = autoTrackCard,
+                        protection = protectionCard,
+                        autoTrackRuns = autoTrackRuns.map { it.toRunView() },
+                        onAutoTrackToggle = autoTrackViewModel::setEnabled,
+                        onAutoTrackRunNow = autoTrackViewModel::runNow,
+                        onOpenAutoTrackCenter = { showAutoTrack = true },
+                        onAutoTrackInterval = autoTrackViewModel::setIntervalMinutes,
+                        onAutoTrackWifiOnly = autoTrackViewModel::setWifiOnly,
+                        onAutoTrackQuietPause = autoTrackViewModel::setQuietPause,
+                        onOpenPriceProtection = {
+                            protectionPrefill = null
+                            showPriceProtection = true
+                        },
+                        onGoSearch = { tab = Tab.OVERVIEW }
                     )
                     Tab.COMMUNITY -> com.pricelens.ui.community.CommunityScreen(searchViewModel)
                     Tab.PROFILE -> com.pricelens.ui.profile.ProfileScreen(
@@ -484,7 +563,12 @@ fun MainScreen(
                             tab = Tab.OVERVIEW
                             searchViewModel.research(it)
                         },
-                        onOpenScripts = { showScripts = true }
+                        onOpenScripts = { showScripts = true },
+                        onOpenAutoTrack = { showAutoTrack = true },
+                        onOpenPriceProtection = {
+                            protectionPrefill = null
+                            showPriceProtection = true
+                        }
                     )
                 }
             }
@@ -522,6 +606,13 @@ fun MainScreen(
             onOpenKeepAlive = {
                 showSettings = false
                 showKeepAlive = true
+            },
+            // 设置页新增两组：自动追价（只读状态 + 去中心页）/ 数据源可信度（只读健康板）
+            autoTrack = autoTrackCard,
+            sourceBoard = accuracy?.sources.orEmpty(),
+            onOpenAutoTrack = {
+                showSettings = false
+                showAutoTrack = true
             }
         )
     }
@@ -546,7 +637,43 @@ fun MainScreen(
         com.pricelens.ui.product.ProductDetailScreen(
             searchViewModel = searchViewModel,
             initialSection = productSection,
-            onBack = { showProduct = false }
+            onBack = { showProduct = false },
+            accuracy = accuracy,
+            onReportAccuracyIssue = { issue ->
+                searchViewModel.reportAccuracyIssue(issue.toEngineKind())
+            },
+            // 「我买了 → 加入价保」：带着商品名/平台/现价进位保页预填
+            onAddToPriceProtection = { title, platform, price ->
+                protectionPrefill = ProtectionPrefill(title, platform, price)
+                showProduct = false
+                showPriceProtection = true
+            }
+        )
+    }
+
+    // 自动化中心（2026-11 新增全屏页）：完整控制台 + 运行历史 + 来源健康
+    PageTransition(visible = showAutoTrack) {
+        com.pricelens.ui.autotrack.AutoTrackScreen(
+            onBack = { showAutoTrack = false },
+            onOpenPriceProtection = {
+                showAutoTrack = false
+                protectionPrefill = null
+                showPriceProtection = true
+            },
+            sourceBoard = accuracy?.sources.orEmpty()
+        )
+    }
+
+    // 价保助手（2026-11 新增全屏页）：录入购买 / 价保列表；从详情页进来时带预填
+    PageTransition(visible = showPriceProtection) {
+        com.pricelens.ui.autotrack.PriceProtectionScreen(
+            onBack = {
+                showPriceProtection = false
+                protectionPrefill = null
+            },
+            initialTitle = protectionPrefill?.title,
+            initialPlatform = protectionPrefill?.platform,
+            initialPrice = protectionPrefill?.price
         )
     }
 }

@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -32,12 +35,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import com.pricelens.R
 import com.pricelens.data.repository.SettingsRepository
 import com.pricelens.ui.theme.Dims
 import com.pricelens.ui.theme.MotionDurations
+import com.pricelens.ui.theme.PillShape
 import com.pricelens.ui.theme.PriceLensEasing
 
 /**
@@ -95,11 +100,21 @@ fun OnboardingFlow(settings: SettingsRepository, onFinish: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    stringResource(R.string.onboarding_step_count, currentStep + 1, steps.size),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 顶栏也给品牌标记：四步里品牌识别不断线
+                    Icon(
+                        painter = painterResource(R.drawable.ic_brand_mark),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(Dims.SpacingXL)
+                    )
+                    Spacer(Modifier.width(Dims.SpacingS))
+                    Text(
+                        stringResource(R.string.onboarding_step_count, currentStep + 1, steps.size),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 StepDots(count = steps.size, index = currentStep)
                 TextButton(onClick = { finish() }) {
                     Text(stringResource(R.string.onboarding_skip_all))
@@ -128,7 +143,11 @@ fun OnboardingFlow(settings: SettingsRepository, onFinish: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (currentStep != 0) {
-                    OutlinedButton(onClick = { goBack() }, shape = MaterialTheme.shapes.small) {
+                    OutlinedButton(
+                        onClick = { goBack() },
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.heightIn(min = Dims.TouchMin)
+                    ) {
                         Text(stringResource(R.string.onboarding_back))
                     }
                 }
@@ -136,7 +155,8 @@ fun OnboardingFlow(settings: SettingsRepository, onFinish: () -> Unit) {
                 Button(
                     onClick = { advance() },
                     enabled = canAccept,
-                    shape = MaterialTheme.shapes.small
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.heightIn(min = Dims.TouchMin)
                 ) {
                     Text(
                         stringResource(
@@ -153,15 +173,24 @@ fun OnboardingFlow(settings: SettingsRepository, onFinish: () -> Unit) {
     }
 }
 
-/** 步骤进度点：当前步加宽（克制，只用尺寸区分，不加弹跳动效） */
+/** 步骤进度（大改造：当前步是一枚加宽的金色胶囊，其余是灰点——静态尺寸差，不加弹跳动效） */
 @Composable
 private fun StepDots(count: Int, index: Int) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Dims.SpacingXS)) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(Dims.SpacingXS),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         repeat(count) { i ->
             val active = i == index
             Surface(
-                modifier = Modifier.size(if (active) Dims.DotActive else Dims.DotIdle),
-                shape = CircleShape,
+                modifier = if (active) {
+                    Modifier
+                        .width(Dims.SpacingXXL)
+                        .height(Dims.DotActive)
+                } else {
+                    Modifier.size(Dims.DotActive)
+                },
+                shape = PillShape,
                 color = if (active) {
                     MaterialTheme.colorScheme.primary
                 } else {

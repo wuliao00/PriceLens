@@ -352,7 +352,8 @@ private fun CouponCard(coupon: GwdangApi.Coupon, onCopy: () -> Unit) {
             Text(
                 stringResource(R.string.coupon_amount, coupon.amount.toInt()),
                 style = PriceType.PriceLarge,
-                color = LocalSemanticColors.current.suspicious
+                // 大改造：券面额走"券品红"（与风险红、到手价红区分开），一眼认出这是券
+                color = LocalSemanticColors.current.coupon
             )
             Spacer(Modifier.width(Dims.SpacingM))
             Column(Modifier.weight(1f)) {

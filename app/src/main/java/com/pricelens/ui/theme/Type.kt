@@ -35,6 +35,9 @@ import androidx.compose.ui.unit.sp
  */
 val PriceLensTypography = Typography(
     displayLarge = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Bold, lineHeight = 36.sp),
+    // 大改造收编：引导页 StepScaffold 的标题一直落在 M3 默认值（24sp W400）上，
+    // 规格表看不见它。这里显式给出并升到 SemiBold——首启第一屏的标题要有分量。
+    headlineSmall = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.SemiBold, lineHeight = 32.sp),
     titleLarge = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.SemiBold, lineHeight = 28.sp),
     titleMedium = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold, lineHeight = 22.sp),
     titleSmall = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp),

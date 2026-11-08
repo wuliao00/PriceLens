@@ -1,13 +1,17 @@
 package com.pricelens.ui.onboarding
 
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.pricelens.R
 import com.pricelens.accessibility.OverlayManager
+import com.pricelens.ui.theme.Dims
 
 /**
  * 第 3 步：悬浮窗权限。
@@ -39,7 +43,10 @@ class OverlayStep : OnboardingStep {
         ) {
             OutlinedButton(
                 onClick = { OverlayManager.requestPermission(context) },
-                shape = MaterialTheme.shapes.small
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = Dims.TouchMin)
             ) {
                 Text(stringResource(R.string.onboarding_overlay_action))
             }

@@ -1,6 +1,7 @@
 package com.pricelens.ui.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -17,9 +18,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PriceCheck
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
@@ -43,7 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -57,13 +59,16 @@ import com.pricelens.R
 import com.pricelens.data.local.entity.PriceTargetEntity
 import com.pricelens.ui.components.AppImage
 import com.pricelens.ui.components.EmptyText
+import com.pricelens.ui.components.EntryTile
+import com.pricelens.ui.components.PlatformBadge
 import com.pricelens.ui.components.PriceBadge
-import com.pricelens.ui.components.PriceCard
 import com.pricelens.ui.components.SectionHeader
+import com.pricelens.ui.components.StatTile
 import com.pricelens.ui.layout.CompactTileRow
 import com.pricelens.ui.price.PriceWatchViewModel
 import com.pricelens.ui.theme.BadgeTone
 import com.pricelens.ui.theme.Dims
+import com.pricelens.ui.theme.PillShape
 import com.pricelens.ui.theme.PriceType
 import com.pricelens.util.PriceFormatter
 import com.pricelens.util.UrlOpener
@@ -78,7 +83,13 @@ import com.pricelens.util.UrlOpener
  * 所以"发起搜索"这个动作必须连带把概览页带过去，这个决定留在知道 tab 在哪的一层。
  */
 @Composable
-fun ProfileScreen(onOpenSettings: () -> Unit, onSearchKeyword: (String) -> Unit, onOpenScripts: () -> Unit = {}) {
+fun ProfileScreen(
+    onOpenSettings: () -> Unit,
+    onSearchKeyword: (String) -> Unit,
+    onOpenScripts: () -> Unit = {},
+    onOpenAutoTrack: () -> Unit = {},
+    onOpenPriceProtection: () -> Unit = {}
+) {
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val priceWatchViewModel: PriceWatchViewModel = hiltViewModel()
 
@@ -156,57 +167,35 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onSearchKeyword: (String) -> Unit,
             }
         }
         item(key = "entries") {
-            // 组间留白走 Dims.GroupGap：入口区与"盯价目标"之间要能看出换了一组（SectionHeader 自己带的
-            // 20dp 只够撑开同组内的标题层级，撑不开组）
+            // 组间留白走 Dims.GroupGap：入口区与"盯价目标"之间要能看出换了一组
+            // （SectionHeader 自带的 20dp 只够撑开同组内的标题层级，撑不开组）
             Spacer(Modifier.height(Dims.GroupGap))
-            CompactTileRow(onClick = onOpenScripts) {
-                Icon(
-                    Icons.Filled.Terminal,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+            Column(verticalArrangement = Arrangement.spacedBy(Dims.SpacingS)) {
+                // 新增两个功能中心入口：自动化中心 / 价保助手（都是全屏二级页）
+                EntryTile(
+                    icon = Icons.Filled.PriceCheck,
+                    title = stringResource(R.string.rd_profile_autotrack_title),
+                    desc = stringResource(R.string.rd_profile_autotrack_desc),
+                    onClick = onOpenAutoTrack
                 )
-                // F8（2026-10-07 真机截图复核）：标题和说明原来各占 weight(1f) 平分一行，
-                // 结果是两个都被省略号截断——「自定义脚本（S…」「ADB 权限执行，预…」，
-                // 一屏里没有任何一句话是完整的。改成图标 + 上下两行（主名 / 次要说明）：
-                // 这是列表入口的通行排法，两行都读得完，行高仍守在 Dims.RowCompact 内。
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.profile_scripts_title),
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        stringResource(R.string.profile_scripts_desc),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            Spacer(Modifier.height(Dims.SpacingXS))
-            CompactTileRow(onClick = onOpenSettings) {
-                Icon(
-                    Icons.Filled.Settings,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                EntryTile(
+                    icon = Icons.Filled.ConfirmationNumber,
+                    title = stringResource(R.string.rd_profile_protect_title),
+                    desc = stringResource(R.string.rd_profile_protect_desc),
+                    onClick = onOpenPriceProtection
                 )
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.profile_settings_title),
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        stringResource(R.string.profile_settings_desc),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                EntryTile(
+                    icon = Icons.Filled.Terminal,
+                    title = stringResource(R.string.profile_scripts_title),
+                    desc = stringResource(R.string.profile_scripts_desc),
+                    onClick = onOpenScripts
+                )
+                EntryTile(
+                    icon = Icons.Filled.Settings,
+                    title = stringResource(R.string.profile_settings_title),
+                    desc = stringResource(R.string.profile_settings_desc),
+                    onClick = onOpenSettings
+                )
             }
         }
         item(key = "footer") {
@@ -237,26 +226,47 @@ fun ProfileScreen(onOpenSettings: () -> Unit, onSearchKeyword: (String) -> Unit,
 
 @Composable
 private fun ProfileHeader() {
-    PriceCard(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    // 大改造：资料头从"白卡 + 蓝图标"换成整块品牌金卡片——App 图标、名称、标语、
+    // 免费徽标全落在金上（onPrimary 排字），是"我的"页第一屏的品牌锚点。
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.primary
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(Dims.SpacingL)
+        ) {
             Icon(
-                painter = painterResource(R.drawable.ic_launcher),
+                painter = painterResource(R.drawable.ic_brand_mark),
                 contentDescription = stringResource(R.string.app_name),
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(Dims.SpacingXXXL + Dims.SpacingXL)
-                    .clip(MaterialTheme.shapes.medium)
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(Dims.SpacingXXXL + Dims.SpacingXL)
             )
             Spacer(Modifier.size(Dims.SpacingL))
             Column {
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge)
+                Text(
+                    stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
                 Text(
                     stringResource(R.string.profile_tagline, BuildConfig.VERSION_NAME),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
                 )
                 Spacer(Modifier.height(Dims.SpacingS))
-                PriceBadge(stringResource(R.string.profile_free_badge), BadgeTone.POSITIVE)
+                Surface(
+                    shape = PillShape,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.16f)
+                ) {
+                    Text(
+                        stringResource(R.string.profile_free_badge),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.padding(horizontal = Dims.SpacingS, vertical = Dims.SpacingXS)
+                    )
+                }
             }
         }
     }
@@ -272,38 +282,19 @@ private fun StatsRow(pinnedCount: Int, targetCount: Int, cache: CacheStats) {
     // 现在四格各读各的，放不下就**换行**——系统字体调大时也不会再吃掉最后一个字。
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         FlowRow(
-            modifier = Modifier.padding(horizontal = Dims.SpacingS, vertical = Dims.SpacingS),
-            horizontalArrangement = Arrangement.spacedBy(Dims.SpacingL),
-            verticalArrangement = Arrangement.spacedBy(Dims.SpacingXS)
+            modifier = Modifier.padding(horizontal = Dims.SpacingL, vertical = Dims.SpacingM),
+            horizontalArrangement = Arrangement.spacedBy(Dims.SpacingXL),
+            verticalArrangement = Arrangement.spacedBy(Dims.SpacingS)
         ) {
-            StatCell(stringResource(R.string.profile_stat_favorites), pinnedCount.toString())
-            StatCell(stringResource(R.string.profile_stat_watching), targetCount.toString())
-            StatCell(stringResource(R.string.profile_stat_cache), cache.memoryText)
-            StatCell(stringResource(R.string.profile_stat_images), cache.imageText)
+            StatTile(label = stringResource(R.string.profile_stat_favorites), value = pinnedCount.toString())
+            StatTile(label = stringResource(R.string.profile_stat_watching), value = targetCount.toString())
+            StatTile(label = stringResource(R.string.profile_stat_cache), value = cache.memoryText)
+            StatTile(label = stringResource(R.string.profile_stat_images), value = cache.imageText)
         }
-    }
-}
-
-/** 一格统计：标签（labelSmall，次要色）+ 值（等宽数字，主色）。值里不许再出现标签词 */
-@Composable
-private fun StatCell(label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.size(Dims.SpacingXS))
-        Text(
-            value,
-            style = PriceType.PriceRowCompact,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1
-        )
     }
 }
 
@@ -432,45 +423,65 @@ private fun SwipeBackground(direction: SwipeToDismissBoxValue, target: PriceTarg
 }
 
 /**
- * 盯价目标行（紧凑单行，替换原来的两行卡片）。
+ * 盯价目标行（2026-11 真机首轮重排）：
+ *  - 标题优先占宽、最多两行省略；行尾只放删除图标；
+ *  - 第二行给平台徽标 + 暂停状态，右侧是目标价（不再和标题/按钮抢同一行）；
+ *  - 暂停中的行在第三行给「恢复」明路按钮；
+ *  - 点行 = 改目标价；右滑暂停/恢复、左滑删除的手势保留（[TargetSwipeRow]）。
  *
- * 段位：标题 · 「已暂停」徽标 · 目标价 · 恢复 · 删除。宽度账（内容宽 302.86dp）：
- *  - 未暂停：目标价 60 + 删除键 48 + 段间距 24 = 132 → 标题拿 170dp（≈12 个 14sp 汉字）；
- *  - 已暂停：再挤进徽标 60 + 恢复键 56 = 248 → 标题只剩 ~54dp（≈4 字）会被省略号。
- *    这是"一屏多放一行"的代价，刻意接受：此时"已暂停"徽标 + 两个动作就是这一行的主要信息，
- *    标题靠点按后的改价对话框（对话框里标题给两行）再读一次。真机走查若认为不可接受，
- *    退路是把恢复/删除收进长按菜单（但那是隐藏入口，与"明路可走"的既有决定冲突，不擅自做）。
+ * 旧版把标题、徽标、目标价、恢复、删除全塞进 60dp 单行，真机深色截图里标题被压成「…」、
+ * 平台徽标消失——「我的」页与盯价页目标卡现在共用同一套「标题优先 + 徽标单独一行」的排法。
  */
 @Composable
 private fun TargetRow(target: PriceTargetEntity, onClick: () -> Unit, onResume: () -> Unit, onDelete: () -> Unit) {
-    CompactTileRow(onClick = onClick) {
-        Text(
-            target.title,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
-        )
-        if (!target.active) {
-            PriceBadge(stringResource(R.string.watch_target_paused_badge), BadgeTone.NEUTRAL)
-        }
-        Text(
-            stringResource(R.string.profile_target_price, PriceFormatter.format(target.targetPrice)),
-            style = PriceType.PriceRowCompact,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
-        if (!target.active) {
-            TextButton(onClick = onResume) {
-                Text(stringResource(R.string.watch_target_resume))
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer
+    ) {
+        Column(Modifier.padding(Dims.SpacingM)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    target.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(top = Dims.SpacingXS)
+                )
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = stringResource(R.string.cd_swipe_delete_target),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
-        }
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Filled.Delete,
-                contentDescription = stringResource(R.string.cd_swipe_delete_target),
-                tint = MaterialTheme.colorScheme.error
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PlatformBadge(target.platform)
+                if (!target.active) {
+                    Spacer(Modifier.size(Dims.SpacingXS))
+                    PriceBadge(stringResource(R.string.watch_target_paused_badge), BadgeTone.NEUTRAL)
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    stringResource(R.string.profile_target_price, PriceFormatter.format(target.targetPrice)),
+                    style = PriceType.PriceRowCompact,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
+                )
+            }
+            if (!target.active) {
+                Row(Modifier.fillMaxWidth()) {
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onResume) {
+                        Text(stringResource(R.string.watch_target_resume))
+                    }
+                }
+            }
         }
     }
     Spacer(Modifier.height(Dims.SpacingXS))

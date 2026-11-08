@@ -58,14 +58,14 @@ fun ShimmerSkeleton(modifier: Modifier = Modifier) {
         )
     )
 
-    // §3.5 shimmer 两色从 colorScheme 派生：亮色向白提亮、暗色向 surface 提亮，
-    // 保证两主题下骨架与高光都有可辨识的对比
+    // §3.5 shimmer 两色从 colorScheme 派生（大改造：底走 surfaceContainerHigh，
+    // 高光在暗色下向品牌金轻混、亮色下向白提亮），保证两主题下骨架与高光都有可辨识对比
     val darkTheme = isSystemInDarkTheme()
-    val base = MaterialTheme.colorScheme.surfaceVariant
+    val base = MaterialTheme.colorScheme.surfaceContainerHigh
     val highlight = if (darkTheme) {
-        lerp(base, MaterialTheme.colorScheme.surface, 0.35f)
+        lerp(base, MaterialTheme.colorScheme.primary, 0.10f)
     } else {
-        lerp(base, Color.White, 0.16f)
+        lerp(base, Color.White, 0.5f)
     }
 
     Row(modifier = modifier.height(Dims.ListItemHeight).padding(Dims.SpacingM)) {
@@ -96,16 +96,20 @@ fun ShimmerSkeleton(modifier: Modifier = Modifier) {
     }
 }
 
-/** shimmer 高亮：drawBehind 在绘制阶段画底色 + 移动高光条，不触发重组 */
+/** shimmer 高亮：drawBehind 在绘制阶段画底色 + 移动高光带，不触发重组。
+ *  大改造：高光带从硬边矩形换成线性渐变（透明→高光→透明），扫过更柔。 */
 private fun Modifier.drawShimmer(progress: Float, base: Color, highlight: Color): Modifier = this.then(
     Modifier.drawBehind {
         drawRect(color = base)
         val bandWidth = size.width
         val x = progress * size.width
         drawRect(
-            color = highlight,
-            topLeft = androidx.compose.ui.geometry.Offset(x - bandWidth / 2, 0f),
-            size = androidx.compose.ui.geometry.Size(bandWidth, size.height)
+            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                colors = listOf(Color.Transparent, highlight, Color.Transparent),
+                start = androidx.compose.ui.geometry.Offset(x - bandWidth / 2, 0f),
+                end = androidx.compose.ui.geometry.Offset(x + bandWidth / 2, 0f)
+            ),
+            size = size
         )
     }
 )

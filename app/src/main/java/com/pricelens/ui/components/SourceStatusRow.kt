@@ -1,49 +1,34 @@
 package com.pricelens.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pricelens.R
 import com.pricelens.data.remote.CrawlerBlockedException
 import com.pricelens.data.remote.CrawlerResult
 import com.pricelens.ui.common.AsyncValue
 import com.pricelens.ui.overview.SearchViewModel
-import com.pricelens.ui.theme.BadgeTone
-import com.pricelens.ui.theme.Dims
-import com.pricelens.ui.theme.bg
-import com.pricelens.ui.theme.fg
 
 /**
- * 数据源状态行（清晰原则：一屏看清每个源的真实结局）。
+ * 数据源状态板（清晰原则：一屏看清每个源的真实结局）。
  *
- * 每源（历史价/当当/B站/优惠券/爆料/识货）一枚状态徽标：
+ * 2026-11 大改造：从「一排横向滚动的状态胶囊」升级成**来源健康板**
+ * （[SourceHealthBoard]：可用计数 + 按源分段的健康横条 + 色点与不可达原因）。
+ * 状态判定（[sourceChipStateOf]）与文案口径原样保留——那套判定有 JVM 单测钉着，
+ * 这次只换渲染，不换语义。
+ *
+ * 每源（历史价/当当/B站/优惠券/爆料/识货）的结局：
  *  - AsyncValue.Loading → 加载中
  *  - Success(有数据) → 正常
- *  - Success(空表) → **无结果**：够着了该源、过滤后确实 0 条（F4 前这一格写成「正常」）
+ *  - Success(空表) → **无结果**：够着了该源、过滤后确实 0 条（仍算可达，健康板上算可用）
  *  - Error → 反爬（cause 是 [CrawlerBlockedException]，或 [SearchViewModel.lastOutcome] 为 Blocked）/ 失败
- *  - Idle → 未查询
+ *  - Idle → 未查询（不占健康板：还没请求过，没有"健康"可言）
  *
  * 已知合并：当当徽标共用 `posts` 的状态（当当是候选主源，成功即进入爆料/候选），
  * 所以"当当正常而值得买被拦"时当当会跟着显示反爬；域名结果只用于区分反爬与失败。
- *
- * 域名诊断结果随 outcomesVersion（每轮搜索结束递增）刷新，此处订阅它
- * 以便搜索结束后重组时读到最新的 lastOutcomeFor 结果。
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SourceStatusRow(viewModel: SearchViewModel, modifier: Modifier = Modifier) {
     val loading by viewModel.loading.collectAsStateWithLifecycle()
@@ -63,99 +48,76 @@ fun SourceStatusRow(viewModel: SearchViewModel, modifier: Modifier = Modifier) {
         return
     }
 
-    // F12（2026-10-08 真机截图复核）：这里原来是 `Row + horizontalScroll`，六枚徽标在
-    // 1080px 宽的屏上只放得下 2.5 枚——而本组件的注释写的恰恰是"一屏看清每个源的真实结局"。
-    // 横向滚动把"哪几个源被拦了"藏到屏外，等于把最需要看见的信息做成要主动 swipe 才看得到。
-    // 改成 FlowRow：放不下就换行，六枚全在眼前（与 F5 统计行同一处理）。
-    FlowRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(Dims.SpacingS),
-        verticalArrangement = Arrangement.spacedBy(Dims.SpacingXS)
-    ) {
-        SourceChip(
-            stringResource(R.string.src_label_history),
-            history,
-            viewModel.lastOutcome("apapia-history.manmanbuy.com")
-        )
-        SourceChip(
-            stringResource(R.string.src_label_dangdang),
+    val cells = listOf(
+        cellOf(
+            label = stringResource(R.string.src_label_history),
+            sourceId = "history",
+            value = history,
+            outcome = viewModel.lastOutcome("apapia-history.manmanbuy.com")
+        ),
+        cellOf(
+            label = stringResource(R.string.src_label_dangdang),
             // 当当是候选主源（成功即进入爆料/候选），按 posts 状态 + 域名结果展示
-            posts,
-            viewModel.lastOutcome("search.dangdang.com")
-        )
-        SourceChip(
-            stringResource(R.string.src_label_bili),
-            videos,
-            viewModel.lastOutcome("api.bilibili.com")
-        )
-        SourceChip(
-            stringResource(R.string.src_label_coupon),
-            coupons,
-            viewModel.lastOutcome("www.gwdang.com")
-        )
-        SourceChip(
-            stringResource(R.string.src_label_posts),
-            posts,
-            viewModel.lastOutcome("search.smzdm.com")
-        )
-        SourceChip(
-            stringResource(R.string.src_label_shihuo),
-            shihuo,
+            sourceId = "dangdang",
+            value = posts,
+            outcome = viewModel.lastOutcome("search.dangdang.com")
+        ),
+        cellOf(
+            label = stringResource(R.string.src_label_bili),
+            sourceId = "bili",
+            value = videos,
+            outcome = viewModel.lastOutcome("api.bilibili.com")
+        ),
+        cellOf(
+            label = stringResource(R.string.src_label_coupon),
+            sourceId = "coupon",
+            value = coupons,
+            outcome = viewModel.lastOutcome("www.gwdang.com")
+        ),
+        cellOf(
+            label = stringResource(R.string.src_label_posts),
+            sourceId = "posts",
+            value = posts,
+            outcome = viewModel.lastOutcome("search.smzdm.com")
+        ),
+        cellOf(
+            label = stringResource(R.string.src_label_shihuo),
+            sourceId = "shihuo",
+            value = shihuo,
             // 识货的请求走 m 站（`ShihuoApi.searchProducts` 的 `https://m.shihuo.cn/search?...`），
             // 域名诊断键必须是 m.shihuo.cn——旧值 www.shihuo.cn 永远查不到记录，反爬/失败无从区分
-            viewModel.lastOutcome("m.shihuo.cn")
+            outcome = viewModel.lastOutcome("m.shihuo.cn")
         )
-    }
-}
-
-/** 单源状态徽标：名称 · 状态（语义色背景胶囊） */
-@Composable
-private fun SourceChip(name: String, value: AsyncValue<*>, outcome: CrawlerResult<String>?) {
-    val status = sourceChipStateOf(value, outcome)
-    val tone = when (status) {
-        SourceChipState.OK -> BadgeTone.POSITIVE
-        SourceChipState.BLOCKED, SourceChipState.FAILED -> BadgeTone.NEGATIVE
-        SourceChipState.LOADING, SourceChipState.IDLE, SourceChipState.NO_RESULTS -> BadgeTone.NEUTRAL
-    }
-    val stateText = stringResource(
-        when (status) {
-            SourceChipState.LOADING -> R.string.src_state_loading
-            SourceChipState.OK -> R.string.src_state_ok
-            SourceChipState.NO_RESULTS -> R.string.src_state_empty
-            SourceChipState.BLOCKED -> R.string.src_state_blocked
-            SourceChipState.FAILED -> R.string.src_state_failed
-            SourceChipState.IDLE -> R.string.src_state_idle
-        }
     )
-
-    Surface(shape = MaterialTheme.shapes.small, color = tone.bg()) {
-        Row(
-            modifier = Modifier.padding(
-                horizontal = Dims.SpacingS,
-                vertical = Dims.SpacingXS
-            ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Dims.SpacingXS)
-        ) {
-            Text(name, style = MaterialTheme.typography.labelSmall, color = tone.fg())
-            Text(
-                "·",
-                style = MaterialTheme.typography.labelSmall,
-                color = tone.fg().copy(alpha = 0.6f)
-            )
-            Text(
-                stateText,
-                style = MaterialTheme.typography.labelSmall,
-                color = tone.fg(),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = Dims.SpacingXXXL * 2)
-            )
-        }
-    }
+    SourceHealthBoard(cells = cells, modifier = modifier)
 }
 
-/** 徽标状态（F4 起对外可见，便于纯函数单测；渲染映射仍在本文件的 [SourceChip]） */
+/**
+ * 单源 → 健康板一格。
+ * IDLE 只有在"别的源还活着"时才会出现在板上（全 Idle 时整块不渲染），原因写「本轮未查询」；
+ * 反爬/失败把**归一化原因**写进 note（反爬拦截 / 失败），不再直接把异常类名漏到屏上。
+ * 状态与原因分工：BLOCKED=被反爬拦住、DEGRADED=网络/解析失败，两者都不再写「不可达 · 失败」这种同义重复。
+ */
+@Composable
+private fun cellOf(label: String, sourceId: String, value: AsyncValue<*>, outcome: CrawlerResult<String>?): SourceHealthCell {
+    val state = sourceChipStateOf(value, outcome)
+    val healthState = when (state) {
+        SourceChipState.OK, SourceChipState.NO_RESULTS -> SourceHealthState.OK
+        SourceChipState.BLOCKED -> SourceHealthState.BLOCKED
+        SourceChipState.FAILED -> SourceHealthState.DEGRADED
+        SourceChipState.LOADING, SourceChipState.IDLE -> SourceHealthState.UNKNOWN
+    }
+    val note = when (state) {
+        SourceChipState.BLOCKED -> stringResource(R.string.rd_source_note_blocked)
+        SourceChipState.FAILED -> stringResource(R.string.rd_source_note_failed)
+        SourceChipState.LOADING -> stringResource(R.string.rd_source_note_loading)
+        SourceChipState.IDLE -> stringResource(R.string.rd_source_note_idle)
+        SourceChipState.OK, SourceChipState.NO_RESULTS -> null
+    }
+    return SourceHealthCell(sourceId = sourceId, label = label, state = healthState, note = note)
+}
+
+/** 徽标状态（F4 起对外可见，便于纯函数单测；渲染映射见 [cellOf]） */
 enum class SourceChipState { LOADING, OK, NO_RESULTS, FAILED, BLOCKED, IDLE }
 
 /**

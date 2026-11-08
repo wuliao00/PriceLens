@@ -1,7 +1,6 @@
 package com.pricelens.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -18,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import com.pricelens.R
-import com.pricelens.ui.theme.Dims
+import com.pricelens.ui.theme.PillShape
 
 /** 顶部搜索栏（独立式，供非 Scaffold-topBar 场景）：商品名 / 粘贴链接 */
 @Composable
@@ -40,11 +39,11 @@ fun SearchBar(value: String, onValueChange: (String) -> Unit, onSubmit: () -> Un
         },
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyMedium,
-        shape = RoundedCornerShape(Dims.ButtonCorner),
+        shape = PillShape,
         colors = OutlinedTextFieldDefaults.colors(
-            // 高对比：聚焦品牌色描边 + surfaceVariant 底，暗色自动适配
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            // 高对比：聚焦品牌色描边 + surfaceContainer 底，暗色自动适配
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
             focusedBorderColor = MaterialTheme.colorScheme.primary,
             unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
         ),

@@ -53,7 +53,10 @@ fun SettingsScreen(
     updateRepository: UpdateRepository,
     onBack: () -> Unit,
     onReplayOnboarding: () -> Unit,
-    onOpenKeepAlive: () -> Unit
+    onOpenKeepAlive: () -> Unit,
+    autoTrack: com.pricelens.ui.autotrack.AutoTrackCardState? = null,
+    sourceBoard: List<com.pricelens.ui.components.SourceHealthCell> = emptyList(),
+    onOpenAutoTrack: () -> Unit = {}
 ) {
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val cacheStats by profileViewModel.cacheStats.collectAsStateWithLifecycle()
@@ -77,7 +80,10 @@ fun SettingsScreen(
                         )
                     }
                 },
-                scrollBehavior = scrollBehavior
+                scrollBehavior = scrollBehavior,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
     ) { inner ->
@@ -96,6 +102,10 @@ fun SettingsScreen(
             SettingsBand(stringResource(R.string.layout_settings_group_notify)) {
                 NotifySection(settings)
             }
+            // 2026-11 新增：自动追价（只读摘要 + 去中心页）
+            SettingsBand(stringResource(R.string.rd_settings_group_autotrack)) {
+                AutoTrackSettingsSection(state = autoTrack, onOpenCenter = onOpenAutoTrack)
+            }
             // 端侧识别（可选）：能力检测 + 从仓库下载模型。放在通知之后、数据之前 ——
             // 它是"这台手机能多做一件事"的开关，不是数据管理，也不该挤在账号凭证那一组里
             SettingsBand(stringResource(R.string.ai_model_title)) {
@@ -113,6 +123,10 @@ fun SettingsScreen(
             }
             SettingsBand(stringResource(R.string.layout_settings_group_appearance)) {
                 AppearanceSection(settings)
+            }
+            // 2026-11 新增：数据源可信度（只读；来源健康板与本轮搜索结果同源）
+            SettingsBand(stringResource(R.string.rd_settings_group_trust)) {
+                SourceTrustSection(cells = sourceBoard)
             }
             SettingsBand(stringResource(R.string.layout_settings_group_about)) {
                 AboutSection(

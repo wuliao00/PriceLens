@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -68,6 +69,15 @@ fun RowScope.NavTabItem(
         selected = selected,
         onClick = onClick,
         modifier = modifier,
+        // 大改造：选中指示条 = 实心品牌金胶囊，图标落在金上是 onPrimary（墨/白），
+        // 未选中走 onSurfaceVariant。金色胶囊 + 图标形变 + 字重三重选中反馈。
+        colors = NavigationBarItemDefaults.colors(
+            selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+            selectedTextColor = MaterialTheme.colorScheme.primary,
+            indicatorColor = MaterialTheme.colorScheme.primary,
+            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
         icon = {
             Box(contentAlignment = Alignment.Center, modifier = scaled) {
                 val unselected = iconUnselected
@@ -97,7 +107,7 @@ fun RowScope.NavTabItem(
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
                 ),
                 color = if (selected) {
-                    MaterialTheme.colorScheme.onSurface
+                    MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -75,7 +76,10 @@ class OptionalCredsStep(private val settings: SettingsRepository) : OnboardingSt
                 onClick = {
                     context.startActivity(Intent(context, ManmanbuyLoginActivity::class.java))
                 },
-                shape = MaterialTheme.shapes.small
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = Dims.TouchMin)
             ) {
                 Text(stringResource(R.string.onboarding_creds_login))
             }

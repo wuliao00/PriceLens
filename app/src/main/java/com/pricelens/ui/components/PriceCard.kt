@@ -3,6 +3,7 @@ package com.pricelens.ui.components
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -29,10 +30,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.pricelens.ui.theme.BadgeTone
 import com.pricelens.ui.theme.Dims
 import com.pricelens.ui.theme.Elevations
 import com.pricelens.ui.theme.MotionDurations
+import com.pricelens.ui.theme.PillShape
 import com.pricelens.ui.theme.PriceLensEasing
 import com.pricelens.ui.theme.PriceType
 import com.pricelens.ui.theme.bg
@@ -115,8 +118,10 @@ fun PriceCard(
             }
             .then(gestureModifier),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = Elevations.CardRest,
+        // 大改造：卡片落在 surfaceContainerLow 上，靠 1dp 分隔线色描边建立层级，
+        // 不再靠 tonal 染色（显式容器色下 tonal 叠加不可控）；投影仍走 CardMotion 契约。
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
         shadowElevation = shadow
     ) {
         Column(Modifier.padding(Dims.SpacingL)) { content() }
@@ -155,12 +160,12 @@ object CardMotion {
     private fun Set<Interaction>.hasActivePress(): Boolean = any { it is PressInteraction.Press }
 }
 
-/** §3.5 语义标签（"历史低价"/"先涨后降"）：labelSmall + 圆角背景 + 主题语义色 */
+/** §3.5 语义标签（"历史低价"/"先涨后降"）：labelSmall + 全圆角胶囊 + 主题语义色 */
 @Composable
 fun PriceBadge(text: String, tone: BadgeTone, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
-        shape = MaterialTheme.shapes.small,
+        shape = PillShape,
         color = tone.bg()
     ) {
         Text(

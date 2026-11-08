@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -28,18 +29,16 @@ import com.pricelens.ui.theme.RevealEasing
  * §6.2 手写 Canvas 历史价格曲线（禁止第三方图表库）。
  * 标注：当前价脉冲圆点、历史最低（绿虚线）、历史最高（红虚线）、大促节点（灰竖线）。
  *
+ * 2026-11 大改造：主线从语义绿换成**品牌金**（行情终端的主线色），线下补一层
+ * 金→透明的垂直渐变面积，背景加三条极淡水平网格——曲线从"一根绿线"变成
+ * 有体积、有坐标感的行情图。最低/最高仍走语义绿/红虚线（与图例同色）。
+ *
  * 入场是**纯 draw 通道**动画：animateFloatAsState 出的 progress 只在 Canvas 的绘制阶段被读，
  * 可见部分由纯函数 [curveReveal] 算（整段 + 残段插值头），每帧只重画、不重排；
- * 描线头随残段连续前进，不再是"整点跳"（旧实现 `(点数*进度).toInt()` 起步就被
- * coerceAtLeast(2) 顶成两段、中段一格一格蹦）。时长 [MotionDurations.ChartReveal] = 350ms
- * ——旧注释写的 500ms 历史例外已在本批收到铁律上限内（见 ui/theme/Motion.kt）。
+ * 描线头随残段连续前进，不再是"整点跳"。时长 [MotionDurations.ChartReveal] = 350ms。
  */
 @Composable
-fun PriceChartCanvas(
-    history: ManmanbuyApi.History,
-    modifier: Modifier = Modifier,
-    lineColor: Color = LocalSemanticColors.current.lowPrice
-) {
+fun PriceChartCanvas(history: ManmanbuyApi.History, modifier: Modifier = Modifier, lineColor: Color = MaterialTheme.colorScheme.primary) {
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
     // 进度值只影响 Canvas 绘制（draw 通道）；组合槽位不变 → 换数据不会重播入场
@@ -71,6 +70,17 @@ fun PriceChartCanvas(
 
         fun xOf(i: Int) = left + w * i / (points.size - 1)
         fun yOf(p: Double) = bottom - h * ((p - minP) / range).toFloat()
+
+        // 水平网格（三条极淡横线）：给曲线一个可读的坐标背景，不抢线
+        for (g in 1..3) {
+            val gy = top + h * g / 4f
+            drawLine(
+                color = gridColor.copy(alpha = 0.35f),
+                start = Offset(left, gy),
+                end = Offset(right, gy),
+                strokeWidth = 1.dp.toPx()
+            )
+        }
 
         // 历史最低 / 最高 虚线：透明度跟入场进度一起淡进来（绘制值，不改布局）
         val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
@@ -111,6 +121,23 @@ fun PriceChartCanvas(
         val headY = yOf(segmentPoint(points[headIndex].price, points[nextIndex].price, fraction))
 
         if (headIndex >= 1 || fraction > 0f) {
+            // 面积渐变：与折线同一条可见路径，向下封到基线，金→透明（随入场淡入）
+            val area = Path()
+            area.moveTo(xOf(0), bottom)
+            area.lineTo(xOf(0), yOf(points[0].price))
+            for (i in 1..headIndex) area.lineTo(xOf(i), yOf(points[i].price))
+            if (fraction > 0f) area.lineTo(headX, headY)
+            area.lineTo(headX, bottom)
+            area.close()
+            drawPath(
+                path = area,
+                brush = Brush.verticalGradient(
+                    colors = listOf(lineColor.copy(alpha = 0.22f * progress), lineColor.copy(alpha = 0f)),
+                    startY = top,
+                    endY = bottom
+                )
+            )
+
             val path = Path()
             path.moveTo(xOf(0), yOf(points[0].price))
             for (i in 1..headIndex) path.lineTo(xOf(i), yOf(points[i].price))

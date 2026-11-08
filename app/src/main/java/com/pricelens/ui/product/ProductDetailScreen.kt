@@ -1,5 +1,6 @@
 package com.pricelens.ui.product
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -34,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,12 +62,17 @@ import com.pricelens.domain.RejectReason
 import com.pricelens.domain.TargetPrefill
 import com.pricelens.domain.WatchDecision
 import com.pricelens.domain.WatchTargetPolicy
+import com.pricelens.ui.accuracy.AccuracyBlock
+import com.pricelens.ui.accuracy.AccuracyIssueView
+import com.pricelens.ui.accuracy.AccuracyView
 import com.pricelens.ui.common.AsyncValue
 import com.pricelens.ui.common.valueOrNull
 import com.pricelens.ui.components.AppImage
 import com.pricelens.ui.components.EmptyState
 import com.pricelens.ui.components.PriceBadge
 import com.pricelens.ui.components.PriceCard
+import com.pricelens.ui.components.PrimaryActionRow
+import com.pricelens.ui.components.SectionHeader
 import com.pricelens.ui.components.SourceStatusRow
 import com.pricelens.ui.overview.SearchViewModel
 import com.pricelens.ui.price.PriceChartCanvas
@@ -75,6 +82,7 @@ import com.pricelens.ui.theme.BadgeTone
 import com.pricelens.ui.theme.Dims
 import com.pricelens.ui.theme.LocalSemanticColors
 import com.pricelens.ui.theme.MotionDurations
+import com.pricelens.ui.theme.PillShape
 import com.pricelens.ui.theme.PriceLensEasing
 import com.pricelens.ui.theme.PriceType
 import com.pricelens.util.PriceFormatter
@@ -93,7 +101,14 @@ import com.pricelens.util.UrlOpener
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProductDetailScreen(searchViewModel: SearchViewModel, onBack: () -> Unit, initialSection: ProductSection = ProductSection.PRICE) {
+fun ProductDetailScreen(
+    searchViewModel: SearchViewModel,
+    onBack: () -> Unit,
+    initialSection: ProductSection = ProductSection.PRICE,
+    accuracy: AccuracyView? = null,
+    onReportAccuracyIssue: (AccuracyIssueView) -> Unit = {},
+    onAddToPriceProtection: (title: String, platform: String, price: Double) -> Unit = { _, _, _ -> }
+) {
     // Activity 作用域的盯价 VM：MainActivity 里 hiltViewModel() 拿到的就是同一个实例，
     // 所以这里改目标价，「盯价」页与后台轮次看到的是同一份数据。
     val watchViewModel: PriceWatchViewModel = hiltViewModel()
@@ -109,7 +124,10 @@ fun ProductDetailScreen(searchViewModel: SearchViewModel, onBack: () -> Unit, in
                             contentDescription = stringResource(R.string.cd_back)
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
     ) { inner ->
@@ -137,7 +155,13 @@ fun ProductDetailScreen(searchViewModel: SearchViewModel, onBack: () -> Unit, in
                 modifier = Modifier.weight(1f)
             ) { target ->
                 when (target) {
-                    ProductSection.PRICE -> ProductPriceSection(searchViewModel, watchViewModel)
+                    ProductSection.PRICE -> ProductPriceSection(
+                        searchViewModel = searchViewModel,
+                        watchViewModel = watchViewModel,
+                        accuracy = accuracy,
+                        onReportAccuracyIssue = onReportAccuracyIssue,
+                        onAddToPriceProtection = onAddToPriceProtection
+                    )
                     ProductSection.COUPON -> ProductCouponSection(searchViewModel)
                     ProductSection.REVIEW -> BiliReviewSection(searchViewModel)
                 }
@@ -158,18 +182,23 @@ private fun ProductSection.labelRes(): Int = when (this) {
 
 @Composable
 private fun SectionTabRow(current: ProductSection, onSelect: (ProductSection) -> Unit) {
-    Row(
+    // 大改造：三段标签从"三枚独立芯片"收进一条全圆角分段选择器（segmented control）：
+    // 灰槽里一枚金色滑块选中项，归属与切换一目了然。
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = Dims.SpacingXL, vertical = Dims.SpacingS)
+            .padding(horizontal = Dims.SpacingXL, vertical = Dims.SpacingS),
+        shape = PillShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
-        ProductSection.entries.forEachIndexed { index, item ->
-            if (index > 0) Spacer(Modifier.width(Dims.SpacingS))
-            SectionChip(
-                label = stringResource(item.labelRes()),
-                selected = item == current,
-                modifier = Modifier.weight(1f)
-            ) { onSelect(item) }
+        Row(modifier = Modifier.padding(Dims.SpacingXS)) {
+            ProductSection.entries.forEach { item ->
+                SectionChip(
+                    label = stringResource(item.labelRes()),
+                    selected = item == current,
+                    modifier = Modifier.weight(1f)
+                ) { onSelect(item) }
+            }
         }
     }
 }
@@ -178,15 +207,15 @@ private fun SectionTabRow(current: ProductSection, onSelect: (ProductSection) ->
 private fun SectionChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(
         modifier = modifier.clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.small,
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+        shape = PillShape,
+        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
             textAlign = TextAlign.Center,
             color = if (selected) {
-                MaterialTheme.colorScheme.onPrimaryContainer
+                MaterialTheme.colorScheme.onPrimary
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
@@ -327,7 +356,13 @@ private fun ProductHeadCard(searchViewModel: SearchViewModel) {
  * 能不能盯、以哪个平台 + 商品 ID 盯，一律问 [WatchTargetPolicy]，本页不另判一套。
  */
 @Composable
-private fun ProductPriceSection(searchViewModel: SearchViewModel, watchViewModel: PriceWatchViewModel) {
+private fun ProductPriceSection(
+    searchViewModel: SearchViewModel,
+    watchViewModel: PriceWatchViewModel,
+    accuracy: AccuracyView?,
+    onReportAccuracyIssue: (AccuracyIssueView) -> Unit,
+    onAddToPriceProtection: (title: String, platform: String, price: Double) -> Unit
+) {
     val product by searchViewModel.product.collectAsStateWithLifecycle()
     val historyAsync by searchViewModel.history.collectAsStateWithLifecycle()
     val netPrice by searchViewModel.netPrice.collectAsStateWithLifecycle()
@@ -337,6 +372,17 @@ private fun ProductPriceSection(searchViewModel: SearchViewModel, watchViewModel
     val targets by watchViewModel.watchTargets.collectAsStateWithLifecycle()
     val candidate = product.valueOrNull()
     val history = historyAsync.valueOrNull()
+    val context = LocalContext.current
+    val reportedText = stringResource(R.string.rd_accuracy_reported)
+    // 「价保」预填的平台键：候选链接决定平台，绝不默认京东（与盯价入口同一判据）
+    val platformKey = remember(candidate?.skuId, candidate?.url) {
+        (WatchTargetPolicy.decide(candidate?.skuId, candidate?.url) as? WatchDecision.Watchable)?.platform.orEmpty()
+    }
+    // 准确性反馈：先记本机，再 Toast 回执（与概览页同一口径）
+    val reportWithToast: (AccuracyIssueView) -> Unit = { issue ->
+        onReportAccuracyIssue(issue)
+        Toast.makeText(context, reportedText, Toast.LENGTH_SHORT).show()
+    }
 
     val decision = remember(candidate?.skuId, candidate?.url) {
         WatchTargetPolicy.decide(candidate?.skuId, candidate?.url)
@@ -365,6 +411,12 @@ private fun ProductPriceSection(searchViewModel: SearchViewModel, watchViewModel
             .padding(Dims.SpacingXL)
     ) {
         SourceStatusRow(searchViewModel)
+        // 准确性证据区：与概览页同一个组件、同一份映射（引擎没给判定就不摆）
+        if (accuracy != null) {
+            Spacer(Modifier.height(Dims.SpacingM))
+            SectionHeader(stringResource(R.string.rd_detail_accuracy_title))
+            AccuracyBlock(view = accuracy, onReportIssue = reportWithToast)
+        }
         Spacer(Modifier.height(Dims.SpacingL))
         if (history == null) {
             // 三种"没有曲线"的成因分开说（沿用「盯价」页口径：失败 / 搜了但归属不到 SKU / 没搜过）
@@ -457,6 +509,15 @@ private fun ProductPriceSection(searchViewModel: SearchViewModel, watchViewModel
                 netPrice?.let { PriceFormatter.format(it) } ?: stringResource(R.string.product_quote_none)
             )
         }
+
+        // 「我买了 → 加入价保」：把商品名、平台键与现价带进价保页预填。
+        // 这是买后动作，放在报价核对之后（用户已经确认过价格，下一步自然是我买了）。
+        Spacer(Modifier.height(Dims.SpacingM))
+        PrimaryActionRow(
+            label = stringResource(R.string.rd_detail_buy_protect),
+            onClick = { candidate?.let { onAddToPriceProtection(it.title, platformKey, it.price) } },
+            enabled = candidate != null
+        )
 
         Spacer(Modifier.height(Dims.SpacingL))
         WatchTargetBlock(

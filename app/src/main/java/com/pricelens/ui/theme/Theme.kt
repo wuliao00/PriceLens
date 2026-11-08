@@ -49,7 +49,9 @@ object Dims {
     val SpacingXL = 20.dp
     val SpacingXXL = 24.dp
     val SpacingXXXL = 32.dp
-    val CardCorner = 16.dp
+
+    /** 卡片圆角（2026-11 大改造 16→20：柔和悬浮感；RowBudget 不钉圆角，只钉行高/缩略图） */
+    val CardCorner = 20.dp
     val ButtonCorner = 12.dp
     val ChipCorner = 8.dp
     val ListItemHeight = 100.dp
