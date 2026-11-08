@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  「熔金行情」UI 大改（2026-11）新增文案。
+  单独成文件、键名统一 rd_ 前缀：本批次有多个代理同时在改文案与代码，
+  集中进 strings.xml 必然互相踩；按前缀也能一眼认出这批新字符串的归属。
+  口径约定：
+   - 错误/空态永远说清「发生了什么、下一步点哪」，不用「暂无数据」这种什么都没说的词；
+   - 不承诺引擎做不到的事（自动追价只是本机轮询，不说「实时监控」）。
+-->
+<resources>
+
+    <!-- ============ 概览 · 品牌英雄区与主 CTA ============ -->
+    <string name="rd_hero_primary">粘贴链接</string>
+    <string name="rd_hero_secondary">自动追价</string>
+    <!-- 点「粘贴链接比价」但剪贴板里没有可用内容：说清楚去哪拿，别只说失败 -->
+    <string name="rd_hero_clipboard_empty">剪贴板里没有商品链接，也可以直接在顶部搜索框输入商品名</string>
+
+    <!-- ============ 概览 · 结果页排版 ============ -->
+    <string name="rd_recent_title">最近搜索</string>
+    <string name="rd_section_guides">更多入口</string>
+    <string name="rd_expand_detail">展开</string>
+    <string name="rd_collapse_detail">收起</string>
+    <string name="rd_result_detail_cta">价格详情 · 找券 · 评测</string>
+    <!-- 价格口径兜底（准确性引擎未就绪时按已有数据保守给口径，绝不把页面价冒充券后价） -->
+    <string name="rd_basis_page">页面价</string>
+    <string name="rd_basis_net">到手价</string>
+    <string name="rd_basis_coupon_after">券后价</string>
+    <string name="rd_basis_reference">参考价</string>
+    <string name="rd_basis_unknown">口径未知</string>
+    <string name="rd_accuracy_age_unknown">时刻未知</string>
+    <!-- 概览曲线卡：最低/最高/均价三个数一次说清（图上另有虚线，这里是文字口径） -->
+    <string name="rd_curve_lower">最低 %1$s</string>
+    <string name="rd_curve_higher">最高 %1$s</string>
+    <string name="rd_curve_average">均价 %1$s</string>
+    <string name="rd_curve_points">%1$d 个采样日</string>
+
+    <!-- ============ 准确性（AI 引擎产出的展示层文案） ============ -->
+    <string name="rd_accuracy_high">高置信</string>
+    <string name="rd_accuracy_medium">中置信</string>
+    <string name="rd_accuracy_low">低置信</string>
+    <string name="rd_accuracy_unknown">置信未知</string>
+    <string name="rd_accuracy_expand">展开判定依据</string>
+    <string name="rd_accuracy_collapse">收起判定依据</string>
+    <string name="rd_accuracy_reasons_title">为什么是这个判断</string>
+    <string name="rd_accuracy_evidence_title">价格证据</string>
+    <string name="rd_accuracy_conflicts_title">来源之间的冲突</string>
+    <string name="rd_accuracy_no_conflict">来源之间没有互相矛盾的报价</string>
+    <string name="rd_accuracy_stale_tag">陈旧</string>
+    <string name="rd_accuracy_score">可信分 %1$d</string>
+    <string name="rd_accuracy_generated">判定生成于 %1$s</string>
+    <!-- 证据行：源 · 价格 · 口径（后面还会接数据年龄/陈旧标记） -->
+    <string name="rd_accuracy_evidence_price">%1$s · %2$s</string>
+    <string name="rd_accuracy_relevance">相关度 %1$d%%</string>
+    <string name="rd_accuracy_report_cta">这条不对</string>
+    <string name="rd_accuracy_report_submit">提交反馈</string>
+    <string name="rd_accuracy_report_title">这条信息哪里不对？</string>
+    <string name="rd_accuracy_report_desc">反馈只记录在本机，用来改进数据源权重与口径判断，不会上传。</string>
+    <string name="rd_accuracy_issue_wrong_price">价格不对</string>
+    <string name="rd_accuracy_issue_wrong_product">商品不对</string>
+    <string name="rd_accuracy_issue_stale">数据过时</string>
+    <string name="rd_accuracy_issue_wrong_basis">口径不对</string>
+    <string name="rd_accuracy_reported">已记录到本机</string>
+
+    <!-- ============ 来源健康板（每个源的状态色点 + 不可达原因） ============ -->
+    <string name="rd_source_board_title">来源健康</string>
+    <string name="rd_source_board_summary">%1$d/%2$d 源可用</string>
+    <string name="rd_source_state_ok">正常</string>
+    <string name="rd_source_state_degraded">降级</string>
+    <string name="rd_source_state_blocked">不可达</string>
+    <string name="rd_source_state_stale">陈旧</string>
+    <string name="rd_source_state_unknown">未知</string>
+    <!-- 无障碍读法：源名 + 状态 + 原因一句话读完，不靠颜色分状态 -->
+    <string name="rd_source_board_cd">%1$s：%2$s%3$s</string>
+    <!-- 不可达原因归一化（引擎 note 里可能带类名/英文，映射成这几种人话；未知一律「失败」） -->
+    <string name="rd_source_note_blocked">反爬拦截</string>
+    <string name="rd_source_note_network">网络不可达</string>
+    <string name="rd_source_note_timeout">请求超时</string>
+    <string name="rd_source_note_http5">HTTP 5xx</string>
+    <string name="rd_source_note_failed">失败</string>
+    <string name="rd_source_note_idle">本轮未查询</string>
+    <string name="rd_source_note_loading">加载中</string>
+
+    <!-- ============ 自动追价（引擎落地后接入） ============ -->
+    <string name="rd_autotrack_title">自动追价</string>
+    <string name="rd_autotrack_subtitle">按设定频率自动替你查一遍价，达标才提醒</string>
+    <string name="rd_autotrack_open">打开自动化中心</string>
+    <string name="rd_autotrack_center_title">自动化中心</string>
+    <string name="rd_autotrack_switch">自动追价</string>
+    <string name="rd_autotrack_enabled">已开启</string>
+    <string name="rd_autotrack_disabled">已关闭</string>
+    <string name="rd_autotrack_last_run">上次运行 %1$s</string>
+    <string name="rd_autotrack_never_run">还没运行过</string>
+    <string name="rd_autotrack_next_run">下次预计 %1$s</string>
+    <string name="rd_autotrack_next_pending">下次预计：开启后按频率排期</string>
+    <string name="rd_autotrack_stat_targets">目标</string>
+    <string name="rd_autotrack_stat_checked">本轮查到价</string>
+    <string name="rd_autotrack_stat_hits">本轮命中</string>
+    <string name="rd_autotrack_running">运行中…</string>
+    <string name="rd_autotrack_run_now">立即运行</string>
+    <string name="rd_autotrack_interval">运行频率</string>
+    <string name="rd_autotrack_interval_option">%1$d 分钟</string>
+    <string name="rd_autotrack_wifi_only">仅 WiFi 时运行</string>
+    <string name="rd_autotrack_quiet_pause">夜间暂停</string>
+    <string name="rd_autotrack_privacy">纯本机运行，不上传任何数据；通知只在本机生成</string>
+    <string name="rd_autotrack_privacy_detail">自动追价只在本机按设定频率重新查询你已保存的盯价目标；目标、轮次历史与来源判断都只写在本机数据库，不上传任何服务器。关掉开关即停止排程，已经存下的目标与曲线不受影响。</string>
+    <string name="rd_autotrack_history">运行历史</string>
+    <string name="rd_autotrack_history_empty">还没有运行记录。开启自动追价或点「立即运行」后，每一轮的实况都会记在这里。</string>
+    <string name="rd_autotrack_source_issues">本轮有 %1$d 个源不可达，结果可能不完整</string>
+    <string name="rd_autotrack_no_targets">还没有盯价目标：先在商品详情页设置一个目标价，自动追价才有事可做。</string>
+    <string name="rd_autotrack_last_note">最近一轮：%1$s</string>
+    <!-- 运行历史一行的状态徽标（摘要行只留时间+命中状态，note 单独整行展示，避免数字重复） -->
+    <string name="rd_run_hit">命中</string>
+    <string name="rd_run_miss">未命中</string>
+
+    <!-- ============ 价保助手（引擎落地后接入） ============ -->
+    <string name="rd_protect_title">价保助手</string>
+    <string name="rd_protect_subtitle">买过的商品降价了，能申请价保就把差价要回来</string>
+    <string name="rd_protect_claimable_label_short">可申请</string>
+    <string name="rd_protect_claimable_count">%1$d 笔</string>
+    <string name="rd_protect_claimable_amount_label">预计可退</string>
+    <string name="rd_protect_last_check">最近检查 %1$s</string>
+    <string name="rd_protect_next_check">下次检查 %1$s</string>
+    <string name="rd_protect_open">进入价保助手</string>
+    <string name="rd_protect_empty_card">还没有记录购买。买了东西记一笔，降价时这里会告诉你能不能申请价保。</string>
+    <string name="rd_protect_add_title">录入购买</string>
+    <string name="rd_protect_field_platform">平台</string>
+    <string name="rd_protect_field_title">商品名</string>
+    <string name="rd_protect_field_price">实付价</string>
+    <string name="rd_protect_field_date">购买日期</string>
+    <string name="rd_protect_save">记录这笔购买</string>
+    <string name="rd_protect_invalid_price">实付价要填大于 0 的数字</string>
+    <string name="rd_protect_empty">还没有记录购买。录入一笔后，PriceLens 会替你盯着它的价格变化，出现可申请价保的差价时提醒你。</string>
+    <string name="rd_protect_list_title">已记录购买（%1$d）</string>
+    <string name="rd_protect_list_title_short">在盯</string>
+    <string name="rd_protect_price_change">现价 %1$s · 实付 %2$s</string>
+    <string name="rd_protect_claimable_label">可申请 %1$s</string>
+    <string name="rd_protect_deadline">价保截止 %1$s</string>
+    <string name="rd_protect_claimed">已申请</string>
+    <string name="rd_protect_mark_claimed">标记已申请</string>
+    <string name="rd_protect_apply">去平台申请</string>
+    <string name="rd_protect_copy_text">复制申请文案</string>
+    <string name="rd_protect_delete">删除</string>
+    <string name="rd_protect_copied">申请文案已复制，去平台提交即可</string>
+    <string name="rd_protect_delete_title">删除这条购买记录？</string>
+    <string name="rd_protect_delete_desc">删除后不再为它追踪价格与价保期限，且无法恢复。</string>
+    <string name="rd_protect_prefill_hint">已带入当前商品：%1$s · %2$s</string>
+    <string name="rd_protect_prefill_price_hint">实付价已预填当前页现价，请按实际支付金额修改</string>
+    <string name="rd_protect_saved">已记录这笔购买，开始替你盯价</string>
+    <string name="rd_protect_state_claimable">可申请</string>
+    <string name="rd_protect_state_no_price">暂取不到现价</string>
+    <string name="rd_protect_state_expired">已过价保期</string>
+    <string name="rd_protect_state_not_dropped">未降价</string>
+    <string name="rd_protect_platform_other">其他平台</string>
+    <string name="rd_protect_platform_jd_third">京东第三方</string>
+    <string name="rd_protect_platform_vip">唯品会</string>
+    <string name="rd_protect_title_required">请填商品名（后台靠它搜同款现价）</string>
+    <string name="rd_protect_price_required">请填大于 0 的实付价</string>
+    <string name="rd_protect_summary_title">价保概览</string>
+    <string name="rd_protect_check_now">立即检查价保</string>
+    <string name="rd_protect_checking">检查中…</string>
+    <string name="rd_protect_window_note">窗口天数按平台规则表计算，实际以平台审核为准；金额为名义差额（未扣已退/赠品/返卡）。</string>
+    <string name="rd_protect_empty_action">录入第一笔购买</string>
+    <string name="rd_protect_no_link">这条记录没有保存商品链接，请在平台 App 里手动申请</string>
+    <string name="rd_protect_claim_copy_line">我在%1$s买的「%2$s」，实付 %3$s，现在价格 %4$s，申请价保退差价。</string>
+
+    <!-- ============ 社区 ============ -->
+    <string name="rd_community_context">当前关键词：%1$s</string>
+    <string name="rd_community_context_blank">先搜索一个商品，社区与爆料会按关键词聚合</string>
+    <string name="rd_community_filtered_title">没有与关键词相关的条目</string>
+    <string name="rd_community_filtered_desc">识货与值得买返回了结果，但没有一条能确认是同款商品（避免把配件/其它型号当成这款卖），换个更完整的型号名再搜一次试试。</string>
+
+    <!-- ============ 商品详情页 ============ -->
+    <string name="rd_detail_buy_protect">我买了 → 加入价保</string>
+    <string name="rd_detail_accuracy_title">价格可信度</string>
+
+    <!-- ============ 我的页入口 ============ -->
+    <string name="rd_profile_autotrack_title">自动化中心</string>
+    <string name="rd_profile_autotrack_desc">自动追价 · 运行历史 · 数据源状态</string>
+    <string name="rd_profile_protect_title">价保助手</string>
+    <string name="rd_profile_protect_desc">已买商品 · 可申请价保</string>
+
+    <!-- ============ 设置页新分组 ============ -->
+    <string name="rd_settings_group_autotrack">自动追价</string>
+    <string name="rd_settings_group_trust">数据源可信度</string>
+    <string name="rd_settings_autotrack_desc">自动追价在本机按频率轮询盯价目标，达标才发通知；数据不离开手机。</string>
+    <string name="rd_settings_autotrack_enabled_desc">当前已开启：自动追价会在后台按设定频率运行。</string>
+    <string name="rd_settings_autotrack_disabled_desc">当前已关闭：只有手动「立即运行」或打开 App 时才检查价格。</string>
+    <string name="rd_settings_trust_desc">只读：下面展示本机最近一轮请求里各数据源的结局，用来判断哪些源现在不可信。</string>
+    <string name="rd_settings_trust_empty">还没有可用的来源状态：先搜索一次商品，回到这里就能看到本轮各数据源的结局。</string>
+    <string name="rd_settings_trust_note">成功时间不落库、只保留最近一次结局，因此这里不显示"上次成功时间"；需要更细的诊断请到自动化中心看运行历史。</string>
+
+    <!-- ============ 盯价页（自动追价中心） ============ -->
+    <string name="rd_price_current_section">当前商品</string>
+    <string name="rd_watch_targets_title">盯价目标（%1$d）</string>
+    <string name="rd_watch_targets_empty_title">还没有盯价目标</string>
+    <string name="rd_watch_targets_empty_desc">在商品详情页设置目标价后，这里会显示现价与目标的差距、最近检查时间与来源口径。</string>
+    <string name="rd_watch_target_progress">已完成 %1$d%%</string>
+    <string name="rd_watch_target_distance">还差 %1$s（%2$d%%）</string>
+    <string name="rd_watch_target_reached">已到目标价</string>
+    <string name="rd_watch_target_last_check">最近检查 %1$s</string>
+    <string name="rd_watch_target_never_checked">还没检查过</string>
+    <string name="rd_watch_target_source">%1$s · %2$s</string>
+    <string name="rd_watch_target_current">现价 %1$s</string>
+    <string name="rd_watch_target_current_unknown">现价未知</string>
+    <string name="rd_watch_target_detail">看详情</string>
+    <string name="rd_watch_targets_empty_action_search">去搜索商品</string>
+    <string name="rd_watch_target_pause">暂停</string>
+    <string name="rd_watch_target_resume">恢复</string>
+    <string name="rd_watch_target_edit">改价</string>
+    <string name="rd_watch_target_delete">删除</string>
+    <string name="rd_watch_auto_records_title">最近自动搜索</string>
+    <string name="rd_watch_auto_records_empty">还没有自动搜索记录。</string>
+
+</resources>

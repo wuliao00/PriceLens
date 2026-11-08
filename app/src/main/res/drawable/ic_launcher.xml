@@ -1,25 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 启动图标：放大镜 + 价格标签 -->
+<!-- 启动图标（2026-11 大改造）：熔金底 + 墨色"价格放大镜"。
+     金色圆角方底上一枚放大镜，镜片里是一条下行价格线——"看穿价格，再下单"。
+     与 ui/theme/Color.kt 的品牌金（#FBBF24 / #231600）同源。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- 金色圆角方底 -->
     <path
-        android:pathData="M54,54m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"
-        android:strokeColor="#1B6EF3"
-        android:strokeWidth="6"
+        android:fillColor="#FBBF24"
+        android:pathData="M26,0H82A26,26 0 0 1 108,26V82A26,26 0 0 1 82,108H26A26,26 0 0 1 0,82V26A26,26 0 0 1 26,0Z" />
+    <!-- 左上柔光（浅金，增加一点体积感） -->
+    <path
+        android:fillColor="#33FFFFFF"
+        android:pathData="M26,0H82A26,26 0 0 1 108,26V40C78,22 40,16 0,22V26A26,26 0 0 1 26,0Z" />
+    <!-- 放大镜镜框 -->
+    <path
+        android:pathData="M46,46m-21,0a21,21 0,1 1,42 0a21,21 0,1 1,-42 0"
+        android:strokeColor="#231600"
+        android:strokeWidth="7.5"
         android:fillColor="#00000000" />
+    <!-- 镜柄 -->
     <path
-        android:pathData="M76,76L92,92"
-        android:strokeColor="#1B6EF3"
-        android:strokeWidth="8"
+        android:pathData="M62,62L82,82"
+        android:strokeColor="#231600"
+        android:strokeWidth="9"
         android:strokeLineCap="round"
         android:fillColor="#00000000" />
+    <!-- 镜片里的下行价格线 -->
     <path
-        android:fillColor="#1B6EF3"
-        android:pathData="M54,38l10,10l-12,12l-10,-10z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M50,44a2,2 0,1 0,4 0a2,2 0,1 0,-4 0" />
+        android:pathData="M35,50L43,41L49,47L58,36"
+        android:strokeColor="#231600"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
 </vector>

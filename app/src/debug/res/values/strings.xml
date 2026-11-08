@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  调试包专属资源：只覆盖"看得见的名字"。
+
+  为什么只改 app_name：调试包与正式包同机共存（applicationId 后缀 .dev），
+  桌面图标与最近任务里必须一眼分出哪个是验证包，否则误点正式包会把"看不到新功能"
+  当成缺陷（2026-10 真机验证踩过）。除名字之外的资源一律沿用 main，避免调试包行为漂移。
+-->
+<resources>
+    <string name="app_name">PriceLens Dev</string>
+</resources>

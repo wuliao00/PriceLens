@@ -37,8 +37,10 @@ android {
         applicationId = "com.pricelens"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "2.8.0.6"
+        // 2.9.0 大更新（UI 熔金行情 + 信息源准确性 + 自动追价/价保）。
+        // 发布真源仍是这里：出正式包前先提交本变更，再跑 build-apk.ps1，别只改 README。
+        versionCode = 28
+        versionName = "2.9.0"
     }
 
     signingConfigs {
@@ -53,6 +55,18 @@ android {
     }
 
     buildTypes {
+        /**
+         * 调试包固定 applicationId 后缀 `.dev`（历史验证流程一直是这么用的，见
+         * PermissionStates 的包名判定测试与 docs 里的真机取证记录）。
+         *
+         * 为什么必须区分：本机真机上装着**正式签名**的 `com.pricelens`（用户在用的版本），
+         * debug 包用同一 applicationId 会因签名不同装不上去；即使装上了也会把用户数据覆盖。
+         * 加后缀后两个包可共存：真机验证只动 `com.pricelens.dev`，用户的正式包与其盯价数据原地不动。
+         */
+        debug {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

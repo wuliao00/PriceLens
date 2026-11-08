@@ -25,4 +25,8 @@
       判定在 ui/common/EmptyStateCause.kt 的 EmptyStateCauseOf.of()（纯函数，有 JVM 单测）。
     -->
     <string name="search_unreachable_result">「%1$s」这一轮一个数据源都没够着：网络不可达或数据源被拦截，与关键词写法无关（联网后重新搜索即可）</string>
+
+    <!-- 2026-11 大改造：还没搜过时首屏的品牌英雄区文案（仅 NOT_SEARCHED 态出现） -->
+    <string name="overview_hero_title">看穿价格，再下单</string>
+    <string name="overview_hero_desc">历史价 · 优惠券 · 真实评测，一屏收齐</string>
 </resources>

@@ -28,7 +28,7 @@
     <string name="tab_profile">我的</string>
 
     <!-- 顶栏搜索 -->
-    <string name="search_hint">搜索商品名 / 粘贴链接</string>
+    <string name="search_hint">搜商品 / 粘链接</string>
     <string name="search_cd_search">搜索</string>
     <string name="search_cd_clear">清空</string>
     <string name="cd_settings">设置</string>
