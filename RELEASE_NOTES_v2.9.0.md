@@ -79,3 +79,21 @@
 - 关键词搜索的「同款」判定是启发式（相关性 + 比值带 + 否定词），极端营销标题仍可能误判；
   可按数据继续调阈值（集中在引擎顶部常量）。
 - 价保金额为「名义差额」，以平台扣除已退/赠品/返卡后为准；界面标注「以平台规则为准」。
+
+## 产物与校验（2026-11-09 正式发布）
+
+- `PriceLens-2.9.0.apk` — 3,689,348 B
+  - sha256 `056650f5f4b3740eb0f762e93fd7695f1604b729ee63c2a90b85cfd7cf8de9c8`
+  - 证书 DN `CN=wuliao00, OU=PriceLens, O=PriceLens, L=Internet, C=CN`
+  - 证书 SHA-256 `c759cbb8ca2bda75799d75336d615390ec5737d83cb588703bef09821205b5e0`
+    （与 2.7.0–2.8.0.6 同一把 release 密钥，可直接覆盖升级）
+  - Gitee 免登录直链：`https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.9.0.apk`
+  - GitHub Release：`https://github.com/wuliao00/PriceLens/releases/download/v2.9.0/PriceLens-2.9.0.apk`
+- 宣传片（随 Release 附件）：
+  - `PriceLens-2.9.0-promo-1080p.mp4` — 50,734,773 B，sha256 `d3b9122e7423cf83afcf289fd2e1579f63998ea53ce7034cec8b33c3ce005bb9`
+  - `PriceLens-2.9.0-promo-720p.mp4` — 7,447,178 B，sha256 `2509a4a1b17bb7ba8ebeb22e3979888790f5f977837994453a151d8508b9b550`
+  - `PriceLens-2.9.0-promo-poster.png` — 2,142,546 B
+- `update.json` 已回填 `latest.versionCode=28 / versionName=2.9.0 / releaseDate=2026-11-09`、
+  `sha256`、`sizeBytes`、双源直链；Gitee `dist` 分支与 GitHub Release 附件由同一签名包同步。
+- 构建链路：GitHub Actions release 事件（ubuntu-latest / JDK 21）`assembleRelease`，用正式 release
+  keystore 签名；本机另跑过一次 `assembleRelease` R8 烟雾验证（无签名配置，仅验证可编译可混淆）。

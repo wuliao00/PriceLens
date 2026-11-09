@@ -5,12 +5,14 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
-## [2.9.0] - 2026-11-08
+## [2.9.0] - 2026-11-09
 
 > 大更新：Android 端 UI 整体重做（「熔金行情」品牌化）+ 两个新引擎（信息源准确性、自动追价/价保助手）。
 > 真机取证：vivo V2156A / Android 11 / 1080×2408，调试包 `com.pricelens.dev`（与正式包共存），
-> 截图与数据证据见 `docs/verification-2.9.0/`。**本轮未出正式签名包**（本机无 release keystore）：
-> 源码与版本号已就位，出包走 CI 或维护机 `build-apk.ps1`。
+> 截图与数据证据见 `docs/verification-2.9.0/`。
+> **正式包已于 2026-11-09 发布**：versionCode 28，由 GitHub Actions release 流程用正式 release keystore 签名，
+> 3,689,348 B，sha256 `056650f5f4b3740eb0f762e93fd7695f1604b729ee63c2a90b85cfd7cf8de9c8`；
+> `update.json` / Gitee `dist` 分支 / GitHub Release 附件 / Gitee 镜像四处已同步，宣传片随 Release 附件提供。
 
 ### 新增（信息源准确性：`com.pricelens.accuracy`）
 
@@ -98,7 +100,8 @@
   目前优先走「同款搜索价」（当当/识货），到价通知文案会明确标注来源，不冒充京东实时价。
 - 关键词搜索的「同款」判定是启发式（相关性 + 比值带 + 否定词），极端营销标题仍可能误判；
   真机可继续按数据调阈值（集中在引擎顶部常量）。
-- 本轮未发布正式签名 APK 与 update.json 抬版（避免把清单指向不存在的资产）。
+- 已发布正式签名 APK 与 update.json 抬版（`versionCode 28 / versionName 2.9.0`，sha256 见上）；
+  签名证书与 2.7.0–2.8.0.6 相同（证书 SHA-256 `c759cbb8…05b5e0`），可直接覆盖升级、数据不丢。
 
 ## [Desktop 2.7.0] - 2026-11-07
 

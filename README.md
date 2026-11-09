@@ -6,11 +6,12 @@
 >
 > Android 无障碍增强版 + Windows Electron 桌面版（安装器 + 便携版）+ Chrome/Edge 浏览器扩展
 >
-> 作者：**莫** | 版本：Android v2.9.0 / Desktop v2.7.0 / Extension v1.0.0（源码；安装包以 Releases 为准）
+> 作者：**莫** | 版本：Android v2.9.0（正式版）/ Desktop v2.7.0 / Extension v1.0.0（安装包以 Releases 为准）
 >
-> **v2.9.0（2026-11-08）大更新**：Android UI 全量重做（「熔金行情」）+ 信息源准确性引擎 + 自动追价/价保助手。
-> 详见 [CHANGELOG 2.9.0](CHANGELOG.md) 与 [真机验证记录](docs/verification-2.9.0/README.md)；
-> 正式 APK 尚未发布（本机无签名钥匙），当前可下载版本仍为 v2.8.0.6。
+> **v2.9.0（2026-11-09 正式发布）大更新**：Android UI 全量重做（「熔金行情」）+ 信息源准确性引擎 + 自动追价/价保助手。
+> 详见 [CHANGELOG 2.9.0](CHANGELOG.md)、[Release Notes](RELEASE_NOTES_v2.9.0.md) 与
+> [真机验证记录](docs/verification-2.9.0/README.md)；正式 APK 已发布（3,689,348 B，
+> `sha256 = 056650f5f4b3740eb0f762e93fd7695f1604b729ee63c2a90b85cfd7cf8de9c8`）。
 
 [![许可证：MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://github.com/wuliao00/PriceLens/releases)
@@ -111,9 +112,15 @@
 
 | 平台 | Gitee（国内直链，免登录） | GitHub Release |
 |------|--------|----------|
-| **Android v2.8.0.6**（最新可下载；2.9.0 源码已就绪、待出正式包） | [PriceLens-2.8.0.6.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.6.apk) | [Release v2.8.0.6](https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.6) |
+| **Android v2.9.0**（最新正式版） | [PriceLens-2.9.0.apk](https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.9.0.apk) | [Release v2.9.0](https://github.com/wuliao00/PriceLens/releases/tag/v2.9.0)（APK + 宣传片 + 封面） |
 | **Windows v2.7.0** | 本版未制分卷；可直连 GitHub 时用右栏 | [GitHub Release v2.7.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.7.0-desktop)（安装器/便携 zip） |
 | Windows v2.6.0 + **扩展 v1.0.0**（旧版） | [Gitee 分卷签名包（13×9MiB，免登录）](https://gitee.com/wuliao11541/PriceLens/raw/dist/README-desktop-2.6.0.md) | [GitHub Release v2.6.0-desktop](https://github.com/wuliao00/PriceLens/releases/tag/v2.6.0-desktop)（安装器/便携 zip/扩展） |
+
+**🎬 v2.9.0 宣传片（48 秒，1920×1080 / 30fps / −14.2 LUFS）**：
+[1080p](https://github.com/wuliao00/PriceLens/releases/download/v2.9.0/PriceLens-2.9.0-promo-1080p.mp4) ·
+[720p 分享版](https://github.com/wuliao00/PriceLens/releases/download/v2.9.0/PriceLens-2.9.0-promo-720p.mp4) ·
+[封面](https://github.com/wuliao00/PriceLens/releases/download/v2.9.0/PriceLens-2.9.0-promo-poster.png)
+（BGM：Kenji - Ooyy；源码在 `motion-showreel` 工程中可重渲）
 
 **网盘镜像（2026-10-23 更新）**
 
@@ -126,24 +133,23 @@
 下载后比对下面对应版本的 sha256。端侧模型的国内镜像见
 [docs/模型下载镜像.md](docs/模型下载镜像.md)。
 
-**v2.8.0.6 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源，
+**v2.9.0 的正式包**在 Gitee 的 `dist` 孤儿分支（应用内更新的主源，
 已回读校验：Gitee raw 下载回来的文件与 CI 签名产物 sha256 逐字节相同），
-包体 3,325,827 字节，
-`sha256 = 4191158593511017f65bbc5c4ba4b653e30ebad2ca5b7fc2e58ba7d642a9232a`
+包体 3,689,348 字节，
+`sha256 = 056650f5f4b3740eb0f762e93fd7695f1604b729ee63c2a90b85cfd7cf8de9c8`
 （这个值与 `update.json` 里的 `sha256` 必须一致；每次重新出包都三处同步：清单、
 `dist` 分支的包、GitHub Release 附件）。
 ⚠️ **v2.7.0 起改用正式 release 密钥签名**（此前 ≤2.6.5 的对外包为 debug 密钥签名）：从 ≤2.6.5 覆盖安装 2.7.0
 会因签名不同失败，需**卸载重装一次**，本机自采的盯价数据会清空，深表歉意。
-**2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 / 2.8.0.3 / 2.8.0.4 / 2.8.0.5 / 2.8.0.6 八版已逐版核对为同一枚密钥**
-（证书 `CN=wuliao00, OU=PriceLens`，SHA-256 前缀 `c759cbb8`），所以这八版之间可直接覆盖升级、
+**2.7.0 / 2.8.0 / 2.8.0.1 / 2.8.0.2 / 2.8.0.3 / 2.8.0.4 / 2.8.0.5 / 2.8.0.6 / 2.9.0 九版已逐版核对为同一枚密钥**
+（证书 `CN=wuliao00, OU=PriceLens`，SHA-256 `c759cbb8…05b5e0`），所以这九版之间可直接覆盖升级、
 数据不丢，应用内"检查更新"也能直接升，不再断链。
 
-> **v2.9.0（源码已就绪，正式包待出）**：本轮大更新新增信息源准确性引擎、自动追价（关键词自动搜索）
-> 与价保助手，DB 升到 v5（`auto_track_runs` / `purchase_records`，**升级不丢数据**）。
-> 由于维护机没有 release keystore、本轮也未把 `update.json` 指向不存在的资产，
-> **当前可下载版本仍为 v2.8.0.6**；正式包由维护机 `build-apk.ps1` 或 CI release 流程产出后，
-> 再按「清单 / dist 分支 / Release 附件」三处同步。真机验证记录见
-> [docs/verification-2.9.0/README.md](docs/verification-2.9.0/README.md)。
+> **v2.9.0 正式发布（2026-11-09）**：本轮大更新新增信息源准确性引擎、自动追价（关键词自动搜索）
+> 与价保助手，DB 升到 v5（`auto_track_runs` / `purchase_records`，**覆盖安装不丢数据**）。
+> 正式包由 GitHub Actions release 流程（`release: published`）用正式 release keystore 签名产出，
+> 已同步「清单 / dist 分支 / Release 附件 / Gitee 镜像」四处。真机验证记录见
+> [docs/verification-2.9.0/README.md](docs/verification-2.9.0/README.md)，宣传片见上方 Release 附件。
 
 
 ---

@@ -1,11 +1,11 @@
-{
+﻿{
   "schemaVersion": 1,
-  "generatedAt": "2026-10-23T01:52:15Z",
+  "generatedAt": "2026-11-09T00:14:29Z",
   "channel": "stable",
   "latest": {
-    "versionCode": 27,
-    "versionName": "2.8.0.6",
-    "releaseDate": "2026-10-23"
+    "versionCode": 28,
+    "versionName": "2.9.0",
+    "releaseDate": "2026-11-09"
   },
   "minSupportedVersionCode": 14,
   "forceBelow": 13,
@@ -13,12 +13,12 @@
   "apkUrls": [
     {
       "label": "Gitee（国内直连）",
-      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.8.0.6.apk",
+      "url": "https://gitee.com/wuliao11541/PriceLens/raw/dist/PriceLens-2.9.0.apk",
       "kind": "apk"
     },
     {
       "label": "GitHub Release",
-      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.8.0.6/PriceLens-2.8.0.6.apk",
+      "url": "https://github.com/wuliao00/PriceLens/releases/download/v2.9.0/PriceLens-2.9.0.apk",
       "kind": "apk"
     },
     {
@@ -28,17 +28,18 @@
     },
     {
       "label": "GitHub Release 页",
-      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.8.0.6",
+      "url": "https://github.com/wuliao00/PriceLens/releases/tag/v2.9.0",
       "kind": "page"
     }
   ],
-  "sha256": "4191158593511017f65bbc5c4ba4b653e30ebad2ca5b7fc2e58ba7d642a9232a",
-  "sizeBytes": 3325827,
+  "sha256": "056650f5f4b3740eb0f762e93fd7695f1604b729ee63c2a90b85cfd7cf8de9c8",
+  "sizeBytes": 3689348,
   "notes": [
-    "端侧模型下载支持国内镜像：gh-proxy.com → ghproxy.net → GitHub 自动回退，下完仍按内置 sha256 校验",
-    "桌面依赖安全升级（vite / undici / fast-uri / source-map-js / brace-expansion）；本轮不重发桌面安装包",
-    "包含 2.8.0.5 的局域网 WebDAV 明文放行修复：只放行 localhost/RFC1918/链路本地/ULA/.local，公网明文仍拒绝",
-    "签名与 2.7.0–2.8.0.5 同一把 release 钥匙（证书 SHA-256 c759cbb8…205b5e0），可直接覆盖升级，本机数据不丢"
+    "2.9.0 大更新：UI「熔金行情」全量重做 + 信息源准确性引擎 + 自动追价（关键词自动搜索）+ 价保助手；DB 升级到 v5，覆盖安装不丢数据",
+    "每个价格都带来源/口径/数据年龄/置信度，可疑就降权；非京东平台可走「同款搜索价」自动追价，到价才提醒",
+    "价保助手：按平台档位算价保窗口与截止日，可申请金额 = 实付价 − 当前同款最低可信价（名义差额，以平台规则为准）",
+    "签名与 2.7.0–2.8.0.6 同一把 release 密钥（证书 SHA-256 c759cbb8…05b5e0），可直接覆盖升级；≤2.6.5 仍需卸载重装一次",
+    "2.9.0 宣传片随 Release 附件提供：PriceLens-2.9.0-promo-1080p.mp4 / -720p.mp4 / -poster.png"
   ],
   "cooldownHours": 24
 }
