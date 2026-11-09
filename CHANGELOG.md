@@ -137,14 +137,18 @@
   仪表盘/图表区间/盯价筛选/右键暂停/B站筛选排序/帮助弹窗/主题持久化均实测，console 0 错误。
 - 未做真实网络抓取实测；冒烟截图为合成数据，不作实机实况截图入库。
 
-### 产物（已构建并随 GitHub Release 分发）
+### 产物（GitHub Release `v2.7.0-desktop` 实际附件，校验值为下载后实测）
 
-- `PriceLens-2.7.0-x64.exe` — 114,267,915 字节
+- `PriceLens-2.7.0-x64.exe`（NSIS 安装器，**本机构建**）— 114,267,915 字节
   sha256 `5ed0fa832e0d3431c8774a4e827d08243edbc58fef3611dfb6c26020631f4d22`
-- `PriceLens-2.7.0-x64.zip` — 157,039,242 字节
-  sha256 `b5c5f95a92aee596868b2e04917c4badc058eeca078fbab71a785c6c4a4794bd`
-- 构建环境备注：本机火绒拦截 electron 缓存 zip 读取与 F:\node.exe 执行，
-  构建走 `--config.electronDist=node_modules/electron/dist` + 本地 npm shim + TMP 迁出 C:\Windows\Temp。
+- `PriceLens-2.7.0-x64.zip`（便携版，**仓库 CI 干净构建**，windows-latest 过 lint+test）— 156,943,719 字节
+  sha256 `04bc9c90822ef147666e944568603aa22e45200a2a6e90b37041a254afa186dc`
+- `PriceLens-2.7.0-desktop.apk`（**CI 附带的签名 Android 包**，非桌面产物；CI release job 按 tag 名命名）— 3,325,827 字节
+  sha256 `a784af69a69c95ec493c141dcd6301303da7aca31e5c5a8d87146adf8c4fcdcc`
+- 来源说明：发版触发仓库 CI（`.github/workflows/ci-cd.yml` 的 release job），CI 自建 zip 覆盖了本机 zip，
+  并按 tag 名附了签名 Android apk；exe 由本机上传（CI 只上传 zip 产物）。三者均源自同一提交 `eaf17d9`。
+- 本机构建环境备注：火绒拦截 electron 缓存 zip 读取与 F:\node.exe 执行，
+  本机 exe 走 `--config.electronDist=node_modules/electron/dist` + 本地 npm shim + TMP 迁出 C:\Windows\Temp。
 
 ## [2.8.0.6] - 2026-10-23
 
